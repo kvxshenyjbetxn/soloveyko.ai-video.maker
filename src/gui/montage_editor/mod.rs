@@ -81,6 +81,31 @@ pub struct EditorClip {
     pub duration: f32,
     pub track_idx: usize,
     pub kind: ClipKind,
+    /// Масштаб кліпу (1.0 = повний кадр). Впливає на превью та FFmpeg overlay.
+    pub scale: f32,
+    /// Горизонтальне зміщення центру кліпу в нормалізованих координатах (-1..1).
+    pub pos_x: f32,
+    /// Вертикальне зміщення центру кліпу в нормалізованих координатах (-1..1).
+    pub pos_y: f32,
+}
+
+// ─── Режими перетягування на превью ──────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PreviewDragMode {
+    Move,
+    Scale,
+}
+
+/// Стан інтерактивного drag-трансформу прямо на превью
+pub struct PreviewDragState {
+    pub clip_id: String,
+    pub mode: PreviewDragMode,
+    pub initial_pos_x: f32,
+    pub initial_pos_y: f32,
+    pub initial_scale: f32,
+    pub initial_mouse: Pos2,
+    pub frame_rect: Rect,
 }
 
 impl EditorClip {
@@ -373,6 +398,8 @@ pub struct MontageEditorState {
     pub timeline_height: f32,
     /// Активний аудіо плеєр (Some = відтворення; None = зупинено)
     pub audio_player: Option<AudioPlayer>,
+    /// Стан інтерактивного drag-трансформу на превью
+    pub preview_drag: Option<PreviewDragState>,
 }
 
 impl MontageEditorState {
@@ -412,6 +439,7 @@ impl MontageEditorState {
             preview_settings: MontagePreviewSettings::default(),
             timeline_height: 220.0,
             audio_player: None,
+            preview_drag: None,
         }
     }
 
@@ -420,62 +448,87 @@ impl MontageEditorState {
         clip_end.max(self.total_duration).max(10.0)
     }
 
-    /// Зберігає поточний стан кліпів у timeline.json для run_montage.
-    /// Вставляє null-сегменти для проміжків між кліпами, щоб run_montage
-    /// правильно відтворював абсолютні позиції (hold last frame для пустих місць).
-    pub fn save_to_timeline(&self) -> Result<(), std::io::Error> {
-        let mut sorted: Vec<&EditorClip> = self.clips.iter()
-            .filter(|c| c.track_idx == 0 && c.path.is_some())
-            .collect();
-        sorted.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+    /// Конвертує абсолютний шлях до медіафайлу у відносний (від save_path).
+    fn path_to_rel(&self, p: &Path) -> Option<String> {
+        if let Ok(rel) = p.strip_prefix(&self.save_path) {
+            return Some(rel.to_string_lossy().replace('\\', "/"));
+        }
+        let canon_clip = std::fs::canonicalize(p).ok();
+        let canon_save = std::fs::canonicalize(&self.save_path).ok();
+        if let (Some(cc), Some(cs)) = (canon_clip, canon_save) {
+            cc.strip_prefix(&cs).ok()
+                .map(|r| r.to_string_lossy().replace('\\', "/"))
+        } else {
+            None
+        }
+    }
 
-        let total_duration_secs = sorted.iter()
+    /// Зберігає поточний стан у timeline.json для run_montage.
+    /// Доріжка 0 → "segments" (з null-gap заглушками для чорного екрану).
+    /// Доріжки 1+ → "overlay_tracks" (з трансформ-даними scale/pos_x/pos_y).
+    pub fn save_to_timeline(&self) -> Result<(), std::io::Error> {
+        let total_duration_secs = self.clips.iter()
             .map(|c| c.end_secs() as f64)
             .fold(0.0f64, f64::max)
             .max(self.total_dur() as f64);
 
-        let mut segments: Vec<serde_json::Value> = Vec::new();
+        // ── Доріжка 0: основна послідовність ────────────────────────────────
+        let mut sorted0: Vec<&EditorClip> = self.clips.iter()
+            .filter(|c| c.track_idx == 0 && c.path.is_some())
+            .collect();
+        sorted0.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+
+        let mut main_segments: Vec<serde_json::Value> = Vec::new();
         let mut cursor = 0.0f32;
-
-        for clip in &sorted {
+        for clip in &sorted0 {
             let actual_start = clip.start_secs.max(cursor);
-
             if actual_start > cursor + 0.01 {
-                segments.push(serde_json::json!({
+                main_segments.push(serde_json::json!({
                     "start_secs": cursor as f64,
                     "end_secs": actual_start as f64,
                     "media": serde_json::Value::Null,
                 }));
             }
-
-            let media_rel = clip.path.as_ref()
-                .and_then(|p| {
-                    if let Ok(rel) = p.strip_prefix(&self.save_path) {
-                        return Some(rel.to_string_lossy().replace('\\', "/"));
-                    }
-                    let canon_clip = std::fs::canonicalize(p).ok();
-                    let canon_save = std::fs::canonicalize(&self.save_path).ok();
-                    if let (Some(cc), Some(cs)) = (canon_clip, canon_save) {
-                        cc.strip_prefix(&cs).ok()
-                            .map(|r| r.to_string_lossy().replace('\\', "/"))
-                    } else {
-                        None
-                    }
-                });
-
+            let media_rel = clip.path.as_ref().and_then(|p| self.path_to_rel(p));
             let actual_end = actual_start + clip.duration;
-            segments.push(serde_json::json!({
+            main_segments.push(serde_json::json!({
                 "start_secs": actual_start as f64,
                 "end_secs": actual_end as f64,
                 "media": media_rel,
             }));
-
             cursor = actual_end;
+        }
+
+        // ── Overlay-доріжки (1+) ─────────────────────────────────────────────
+        let max_track = self.clips.iter().map(|c| c.track_idx).max().unwrap_or(0);
+        let mut overlay_tracks: Vec<serde_json::Value> = Vec::new();
+        for t in 1..=max_track {
+            let mut segs: Vec<&EditorClip> = self.clips.iter()
+                .filter(|c| c.track_idx == t && c.path.is_some())
+                .collect();
+            if segs.is_empty() { continue; }
+            segs.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+            let segments: Vec<serde_json::Value> = segs.iter().map(|clip| {
+                let media_rel = clip.path.as_ref().and_then(|p| self.path_to_rel(p));
+                serde_json::json!({
+                    "start_secs": clip.start_secs as f64,
+                    "end_secs": clip.end_secs() as f64,
+                    "media": media_rel,
+                    "scale": clip.scale as f64,
+                    "pos_x": clip.pos_x as f64,
+                    "pos_y": clip.pos_y as f64,
+                })
+            }).collect();
+            overlay_tracks.push(serde_json::json!({
+                "track_idx": t,
+                "segments": segments,
+            }));
         }
 
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
-            "segments": segments,
+            "segments": main_segments,
+            "overlay_tracks": overlay_tracks,
         });
 
         let timeline_path = self.save_path.join("timeline.json");
@@ -487,56 +540,77 @@ impl MontageEditorState {
 
 // ─── Завантаження даних ───────────────────────────────────────────────────────
 
-#[derive(serde::Deserialize)]
-struct SegTiming {
-    start_secs: f64,
-    end_secs: f64,
-    media: Option<String>,
-}
-
-#[derive(serde::Deserialize)]
-struct TimelineJson {
-    total_duration_secs: f64,
-    segments: Vec<SegTiming>,
+/// Будує EditorClip з JSON-сегменту (спільна логіка для track 0 та overlay).
+fn clip_from_json_seg(
+    seg: &serde_json::Value,
+    media_str: &str,
+    save_path: &Path,
+    track_idx: usize,
+) -> EditorClip {
+    let full_path: PathBuf = save_path.join(media_str).components().collect();
+    let name = full_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(media_str)
+        .to_string();
+    let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
+        ClipKind::Video
+    } else {
+        ClipKind::Image
+    };
+    let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
+    let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+    let scale = seg["scale"].as_f64().unwrap_or(1.0) as f32;
+    let pos_x = seg["pos_x"].as_f64().unwrap_or(0.0) as f32;
+    let pos_y = seg["pos_y"].as_f64().unwrap_or(0.0) as f32;
+    EditorClip {
+        id: uuid_str(),
+        path: Some(full_path),
+        name,
+        start_secs: start,
+        duration: (end - start).max(0.1),
+        track_idx,
+        kind,
+        scale,
+        pos_x,
+        pos_y,
+    }
 }
 
 fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32) {
     let path = save_path.join("timeline.json");
     if !path.exists() { return (Vec::new(), 10.0); }
     let content = std::fs::read_to_string(&path).unwrap_or_default();
-    let tl: TimelineJson = match serde_json::from_str(&content) {
-        Ok(t) => t,
+    let v: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
         Err(_) => return (Vec::new(), 10.0),
     };
-    let total = tl.total_duration_secs as f32;
+    let total = v["total_duration_secs"].as_f64().unwrap_or(10.0) as f32;
     let mut clips = Vec::new();
-    for seg in &tl.segments {
-        if let Some(ref media) = seg.media {
-            // components().collect() нормалізує роздільники (/ → \ на Windows)
-            let full_path: PathBuf = save_path.join(media).components().collect();
-            let name = full_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(media)
-                .to_string();
-            let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-            let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
-                ClipKind::Video
-            } else {
-                ClipKind::Image
-            };
-            let start = seg.start_secs as f32;
-            let dur = (seg.end_secs - seg.start_secs) as f32;
-            clips.push(EditorClip {
-                id: uuid_str(),
-                path: Some(full_path),
-                name,
-                start_secs: start,
-                duration: dur.max(0.1),
-                track_idx: 0,
-                kind,
-            });
+
+    // Доріжка 0 з "segments"
+    if let Some(segs) = v["segments"].as_array() {
+        for seg in segs {
+            if let Some(media) = seg["media"].as_str() {
+                clips.push(clip_from_json_seg(seg, media, save_path, 0));
+            }
         }
     }
+
+    // Overlay-доріжки з "overlay_tracks"
+    if let Some(tracks) = v["overlay_tracks"].as_array() {
+        for track in tracks {
+            let track_idx = track["track_idx"].as_u64().unwrap_or(1) as usize;
+            if let Some(segs) = track["segments"].as_array() {
+                for seg in segs {
+                    if let Some(media) = seg["media"].as_str() {
+                        clips.push(clip_from_json_seg(seg, media, save_path, track_idx));
+                    }
+                }
+            }
+        }
+    }
+
     (clips, total)
 }
 
@@ -1041,19 +1115,10 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let ph = editor.playhead;
     let settings = editor.preview_settings.clone();
 
-    // Знаходимо найвищу пріоритетну доріжку (найнижчий track_idx) що має візуальний кліп під плейхедом
-    let active_track = {
-        let mut visual: Vec<&EditorClip> = editor.clips.iter()
-            .filter(|c| c.path.is_some() && !matches!(c.kind, ClipKind::Audio))
-            .collect();
-        visual.sort_by_key(|c| c.track_idx);
-        visual.iter()
-            .find(|c| c.start_secs <= ph && ph < c.end_secs())
-            .map(|c| c.track_idx)
-            .unwrap_or(0)
-    };
+    // Доріжка 0 = базова (фон). Overlay-доріжки (1+) рендеруються поверх незалежно.
+    let active_track = 0usize;
 
-    // Відсортовані кліпи активної доріжки (тільки ті що мають файл)
+    // Відсортовані кліпи базової доріжки 0 (тільки ті що мають файл)
     let mut sorted: Vec<EditorClip> = editor.clips.iter()
         .filter(|c| c.track_idx == active_track && c.path.is_some())
         .cloned()
@@ -1131,7 +1196,8 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
     ui.horizontal(|ui| {
         ui.add_space(pad_x);
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(frame_w, frame_h), Sense::hover());
+        // Дозволяємо drag для інтерактивного трансформу
+        let (rect, _frame_resp) = ui.allocate_exact_size(Vec2::new(frame_w, frame_h), Sense::click_and_drag());
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 4.0, Color32::from_rgb(5, 5, 7));
 
@@ -1144,18 +1210,17 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         let uv_prev = zoom_uv(compute_zoom(dur_prev, dur_prev, &settings, img_idx_prev, is_img_prev));
         let sh_prev = shake_uv(dur_prev, &settings, is_img_prev);
 
+        // ── Рендер базової доріжки 0 (зі zoom/shake/переходами) ─────────────
         if let Some(ref curr) = current_tex {
             if in_transition {
                 let tp = transition_progress;
                 match transition_kind(&settings.transition) {
-                    // ── Cross-dissolve (fade, dissolve та решта) ──────────────
                     TransitionKind::Fade => {
                         if let Some(ref pt) = prev_tex {
                             render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, ((1.0 - tp) * 255.0) as u8);
                         }
                         render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, (tp * 255.0) as u8);
                     }
-                    // ── Fade через чорний ────────────────────────────────────
                     TransitionKind::FadeBlack => {
                         if tp < 0.5 {
                             if let Some(ref pt) = prev_tex {
@@ -1165,7 +1230,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                             render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, (((tp - 0.5) * 2.0) * 255.0) as u8);
                         }
                     }
-                    // ── Fade через білий ─────────────────────────────────────
                     TransitionKind::FadeWhite => {
                         painter.rect_filled(rect, 0.0, Color32::WHITE);
                         if tp < 0.5 {
@@ -1176,7 +1240,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                             render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, (((tp - 0.5) * 2.0) * 255.0) as u8);
                         }
                     }
-                    // ── Wipe Left: старий кліп зліва, новий справа ───────────
                     TransitionKind::WipeLeft => {
                         let sx = rect.left() + (1.0 - tp) * rect.width();
                         if let Some(ref pt) = prev_tex {
@@ -1186,7 +1249,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         let r = Rect::from_min_max(Pos2::new(sx, rect.min.y), rect.max);
                         render_clip_frame(&ui.painter_at(r), curr, rect, uv_curr, sh_curr, 255);
                     }
-                    // ── Wipe Right ───────────────────────────────────────────
                     TransitionKind::WipeRight => {
                         let sx = rect.left() + tp * rect.width();
                         let r_new = Rect::from_min_max(rect.min, Pos2::new(sx, rect.max.y));
@@ -1196,7 +1258,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         }
                         render_clip_frame(&ui.painter_at(r_new), curr, rect, uv_curr, sh_curr, 255);
                     }
-                    // ── Wipe Up ──────────────────────────────────────────────
                     TransitionKind::WipeUp => {
                         let sy = rect.top() + (1.0 - tp) * rect.height();
                         if let Some(ref pt) = prev_tex {
@@ -1206,7 +1267,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         let r = Rect::from_min_max(Pos2::new(rect.min.x, sy), rect.max);
                         render_clip_frame(&ui.painter_at(r), curr, rect, uv_curr, sh_curr, 255);
                     }
-                    // ── Wipe Down ────────────────────────────────────────────
                     TransitionKind::WipeDown => {
                         let sy = rect.top() + tp * rect.height();
                         let r_new = Rect::from_min_max(rect.min, Pos2::new(rect.max.x, sy));
@@ -1216,7 +1276,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         }
                         render_clip_frame(&ui.painter_at(r_new), curr, rect, uv_curr, sh_curr, 255);
                     }
-                    // ── Slide Left: новий з правого краю, старий виходить ліворуч ──
                     TransitionKind::SlideLeft => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
@@ -1226,7 +1285,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         let c = rect.translate(Vec2::new((1.0 - tp) * rect.width(), 0.0));
                         render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
                     }
-                    // ── Slide Right ──────────────────────────────────────────
                     TransitionKind::SlideRight => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
@@ -1236,7 +1294,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         let c = rect.translate(Vec2::new(-(1.0 - tp) * rect.width(), 0.0));
                         render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
                     }
-                    // ── Slide Up ─────────────────────────────────────────────
                     TransitionKind::SlideUp => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
@@ -1246,7 +1303,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         let c = rect.translate(Vec2::new(0.0, (1.0 - tp) * rect.height()));
                         render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
                     }
-                    // ── Slide Down ───────────────────────────────────────────
                     TransitionKind::SlideDown => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
@@ -1258,7 +1314,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                     }
                 }
             } else {
-                // Звичайний рендер з зумом та покачуванням
                 render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, 255);
             }
 
@@ -1266,7 +1321,6 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                 let dot = Pos2::new(rect.right() - 10.0, rect.top() + 10.0);
                 painter.circle_filled(dot, 5.0, Color32::from_rgba_unmultiplied(255, 180, 0, 220));
             }
-            // Підказка про активні ефекти
             let mut effects: Vec<&str> = Vec::new();
             if settings.zoom_enabled && is_img_curr { effects.push("zoom"); }
             if settings.shake_enabled && is_img_curr { effects.push("shake"); }
@@ -1308,8 +1362,81 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             );
         }
 
-        // ── Обводка кадру та shake-зона ─────────────────────────────────────
+        // ── Overlay-доріжки (track 1+) поверх базової доріжки 0 ─────────────
+        // Сортуємо за track_idx зростаючим (track 1 = нижня overlay, track N = верхня)
+        // Збираємо до Vec перед мутацією frame_cache (уникаємо borrow-конфлікту)
+        let mut ov_sorted: Vec<&EditorClip> = editor.clips.iter()
+            .filter(|c| c.track_idx > 0 && c.path.is_some())
+            .filter(|c| c.start_secs <= ph && ph < c.end_secs())
+            .collect();
+        ov_sorted.sort_by_key(|c| c.track_idx);
+        let overlay_data: Vec<(PathBuf, f32, f32, f32, f32, String)> = ov_sorted.iter()
+            .map(|c| (
+                c.path.clone().unwrap(),
+                (ph - c.start_secs).max(0.0),
+                c.scale, c.pos_x, c.pos_y,
+                c.id.clone(),
+            ))
+            .collect();
+
+        for (path, t_off, scale, pos_x, pos_y, _id) in &overlay_data {
+            let ov_media = editor.media_pool.iter().find(|m| m.path == *path).cloned();
+            if let Some(media) = ov_media {
+                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, *t_off) {
+                    let clip_w = rect.width() * scale;
+                    let clip_h = rect.height() * scale;
+                    let clip_cx = rect.center().x + pos_x * rect.width() / 2.0;
+                    let clip_cy = rect.center().y + pos_y * rect.height() / 2.0;
+                    let container = Rect::from_center_size(
+                        Pos2::new(clip_cx, clip_cy),
+                        Vec2::new(clip_w, clip_h),
+                    );
+                    let full_uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+                    render_clip_frame(&painter, &tex, container, full_uv, Vec2::ZERO, 255);
+                }
+            }
+        }
+
+        // ── Ручки трансформу для виділеного кліпу ───────────────────────────
+        // Обчислюємо rect виділеного кліпу в екранних координатах
+        let sel_transform = editor.selected_clip_id.as_ref().and_then(|id| {
+            editor.clips.iter().find(|c| &c.id == id
+                && c.start_secs <= ph && ph < c.end_secs())
+                .map(|c| {
+                    let w = rect.width() * c.scale;
+                    let h = rect.height() * c.scale;
+                    let cx = rect.center().x + c.pos_x * rect.width() / 2.0;
+                    let cy = rect.center().y + c.pos_y * rect.height() / 2.0;
+                    let sel_rect = Rect::from_center_size(Pos2::new(cx, cy), Vec2::new(w, h));
+                    let corners: [Pos2; 4] = [
+                        sel_rect.left_top(), sel_rect.right_top(),
+                        sel_rect.right_bottom(), sel_rect.left_bottom(),
+                    ];
+                    (sel_rect, corners, c.id.clone())
+                })
+        });
+
+        if let Some((sel_rect, corners, _)) = &sel_transform {
+            // Обводка виділеного кліпу
+            painter.rect_stroke(*sel_rect, 0.0, egui::Stroke::new(2.0, Color32::from_rgb(9, 123, 244)));
+            // Кутові ручки масштабу
+            for &corner in corners {
+                painter.circle_filled(corner, 5.0, Color32::from_rgb(9, 123, 244));
+                painter.circle_stroke(corner, 5.0, egui::Stroke::new(1.0, Color32::WHITE));
+            }
+        }
+
+        // Обводка кадру та shake-зона
         draw_frame_overlay(&painter, rect, &settings, is_img_curr);
+
+        // Інтерактивний drag-трансформ
+        if sel_transform.is_some() {
+            let (sel_rect, corners, _) = sel_transform.as_ref().unwrap();
+            update_preview_drag(ui.ctx(), editor, rect, *sel_rect, corners);
+        } else if editor.preview_drag.is_some() {
+            // Завершуємо drag якщо виділення зникло
+            update_preview_drag(ui.ctx(), editor, rect, Rect::NOTHING, &[]);
+        }
     });
 
     ui.add_space(4.0);
@@ -1420,6 +1547,96 @@ fn draw_frame_overlay(
 
 }
 
+// ─── Інтерактивний трансформ на превью ───────────────────────────────────────
+
+/// Обробляє drag-переміщення та масштабування кліпу прямо на превью.
+/// `frame_rect` — екранні координати прямокутника превью (16:9).
+/// `sel_rect`   — екранний прямокутник виділеного кліпу.
+/// `corners`    — позиції кутових ручок (порожній → тільки завершення поточного drag).
+fn update_preview_drag(
+    ctx: &egui::Context,
+    editor: &mut MontageEditorState,
+    frame_rect: Rect,
+    sel_rect: Rect,
+    corners: &[Pos2],
+) {
+    // Завершення drag при відпусканні кнопки
+    if ctx.input(|i| i.pointer.any_released()) {
+        editor.preview_drag = None;
+        return;
+    }
+
+    let mouse = match ctx.input(|i| i.pointer.hover_pos()) { Some(p) => p, None => return };
+    let primary_down = ctx.input(|i| i.pointer.primary_down());
+    let primary_pressed = ctx.input(|i| i.pointer.primary_pressed());
+
+    // Продовжуємо активний drag
+    if let Some(drag) = editor.preview_drag.as_ref() {
+        if primary_down {
+            let dx = (mouse.x - drag.initial_mouse.x) / drag.frame_rect.width() * 2.0;
+            let dy = (mouse.y - drag.initial_mouse.y) / drag.frame_rect.height() * 2.0;
+            let (init_px, init_py, init_sc, clip_id, drag_mode) = (
+                drag.initial_pos_x, drag.initial_pos_y,
+                drag.initial_scale, drag.clip_id.clone(), drag.mode,
+            );
+            if let Some(idx) = editor.clips.iter().position(|c| c.id == clip_id) {
+                match drag_mode {
+                    PreviewDragMode::Move => {
+                        editor.clips[idx].pos_x = (init_px + dx).clamp(-2.5, 2.5);
+                        editor.clips[idx].pos_y = (init_py + dy).clamp(-2.5, 2.5);
+                    }
+                    PreviewDragMode::Scale => {
+                        // Масштабуємо по діагоналі правого нижнього кута
+                        let scale_delta = (dx - dy) * 0.5;
+                        editor.clips[idx].scale = (init_sc + scale_delta).clamp(0.05, 3.0);
+                    }
+                }
+            }
+            ctx.request_repaint();
+        } else {
+            editor.preview_drag = None;
+        }
+        return;
+    }
+
+    // Початок нового drag
+    if primary_pressed && !corners.is_empty() {
+        let on_corner = corners.iter().any(|&c| (mouse - c).length() < 10.0);
+        let in_interior = sel_rect.contains(mouse);
+
+        if on_corner || in_interior {
+            if let Some(sel_id) = editor.selected_clip_id.clone() {
+                if let Some(clip) = editor.clips.iter().find(|c| c.id == sel_id) {
+                    editor.preview_drag = Some(PreviewDragState {
+                        clip_id: clip.id.clone(),
+                        mode: if on_corner { PreviewDragMode::Scale } else { PreviewDragMode::Move },
+                        initial_pos_x: clip.pos_x,
+                        initial_pos_y: clip.pos_y,
+                        initial_scale: clip.scale,
+                        initial_mouse: mouse,
+                        frame_rect,
+                    });
+                    ctx.set_cursor_icon(if on_corner {
+                        egui::CursorIcon::ResizeNwSe
+                    } else {
+                        egui::CursorIcon::Grabbing
+                    });
+                }
+            }
+        }
+        return;
+    }
+
+    // Курсор при hover
+    if !corners.is_empty() {
+        if corners.iter().any(|&c| (mouse - c).length() < 10.0) {
+            ctx.set_cursor_icon(egui::CursorIcon::ResizeNwSe);
+        } else if sel_rect.contains(mouse) {
+            ctx.set_cursor_icon(egui::CursorIcon::Grab);
+        }
+    }
+}
+
 // ─── Інспектор ───────────────────────────────────────────────────────────────
 
 fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {
@@ -1435,16 +1652,15 @@ fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdi
             ui.label(egui::RichText::new(&clip.name).size(12.0).strong());
             ui.add_space(6.0);
 
+            // ── Час/тривалість/доріжка ───────────────────────────────────────
             ui.horizontal(|ui| {
                 ui.label(translate(language, "montage_editor_clip_start"));
                 ui.add(egui::DragValue::new(&mut clip.start_secs).speed(0.05).range(0.0..=3600.0));
             });
-
             ui.horizontal(|ui| {
                 ui.label(translate(language, "montage_editor_clip_dur"));
                 ui.add(egui::DragValue::new(&mut clip.duration).speed(0.05).range(0.1..=3600.0));
             });
-
             ui.horizontal(|ui| {
                 ui.label(translate(language, "montage_editor_clip_track"));
                 let mut t = clip.track_idx as i32;
@@ -1452,6 +1668,31 @@ fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdi
                     clip.track_idx = t as usize;
                 }
             });
+
+            // ── Трансформ (масштаб + позиція) ───────────────────────────────
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(translate(language, "montage_editor_transform")).strong().size(11.0));
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.label(translate(language, "montage_editor_clip_scale"));
+                ui.add(egui::Slider::new(&mut clip.scale, 0.05..=3.0).step_by(0.01));
+            });
+            ui.horizontal(|ui| {
+                ui.label(translate(language, "montage_editor_clip_pos_x"));
+                ui.add(egui::Slider::new(&mut clip.pos_x, -2.0..=2.0).step_by(0.01));
+            });
+            ui.horizontal(|ui| {
+                ui.label(translate(language, "montage_editor_clip_pos_y"));
+                ui.add(egui::Slider::new(&mut clip.pos_y, -2.0..=2.0).step_by(0.01));
+            });
+
+            ui.add_space(4.0);
+            if ui.small_button(translate(language, "montage_editor_reset_transform")).clicked() {
+                clip.scale = 1.0;
+                clip.pos_x = 0.0;
+                clip.pos_y = 0.0;
+            }
 
             ui.add_space(8.0);
             if ui.button(translate(language, "montage_editor_delete_clip")).clicked() {
@@ -1464,7 +1705,6 @@ fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdi
     } else {
         ui.weak(translate(language, "montage_editor_no_selection"));
     }
-
 }
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
@@ -1628,6 +1868,9 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                                     duration,
                                     track_idx: t_idx,
                                     kind,
+                                    scale: 1.0,
+                                    pos_x: 0.0,
+                                    pos_y: 0.0,
                                 });
                             }
                         }

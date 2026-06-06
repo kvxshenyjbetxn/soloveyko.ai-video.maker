@@ -50,10 +50,34 @@ pub fn run_montage(
         end_secs: f64,
         media: Option<String>,
     }
+
+    #[derive(serde::Deserialize)]
+    struct OverlaySeg {
+        start_secs: f64,
+        end_secs: f64,
+        media: Option<String>,
+        #[serde(default = "default_scale")]
+        scale: f64,
+        #[serde(default)]
+        pos_x: f64,
+        #[serde(default)]
+        pos_y: f64,
+    }
+    fn default_scale() -> f64 { 1.0 }
+
+    #[derive(serde::Deserialize)]
+    struct OverlayTrack {
+        #[allow(dead_code)]
+        track_idx: usize,
+        segments: Vec<OverlaySeg>,
+    }
+
     #[derive(serde::Deserialize)]
     struct Timeline {
         total_duration_secs: f64,
         segments: Vec<SegTiming>,
+        #[serde(default)]
+        overlay_tracks: Vec<OverlayTrack>,
     }
 
     struct Clip {
@@ -74,20 +98,20 @@ pub fn run_montage(
     // ─── Зчитуємо timeline.json ───────────────────────────────────────────────
     let mut clips: Vec<Clip> = Vec::new();
     let mut total_dur = 0.0f64;
+    let mut overlay_tracks: Vec<OverlayTrack> = Vec::new();
     let timeline_path = save_dir.join("timeline.json");
 
     if timeline_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&timeline_path) {
             if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
                 total_dur = tl.total_duration_secs;
+                overlay_tracks = tl.overlay_tracks;
                 let seg_count = tl.segments.len();
-                // null-сегменти → чорна заставка між кліпами
                 for seg in &tl.segments {
                     let dur = (seg.end_secs - seg.start_secs).max(0.05);
                     if let Some(ref media) = seg.media {
                         clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media) });
                     } else {
-                        // Об'єднуємо суміжні null-сегменти в один чорний кліп
                         if matches!(clips.last(), Some(Clip { path: None, .. })) {
                             clips.last_mut().unwrap().duration += dur;
                         } else {
@@ -96,9 +120,8 @@ pub fn run_montage(
                     }
                 }
                 log_fn(&format!(
-                    "timeline.json: {} segments → {} clips, total={:.2}s, first={}",
-                    seg_count, clips.len(), total_dur,
-                    clips.first().and_then(|c| c.path.as_deref()).unwrap_or("(black gap)"),
+                    "timeline.json: {} segments → {} clips, {} overlay tracks, total={:.2}s",
+                    seg_count, clips.len(), overlay_tracks.len(), total_dur,
                 ));
             } else {
                 log_fn("timeline.json: PARSE ERROR — invalid JSON format");
@@ -380,11 +403,61 @@ pub fn run_montage(
         log_fn(&format!("Active triggers: {}", active_triggers.len()));
     }
 
-    // Будуємо фільтри для тригерів поверх поточного відео-потоку
-    let video_map_label = if active_triggers.is_empty() {
-        format!("[{after_subs_label}]")
-    } else {
+    // ─── Збираємо overlay-кліпи з доріжок 1+ ────────────────────────────────
+    struct OverlayItem {
+        input_idx: usize,
+        start: f64,
+        end: f64,
+        w: i32,
+        h: i32,
+        x: i32,
+        y: i32,
+        is_video: bool,
+    }
+
+    let mut overlay_items: Vec<OverlayItem> = Vec::new();
+    let mut overlay_input_paths: Vec<(String, bool)> = Vec::new();
+
+    for track in &overlay_tracks {
+        for seg in &track.segments {
+            let media_path_str = match &seg.media {
+                Some(m) if !m.is_empty() => m.clone(),
+                _ => continue,
+            };
+            let media_abs = save_dir.join(&media_path_str);
+            if !media_abs.exists() {
+                log_fn(&format!("Overlay media not found, skipping: {media_path_str}"));
+                continue;
+            }
+            let is_vid = is_video_ext(&media_path_str);
+
+            // Розмір у пікселях з нормалізованого масштабу (округлюємо до парного)
+            let raw_w = (1920.0 * seg.scale).round() as u32;
+            let raw_h = (1080.0 * seg.scale).round() as u32;
+            let w = (raw_w.max(2) + 1) / 2 * 2;
+            let h = (raw_h.max(2) + 1) / 2 * 2;
+
+            // Позиція центру в пікселях; pos_x/pos_y ∈ [-1..1] = від лівого/верхнього краю до правого/нижнього
+            let cx = 960.0 * (1.0 + seg.pos_x);
+            let cy = 540.0 * (1.0 + seg.pos_y);
+            let x = (cx - w as f64 / 2.0).round() as i32;
+            let y = (cy - h as f64 / 2.0).round() as i32;
+
+            let input_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
+            overlay_input_paths.push((media_path_str.clone(), is_vid));
+
+            log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s",
+                seg.start_secs, seg.end_secs));
+
+            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, w: w as i32, h: h as i32, x, y, is_video: is_vid });
+        }
+    }
+
+    // Будуємо фільтри для тригерів та overlay-кліпів поверх поточного відео-потоку
+    let video_map_label = {
         let mut current = after_subs_label.clone();
+
+        // ── Тригери (як раніше) ───────────────────────────────────────────
         for (i, tr) in active_triggers.iter().enumerate() {
             let w = (tr.w / 2) * 2;
             let h = (tr.h / 2) * 2;
@@ -396,27 +469,57 @@ pub fn run_montage(
                 filter_parts.push(format!(
                     "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=increase,\
                     crop={w}:{h},setpts=PTS-STARTPTS+{:.3}/TB[{ready_label}]",
-                    tr.input_idx, tr.start, ready_label = ready_label, w = w, h = h,
+                    tr.input_idx, tr.start,
                 ));
                 filter_parts.push(format!(
                     "[{current}][{ready_label}]overlay=x={x}:y={y}:eof_action=pass:enable='{enable_expr}'[{out_label}]",
-                    current = current, ready_label = ready_label, x = tr.x, y = tr.y,
-                    enable_expr = enable_expr, out_label = out_label,
+                    x = tr.x, y = tr.y,
                 ));
             } else {
                 filter_parts.push(format!(
                     "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=increase,\
                     crop={w}:{h},setpts=PTS-STARTPTS+{:.3}/TB[{ready_label}]",
-                    tr.input_idx, tr.start, ready_label = ready_label, w = w, h = h,
+                    tr.input_idx, tr.start,
                 ));
                 filter_parts.push(format!(
                     "[{current}][{ready_label}]overlay=x={x}:y={y}:enable='{enable_expr}'[{out_label}]",
-                    current = current, ready_label = ready_label, x = tr.x, y = tr.y,
-                    enable_expr = enable_expr, out_label = out_label,
+                    x = tr.x, y = tr.y,
                 ));
             }
             current = out_label;
         }
+
+        // ── Overlay-доріжки (track 1+) ────────────────────────────────────
+        for (i, ov) in overlay_items.iter().enumerate() {
+            let prep_label = format!("v_ov_{i}");
+            let out_label = format!("v_ov_out_{i}");
+            let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
+            let (w, h) = (ov.w, ov.h);
+
+            if ov.is_video {
+                filter_parts.push(format!(
+                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                    pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
+                    ov.input_idx, ov.start,
+                ));
+                filter_parts.push(format!(
+                    "[{current}][{prep_label}]overlay=x={x}:y={y}:eof_action=pass:enable='{enable_expr}'[{out_label}]",
+                    x = ov.x, y = ov.y,
+                ));
+            } else {
+                filter_parts.push(format!(
+                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                    pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
+                    ov.input_idx, ov.start,
+                ));
+                filter_parts.push(format!(
+                    "[{current}][{prep_label}]overlay=x={x}:y={y}:enable='{enable_expr}'[{out_label}]",
+                    x = ov.x, y = ov.y,
+                ));
+            }
+            current = out_label;
+        }
+
         format!("[{current}]")
     };
 
@@ -451,13 +554,22 @@ pub fn run_montage(
     }
     args.extend(["-i".into(), audio_rel]);
 
-    // Додаємо input-файли тригерів: -loop 1 для зображень (щоб frame повторювався)
+    // Тригери: -loop 1 для зображень
     for (tp, is_vid) in &trigger_input_paths {
         if !is_vid {
             args.push("-loop".into());
             args.push("1".into());
         }
         args.extend(["-i".into(), tp.clone()]);
+    }
+
+    // Overlay-кліпи (доріжки 1+): -loop 1 для зображень
+    for (op, is_vid) in &overlay_input_paths {
+        if !is_vid {
+            args.push("-loop".into());
+            args.push("1".into());
+        }
+        args.extend(["-i".into(), op.clone()]);
     }
 
     args.extend([
