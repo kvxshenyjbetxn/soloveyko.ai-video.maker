@@ -285,6 +285,31 @@ impl FrameCache {
     }
 }
 
+// ─── Аудіо плеєр ─────────────────────────────────────────────────────────────
+
+pub(crate) struct AudioPlayer {
+    _stream: rodio::OutputStream,
+    // Sink зберігається щоб утримувати відтворення живим; дроп зупиняє аудіо
+    _sink: rodio::Sink,
+}
+
+impl AudioPlayer {
+    /// Відкриває аудіо-файл і починає відтворення з позиції `start_secs`.
+    fn start(path: &Path, start_secs: f32) -> Option<Self> {
+        let (stream, handle) = rodio::OutputStream::try_default().ok()?;
+        let sink = rodio::Sink::try_new(&handle).ok()?;
+        let file = std::fs::File::open(path).ok()?;
+        let decoder = rodio::Decoder::new(std::io::BufReader::new(file)).ok()?;
+        use rodio::Source;
+        if start_secs > 0.05 {
+            sink.append(decoder.skip_duration(std::time::Duration::from_secs_f32(start_secs)));
+        } else {
+            sink.append(decoder);
+        }
+        Some(Self { _stream: stream, _sink: sink })
+    }
+}
+
 // ─── Допоміжні функції ────────────────────────────────────────────────────────
 
 /// Стабільний хеш шляху → ім'я папки кешу (не змінюється між запусками)
@@ -346,6 +371,8 @@ pub struct MontageEditorState {
     pub preview_settings: MontagePreviewSettings,
     /// Висота панелі таймлайну (змінюється drag-handle)
     pub timeline_height: f32,
+    /// Активний аудіо плеєр (Some = відтворення; None = зупинено)
+    pub audio_player: Option<AudioPlayer>,
 }
 
 impl MontageEditorState {
@@ -384,6 +411,7 @@ impl MontageEditorState {
             frame_cache: FrameCache::new(FRAME_CACHE_SIZE),
             preview_settings: MontagePreviewSettings::default(),
             timeline_height: 220.0,
+            audio_player: None,
         }
     }
 
@@ -596,6 +624,12 @@ pub fn draw_montage_editor_window(
         if editor.playhead >= editor.total_dur() {
             editor.is_playing = false;
             editor.playhead = 0.0;
+            editor.audio_player = None;
+        } else if editor.audio_player.is_none() {
+            // Запускаємо аудіо з поточної позиції (після Play або після скрабу)
+            if let Some(ap) = editor.audio_path.clone() {
+                editor.audio_player = AudioPlayer::start(&ap, editor.playhead);
+            }
         }
         ctx.request_repaint();
     }
@@ -1211,18 +1245,24 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
         if ui.button("⏮").on_hover_text("-0.1s").clicked() {
             editor.playhead = (editor.playhead - 0.1).max(0.0);
+            editor.audio_player = None; // перезапуск аудіо з нової позиції
         }
         if ui.button("⏹").clicked() {
             editor.is_playing = false;
             editor.playhead = 0.0;
+            editor.audio_player = None;
         }
         let play_lbl = egui::RichText::new(if editor.is_playing { "⏸" } else { "▶" }).size(16.0);
         if ui.button(play_lbl).clicked() {
             editor.is_playing = !editor.is_playing;
             editor.last_frame_time = Instant::now();
+            if !editor.is_playing {
+                editor.audio_player = None; // пауза = зупиняємо аудіо
+            }
         }
         if ui.button("⏭").on_hover_text("+0.1s").clicked() {
             editor.playhead = (editor.playhead + 0.1).min(total);
+            editor.audio_player = None; // перезапуск аудіо з нової позиції
         }
 
         ui.add_space(8.0);
@@ -1652,7 +1692,11 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
             // Скраб плейхеда кліком по лінійці
             if let Some(pos) = mouse_pos {
                 if ruler_rect.contains(pos) && ui.input(|i| i.pointer.primary_down()) {
-                    editor.playhead = ((pos.x - rect.left()) / zoom).clamp(0.0, total_dur);
+                    let new_ph = ((pos.x - rect.left()) / zoom).clamp(0.0, total_dur);
+                    if (new_ph - editor.playhead).abs() > 0.05 {
+                        editor.audio_player = None; // перезапуск аудіо з нової позиції
+                    }
+                    editor.playhead = new_ph;
                 }
             }
 
