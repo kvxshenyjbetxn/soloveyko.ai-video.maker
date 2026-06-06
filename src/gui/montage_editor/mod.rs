@@ -766,6 +766,29 @@ fn draw_topbar(
 // ─── Медіа-пул ───────────────────────────────────────────────────────────────
 
 fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {
+    const VALID_EXTS: &[&str] = &["mp4", "mov", "webm", "jpg", "jpeg", "png", "webp", "mp3", "wav"];
+
+    // ── Drag-and-drop з файлової системи ─────────────────────────────────────
+    let hovered_files = ui.ctx().input(|i| i.raw.hovered_files.clone());
+    let dropped_files = ui.ctx().input(|i| i.raw.dropped_files.clone());
+
+    let is_hovering_media = hovered_files.iter().any(|f| {
+        f.path.as_ref().map(|p| {
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            VALID_EXTS.contains(&ext.as_str())
+        }).unwrap_or(true) // невідоме розширення — показуємо підказку
+    });
+
+    for file in &dropped_files {
+        if let Some(path) = &file.path {
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            if VALID_EXTS.contains(&ext.as_str()) && !editor.media_pool.iter().any(|m| m.path == *path) {
+                let save_path = editor.save_path.clone();
+                editor.media_pool.push(MediaItem::new(path.clone(), &save_path));
+            }
+        }
+    }
+
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(format!("📁 {}", translate(language, "montage_editor_media_pool"))).strong());
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
@@ -788,7 +811,34 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
 
     ScrollArea::vertical().id_salt("editor_pool_scroll").show(ui, |ui| {
         if editor.media_pool.is_empty() {
-            ui.weak("Медіа файли відсутні");
+            // Зона скидання коли пул порожній
+            let drop_h = (ui.available_height() - 8.0).max(60.0);
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), drop_h), Sense::hover());
+            let stroke_col = if is_hovering_media {
+                Color32::from_rgb(9, 123, 244)
+            } else {
+                Color32::from_rgb(55, 55, 60)
+            };
+            let bg_col = if is_hovering_media {
+                Color32::from_rgba_unmultiplied(9, 123, 244, 18)
+            } else {
+                Color32::TRANSPARENT
+            };
+            ui.painter().rect(rect, 6.0, bg_col, Stroke::new(1.5, stroke_col));
+            ui.painter().text(
+                rect.center() - Vec2::new(0.0, 10.0),
+                Align2::CENTER_CENTER,
+                "📂",
+                egui::FontId::proportional(24.0),
+                stroke_col,
+            );
+            ui.painter().text(
+                rect.center() + Vec2::new(0.0, 14.0),
+                Align2::CENTER_CENTER,
+                translate(language, "montage_editor_drop_here"),
+                egui::FontId::proportional(11.0),
+                stroke_col,
+            );
             return;
         }
         let mut to_remove: Option<usize> = None;
@@ -879,6 +929,21 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
                 );
             }
         }
+    }
+
+    // Overlay коли файли перетягуються над пулом (а в пулі вже є елементи)
+    if is_hovering_media && !editor.media_pool.is_empty() {
+        let pool_rect = ui.clip_rect();
+        let painter = ui.painter_at(pool_rect);
+        painter.rect_filled(pool_rect, 0.0, Color32::from_rgba_unmultiplied(9, 123, 244, 22));
+        painter.rect_stroke(pool_rect, 6.0, Stroke::new(2.0, Color32::from_rgb(9, 123, 244)));
+        painter.text(
+            pool_rect.center(),
+            Align2::CENTER_CENTER,
+            translate(language, "montage_editor_drop_here"),
+            egui::FontId::proportional(13.0),
+            Color32::from_rgb(9, 123, 244),
+        );
     }
 }
 
@@ -976,9 +1041,21 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let ph = editor.playhead;
     let settings = editor.preview_settings.clone();
 
-    // Відсортовані кліпи трека 0 (тільки ті що мають файл)
+    // Знаходимо найвищу пріоритетну доріжку (найнижчий track_idx) що має візуальний кліп під плейхедом
+    let active_track = {
+        let mut visual: Vec<&EditorClip> = editor.clips.iter()
+            .filter(|c| c.path.is_some() && !matches!(c.kind, ClipKind::Audio))
+            .collect();
+        visual.sort_by_key(|c| c.track_idx);
+        visual.iter()
+            .find(|c| c.start_secs <= ph && ph < c.end_secs())
+            .map(|c| c.track_idx)
+            .unwrap_or(0)
+    };
+
+    // Відсортовані кліпи активної доріжки (тільки ті що мають файл)
     let mut sorted: Vec<EditorClip> = editor.clips.iter()
-        .filter(|c| c.track_idx == 0 && c.path.is_some())
+        .filter(|c| c.track_idx == active_track && c.path.is_some())
         .cloned()
         .collect();
     sorted.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));

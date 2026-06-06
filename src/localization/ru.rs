@@ -36,6 +36,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_continue" => "▶ Продолжить рендер",
         "montage_editor_media_pool" => "Медиа пул",
         "montage_editor_add_media" => "+ Добавить",
+        "montage_editor_drop_here" => "⬇ Перетащите файлы сюда",
         "montage_editor_inspector" => "Инспектор",
         "montage_editor_no_selection" => "Выберите клип на таймлайне",
         "montage_editor_clip_start" => "Старт (с):",

@@ -36,6 +36,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_continue" => "▶ Continue Render",
         "montage_editor_media_pool" => "Media Pool",
         "montage_editor_add_media" => "+ Add",
+        "montage_editor_drop_here" => "⬇ Drop files here",
         "montage_editor_inspector" => "Inspector",
         "montage_editor_no_selection" => "Select a clip on the timeline",
         "montage_editor_clip_start" => "Start (s):",

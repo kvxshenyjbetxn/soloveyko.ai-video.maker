@@ -36,6 +36,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_continue" => "▶ Продовжити рендер",
         "montage_editor_media_pool" => "Медіа пул",
         "montage_editor_add_media" => "+ Додати",
+        "montage_editor_drop_here" => "⬇ Перетягніть файли сюди",
         "montage_editor_inspector" => "Інспектор",
         "montage_editor_no_selection" => "Виберіть кліп на таймлінії",
         "montage_editor_clip_start" => "Старт (с):",
