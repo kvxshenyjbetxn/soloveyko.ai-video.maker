@@ -87,6 +87,24 @@ pub struct EditorClip {
     pub pos_x: f32,
     /// Вертикальне зміщення центру кліпу в нормалізованих координатах (-1..1).
     pub pos_y: f32,
+    /// Чи застосовувати ефект зуму до цього кліпу у превью.
+    pub zoom_enabled: bool,
+    /// Чи застосовувати ефект покачування до цього кліпу у превью.
+    pub shake_enabled: bool,
+}
+
+// ─── Дані overlay-кліпу для рендеру превью ───────────────────────────────────
+
+struct OverlayRenderItem {
+    path: PathBuf,
+    t_off: f32,
+    scale: f32,
+    pos_x: f32,
+    pos_y: f32,
+    duration: f32,
+    kind: ClipKind,
+    zoom_enabled: bool,
+    shake_enabled: bool,
 }
 
 // ─── Режими перетягування на превью ──────────────────────────────────────────
@@ -495,6 +513,8 @@ impl MontageEditorState {
                 "start_secs": actual_start as f64,
                 "end_secs": actual_end as f64,
                 "media": media_rel,
+                "zoom_enabled": clip.zoom_enabled,
+                "shake_enabled": clip.shake_enabled,
             }));
             cursor = actual_end;
         }
@@ -517,6 +537,8 @@ impl MontageEditorState {
                     "scale": clip.scale as f64,
                     "pos_x": clip.pos_x as f64,
                     "pos_y": clip.pos_y as f64,
+                    "zoom_enabled": clip.zoom_enabled,
+                    "shake_enabled": clip.shake_enabled,
                 })
             }).collect();
             overlay_tracks.push(serde_json::json!({
@@ -563,6 +585,9 @@ fn clip_from_json_seg(
     let scale = seg["scale"].as_f64().unwrap_or(1.0) as f32;
     let pos_x = seg["pos_x"].as_f64().unwrap_or(0.0) as f32;
     let pos_y = seg["pos_y"].as_f64().unwrap_or(0.0) as f32;
+    // Якщо поле відсутнє (старий формат) — вважаємо ефекти увімкненими для сумісності
+    let zoom_enabled = seg["zoom_enabled"].as_bool().unwrap_or(true);
+    let shake_enabled = seg["shake_enabled"].as_bool().unwrap_or(true);
     EditorClip {
         id: uuid_str(),
         path: Some(full_path),
@@ -574,6 +599,8 @@ fn clip_from_json_seg(
         scale,
         pos_x,
         pos_y,
+        zoom_enabled,
+        shake_enabled,
     }
 }
 
@@ -1201,14 +1228,19 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 4.0, Color32::from_rgb(5, 5, 7));
 
-        let is_img_curr = active.as_ref().map(|c| matches!(c.kind, ClipKind::Image)).unwrap_or(false);
-        let is_img_prev = prev_clip.as_ref().map(|c| matches!(c.kind, ClipKind::Image)).unwrap_or(false);
+        // Per-clip zoom/shake для базової (V1) доріжки
+        let is_base_img = active.as_ref().map(|c| matches!(c.kind, ClipKind::Image)).unwrap_or(false);
+        let base_zoom_on = is_base_img && active.as_ref().map(|c| c.zoom_enabled).unwrap_or(false);
+        let base_shake_on = is_base_img && active.as_ref().map(|c| c.shake_enabled).unwrap_or(false);
+        let is_prev_img = prev_clip.as_ref().map(|c| matches!(c.kind, ClipKind::Image)).unwrap_or(false);
+        let prev_zoom_on = is_prev_img && prev_clip.as_ref().map(|c| c.zoom_enabled).unwrap_or(false);
+        let prev_shake_on = is_prev_img && prev_clip.as_ref().map(|c| c.shake_enabled).unwrap_or(false);
         let dur_curr = active.as_ref().map(|c| c.duration).unwrap_or(1.0);
         let dur_prev = prev_clip.as_ref().map(|c| c.duration).unwrap_or(1.0);
-        let uv_curr = zoom_uv(compute_zoom(clip_offset, dur_curr, &settings, img_idx_active, is_img_curr));
-        let sh_curr = shake_uv(clip_offset, &settings, is_img_curr);
-        let uv_prev = zoom_uv(compute_zoom(dur_prev, dur_prev, &settings, img_idx_prev, is_img_prev));
-        let sh_prev = shake_uv(dur_prev, &settings, is_img_prev);
+        let uv_curr = zoom_uv(compute_zoom(clip_offset, dur_curr, &settings, img_idx_active, base_zoom_on));
+        let sh_curr = shake_uv(clip_offset, &settings, base_shake_on);
+        let uv_prev = zoom_uv(compute_zoom(dur_prev, dur_prev, &settings, img_idx_prev, prev_zoom_on));
+        let sh_prev = shake_uv(dur_prev, &settings, prev_shake_on);
 
         // ── Рендер базової доріжки 0 (зі zoom/shake/переходами) ─────────────
         if let Some(ref curr) = current_tex {
@@ -1322,8 +1354,8 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                 painter.circle_filled(dot, 5.0, Color32::from_rgba_unmultiplied(255, 180, 0, 220));
             }
             let mut effects: Vec<&str> = Vec::new();
-            if settings.zoom_enabled && is_img_curr { effects.push("zoom"); }
-            if settings.shake_enabled && is_img_curr { effects.push("shake"); }
+            if settings.zoom_enabled && base_zoom_on { effects.push("zoom"); }
+            if settings.shake_enabled && base_shake_on { effects.push("shake"); }
             if in_transition { effects.push(&settings.transition); }
             if !effects.is_empty() {
                 let label = effects.join(" + ");
@@ -1370,32 +1402,54 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             .filter(|c| c.start_secs <= ph && ph < c.end_secs())
             .collect();
         ov_sorted.sort_by_key(|c| c.track_idx);
-        let overlay_data: Vec<(PathBuf, f32, f32, f32, f32, String)> = ov_sorted.iter()
-            .map(|c| (
-                c.path.clone().unwrap(),
-                (ph - c.start_secs).max(0.0),
-                c.scale, c.pos_x, c.pos_y,
-                c.id.clone(),
-            ))
+        let overlay_data: Vec<OverlayRenderItem> = ov_sorted.iter()
+            .map(|c| OverlayRenderItem {
+                path: c.path.clone().unwrap(),
+                t_off: (ph - c.start_secs).max(0.0),
+                scale: c.scale, pos_x: c.pos_x, pos_y: c.pos_y,
+                duration: c.duration,
+                kind: c.kind.clone(),
+                zoom_enabled: c.zoom_enabled,
+                shake_enabled: c.shake_enabled,
+            })
             .collect();
 
-        for (path, t_off, scale, pos_x, pos_y, _id) in &overlay_data {
-            let ov_media = editor.media_pool.iter().find(|m| m.path == *path).cloned();
+        for (ov_idx, item) in overlay_data.iter().enumerate() {
+            let ov_media = editor.media_pool.iter().find(|m| m.path == item.path).cloned();
             if let Some(media) = ov_media {
-                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, *t_off) {
-                    let clip_w = rect.width() * scale;
-                    let clip_h = rect.height() * scale;
-                    let clip_cx = rect.center().x + pos_x * rect.width() / 2.0;
-                    let clip_cy = rect.center().y + pos_y * rect.height() / 2.0;
+                // Запитуємо перемалювання поки витягування не завершено
+                if !media.is_extraction_complete() {
+                    ui.ctx().request_repaint();
+                    // Жовта крапка — overlay ще завантажується
+                    let dot_x = rect.left() + 10.0 + ov_idx as f32 * 14.0;
+                    painter.circle_filled(
+                        Pos2::new(dot_x, rect.top() + 10.0),
+                        5.0, Color32::from_rgba_unmultiplied(255, 200, 60, 220),
+                    );
+                }
+                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, item.t_off) {
+                    let clip_w = rect.width() * item.scale;
+                    let clip_h = rect.height() * item.scale;
+                    let clip_cx = rect.center().x + item.pos_x * rect.width() / 2.0;
+                    let clip_cy = rect.center().y + item.pos_y * rect.height() / 2.0;
                     let container = Rect::from_center_size(
                         Pos2::new(clip_cx, clip_cy),
                         Vec2::new(clip_w, clip_h),
                     );
-                    let full_uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
-                    render_clip_frame(&painter, &tex, container, full_uv, Vec2::ZERO, 255);
+                    let is_ov_img = matches!(item.kind, ClipKind::Image);
+                    let ov_uv = zoom_uv(compute_zoom(item.t_off, item.duration, &settings, ov_idx,
+                        is_ov_img && item.zoom_enabled));
+                    let ov_shake = shake_uv(item.t_off, &settings,
+                        is_ov_img && item.shake_enabled);
+                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, 255);
                 }
             }
         }
+
+        // Shake safe-zone: показуємо якщо будь-який видимий кліп має shake увімкнений
+        let any_shake_on = base_shake_on || overlay_data.iter().any(|item|
+            matches!(item.kind, ClipKind::Image) && item.shake_enabled
+        );
 
         // ── Ручки трансформу для виділеного кліпу ───────────────────────────
         // Обчислюємо rect виділеного кліпу в екранних координатах
@@ -1427,7 +1481,7 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         }
 
         // Обводка кадру та shake-зона
-        draw_frame_overlay(&painter, rect, &settings, is_img_curr);
+        draw_frame_overlay(&painter, rect, &settings, any_shake_on);
 
         // Інтерактивний drag-трансформ
         if sel_transform.is_some() {
@@ -1694,6 +1748,18 @@ fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdi
                 clip.pos_y = 0.0;
             }
 
+            // ── Ефекти (лише для зображень) ─────────────────────────────────
+            if matches!(clip.kind, ClipKind::Image) {
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new(translate(language, "montage_editor_effects")).strong().size(11.0));
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut clip.zoom_enabled, translate(language, "montage_editor_clip_zoom"));
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut clip.shake_enabled, translate(language, "montage_editor_clip_shake"));
+                });
+            }
+
             ui.add_space(8.0);
             if ui.button(translate(language, "montage_editor_delete_clip")).clicked() {
                 editor.clips.remove(idx);
@@ -1871,6 +1937,8 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                                     scale: 1.0,
                                     pos_x: 0.0,
                                     pos_y: 0.0,
+                                    zoom_enabled: false,
+                                    shake_enabled: false,
                                 });
                             }
                         }
