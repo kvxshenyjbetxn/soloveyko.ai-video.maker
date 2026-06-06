@@ -102,7 +102,7 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
         let scale_filter = format!("fps={},scale={}:{}", FPS, out_w, out_h);
         let frame_bytes = (out_w * out_h * 4) as usize;
 
-        let child = std::process::Command::new("ffmpeg")
+        let child = std::process::Command::new(crate::bundle::ffmpeg_path())
             .arg("-i").arg(&path)
             .arg("-vf").arg(&scale_filter)
             .arg("-f").arg("rawvideo")
@@ -155,7 +155,7 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
 
 /// Повертає (width, height) для масштабування відео до `target_w` (парна висота).
 fn get_video_dimensions(path: &Path, target_w: u32) -> Option<(u32, u32)> {
-    let output = std::process::Command::new("ffprobe")
+    let output = std::process::Command::new(crate::bundle::ffprobe_path())
         .args(["-v", "quiet", "-select_streams", "v:0",
                "-show_entries", "stream=width,height",
                "-of", "csv=p=0"])
@@ -185,7 +185,7 @@ fn extract_single_frame_pipe(
     let (out_w, out_h) = get_video_dimensions(path, width).unwrap_or((width, width * 9 / 16));
     let frame_bytes = (out_w * out_h * 4) as usize;
 
-    let mut child = std::process::Command::new("ffmpeg")
+    let mut child = std::process::Command::new(crate::bundle::ffmpeg_path())
         .arg("-i").arg(path)
         .arg("-vf").arg(format!("scale={}:{}", out_w, out_h))
         .arg("-frames:v").arg("1")
@@ -238,7 +238,7 @@ fn extract_frames_file(
     let out_pattern = tmp_dir.join("frame_%06d.jpg");
     let scale_filter = format!("fps={},scale={}:-2", fps, width);
 
-    let mut cmd = std::process::Command::new("ffmpeg");
+    let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
     cmd.arg("-i").arg(path)
        .arg("-vf").arg(&scale_filter)
        .arg("-q:v").arg("3")

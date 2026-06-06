@@ -214,7 +214,7 @@ impl MediaItem {
                 std::fs::create_dir_all(&dir).ok();
                 let out_pattern = dir.join("%06d.jpg");
                 let Some(out_str) = out_pattern.to_str() else { return };
-                let status = std::process::Command::new("ffmpeg")
+                let status = std::process::Command::new(crate::bundle::ffmpeg_path())
                     .args([
                         "-y", "-v", "error", "-threads", "1",
                         "-i", &path_str,
@@ -229,7 +229,7 @@ impl MediaItem {
                 } else {
                     // Fallback: витягуємо тільки перший кадр без фільтрів
                     let first_frame = dir.join("000001.jpg");
-                    let _ = std::process::Command::new("ffmpeg")
+                    let _ = std::process::Command::new(crate::bundle::ffmpeg_path())
                         .args([
                             "-y", "-v", "error", "-threads", "1",
                             "-i", &path_str,
@@ -389,7 +389,7 @@ fn path_hash(path: &Path) -> String {
 
 /// Отримує тривалість медіафайлу через ffprobe
 fn probe_duration(path: &Path) -> Option<f32> {
-    let out = std::process::Command::new("ffprobe")
+    let out = std::process::Command::new(crate::bundle::ffprobe_path())
         .args(["-v", "error", "-show_entries", "format=duration",
                "-of", "default=noprint_wrappers=1:nokey=1"])
         .arg(path)
