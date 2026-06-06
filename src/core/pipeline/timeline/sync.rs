@@ -20,6 +20,8 @@ pub struct SegmentTiming {
 #[derive(Serialize, Deserialize)]
 pub struct Timeline {
     pub total_duration_secs: f64,
+    #[serde(default)]
+    pub audio_start_secs: f64,
     pub segments: Vec<SegmentTiming>,
 }
 
@@ -658,6 +660,7 @@ pub fn build_timeline(
 
     let timeline = Timeline {
         total_duration_secs: total_duration,
+        audio_start_secs: 0.0,
         segments: segment_timings.clone(),
     };
 

@@ -468,6 +468,14 @@ impl AudioPlayer {
     }
 }
 
+#[allow(dead_code)]
+pub(crate) struct PlayingAudio {
+    pub path: PathBuf,
+    pub start_secs: f32,
+    pub duration: f32,
+    pub player: AudioPlayer,
+}
+
 // ─── Допоміжні функції ────────────────────────────────────────────────────────
 
 /// Стабільний хеш шляху → ім'я папки кешу (не змінюється між запусками)
@@ -479,12 +487,24 @@ fn path_hash(path: &Path) -> String {
     format!("{:x}", h.finish())
 }
 
+fn clean_windows_path(path: &Path) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let s = path.to_string_lossy();
+        if s.starts_with(r"\\?\") {
+            return PathBuf::from(&s[4..]);
+        }
+    }
+    path.to_path_buf()
+}
+
 /// Отримує тривалість медіафайлу через ffprobe
 fn probe_duration(path: &Path) -> Option<f32> {
+    let clean_path = clean_windows_path(path);
     let out = std::process::Command::new(crate::bundle::ffprobe_path())
         .args(["-v", "error", "-show_entries", "format=duration",
                "-of", "default=noprint_wrappers=1:nokey=1"])
-        .arg(path)
+        .arg(&clean_path)
         .output()
         .ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
@@ -526,6 +546,8 @@ pub struct MontageEditorState {
     pub clips: Vec<EditorClip>,
     pub num_tracks: usize,
     pub audio_path: Option<PathBuf>,
+    pub audio_start_secs: f32,
+    pub audio_duration: f32,
     pub total_duration: f32,
     pub playhead: f32,
     pub is_playing: bool,
@@ -541,8 +563,8 @@ pub struct MontageEditorState {
     pub preview_settings: MontagePreviewSettings,
     /// Висота панелі таймлайну (змінюється drag-handle)
     pub timeline_height: f32,
-    /// Активний аудіо плеєр (Some = відтворення; None = зупинено)
-    pub audio_player: Option<AudioPlayer>,
+    /// Активні аудіо плеєри
+    pub active_audios: Vec<PlayingAudio>,
     /// Стан інтерактивного drag-трансформу на превью
     pub preview_drag: Option<PreviewDragState>,
     /// Виділені медіа в пулі (для групової анімації)
@@ -559,8 +581,13 @@ pub struct MontageEditorState {
 
 impl MontageEditorState {
     pub fn load(save_path: &Path, job_name: &str) -> Self {
-        let (mut clips, total_duration) = load_timeline_clips(save_path);
+        let (mut clips, total_duration, audio_start_secs) = load_timeline_clips(save_path);
         let audio_path = find_audio_file(save_path);
+        let audio_duration = if let Some(ref ap) = audio_path {
+            probe_duration(ap).unwrap_or(0.0)
+        } else {
+            0.0
+        };
         let mut media_pool = load_media_pool(save_path);
 
         // Додаємо у пул файли з таймлінії, яких ще немає (захист від розбіжності шляхів)
@@ -605,6 +632,8 @@ impl MontageEditorState {
             clips,
             num_tracks,
             audio_path,
+            audio_start_secs,
+            audio_duration,
             total_duration: total_duration.max(10.0),
             playhead: 0.0,
             is_playing: false,
@@ -617,7 +646,7 @@ impl MontageEditorState {
             frame_cache: FrameCache::new(FRAME_CACHE_SIZE),
             preview_settings: MontagePreviewSettings::default(),
             timeline_height: 220.0,
-            audio_player: None,
+            active_audios: Vec::new(),
             preview_drag: None,
             selected_media_ids: HashSet::new(),
             pending_animate_paths: vec![],
@@ -717,6 +746,7 @@ impl MontageEditorState {
 
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
+            "audio_start_secs": self.audio_start_secs as f64,
             "segments": main_segments,
             "overlay_tracks": overlay_tracks,
         });
@@ -745,6 +775,8 @@ fn clip_from_json_seg(
     let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
         ClipKind::Video
+    } else if matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac") {
+        ClipKind::Audio
     } else {
         ClipKind::Image
     };
@@ -774,15 +806,16 @@ fn clip_from_json_seg(
     }
 }
 
-fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32) {
+fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
     let path = save_path.join("timeline.json");
-    if !path.exists() { return (Vec::new(), 10.0); }
+    if !path.exists() { return (Vec::new(), 10.0, 0.0); }
     let content = std::fs::read_to_string(&path).unwrap_or_default();
     let v: serde_json::Value = match serde_json::from_str(&content) {
         Ok(v) => v,
-        Err(_) => return (Vec::new(), 10.0),
+        Err(_) => return (Vec::new(), 10.0, 0.0),
     };
     let total = v["total_duration_secs"].as_f64().unwrap_or(10.0) as f32;
+    let audio_start = v["audio_start_secs"].as_f64().unwrap_or(0.0) as f32;
     let mut clips = Vec::new();
 
     // Доріжка 0 з "segments"
@@ -808,7 +841,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32) {
         }
     }
 
-    (clips, total)
+    (clips, total, audio_start)
 }
 
 fn find_audio_file(save_path: &Path) -> Option<PathBuf> {
@@ -960,11 +993,64 @@ pub fn draw_montage_editor_window(
         if editor.playhead >= editor.total_dur() {
             editor.is_playing = false;
             editor.playhead = 0.0;
-            editor.audio_player = None;
-        } else if editor.audio_player.is_none() {
-            // Запускаємо аудіо з поточної позиції (після Play або після скрабу)
-            if let Some(ap) = editor.audio_path.clone() {
-                editor.audio_player = AudioPlayer::start(&ap, editor.playhead);
+            editor.active_audios.clear();
+        } else {
+            struct TargetAudio {
+                path: PathBuf,
+                start: f32,
+                duration: f32,
+            }
+            let mut targets = Vec::new();
+            if let Some(ref ap) = editor.audio_path {
+                targets.push(TargetAudio {
+                    path: ap.clone(),
+                    start: editor.audio_start_secs,
+                    duration: editor.audio_duration,
+                });
+            }
+            for clip in &editor.clips {
+                if clip.kind == ClipKind::Audio {
+                    if let Some(ref cp) = clip.path {
+                        targets.push(TargetAudio {
+                            path: cp.clone(),
+                            start: clip.start_secs,
+                            duration: clip.duration,
+                        });
+                    }
+                }
+            }
+
+            let playhead = editor.playhead;
+            
+            // 1. Зупиняємо ті, що вже не мають грати
+            editor.active_audios.retain(|active| {
+                targets.iter().any(|t| {
+                    t.path == active.path
+                        && (t.start - active.start_secs).abs() < 0.001
+                        && playhead >= t.start
+                        && playhead < t.start + t.duration
+                })
+            });
+
+            // 2. Запускаємо нові
+            for t in targets {
+                let should_play = playhead >= t.start && playhead < t.start + t.duration;
+                if should_play {
+                    let already_playing = editor.active_audios.iter().any(|active| {
+                        active.path == t.path && (active.start_secs - t.start).abs() < 0.001
+                    });
+                    if !already_playing {
+                        let offset = playhead - t.start;
+                        if let Some(player) = AudioPlayer::start(&t.path, offset) {
+                            editor.active_audios.push(PlayingAudio {
+                                path: t.path,
+                                start_secs: t.start,
+                                duration: t.duration,
+                                player,
+                            });
+                        }
+                    }
+                }
             }
         }
         ctx.request_repaint();
@@ -2046,24 +2132,24 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
         if ui.button("⏮").on_hover_text("-0.1s").clicked() {
             editor.playhead = (editor.playhead - 0.1).max(0.0);
-            editor.audio_player = None; // перезапуск аудіо з нової позиції
+            editor.active_audios.clear(); // перезапуск аудіо з нової позиції
         }
         if ui.button("⏹").clicked() {
             editor.is_playing = false;
             editor.playhead = 0.0;
-            editor.audio_player = None;
+            editor.active_audios.clear();
         }
         let play_lbl = egui::RichText::new(if editor.is_playing { "⏸" } else { "▶" }).size(16.0);
         if ui.button(play_lbl).clicked() {
             editor.is_playing = !editor.is_playing;
             editor.last_frame_time = Instant::now();
             if !editor.is_playing {
-                editor.audio_player = None; // пауза = зупиняємо аудіо
+                editor.active_audios.clear(); // пауза = зупиняємо аудіо
             }
         }
         if ui.button("⏭").on_hover_text("+0.1s").clicked() {
             editor.playhead = (editor.playhead + 0.1).min(total);
-            editor.audio_player = None; // перезапуск аудіо з нової позиції
+            editor.active_audios.clear(); // перезапуск аудіо з нової позиції
         }
 
         ui.add_space(8.0);
@@ -2652,9 +2738,18 @@ fn draw_timeline(
                 let audio_y = rect.top() + ruler_h + (track_h + 2.0) * editor.num_tracks as f32 + 2.0;
                 let audio_row = Rect::from_min_size(Pos2::new(rect.left(), audio_y - 2.0), Vec2::new(rect.width(), track_h));
                 painter.rect_filled(audio_row, 0.0, Color32::from_rgb(14, 22, 16));
-                let audio_w = total_dur * zoom;
-                let audio_rect = Rect::from_min_size(Pos2::new(rect.left(), audio_y), Vec2::new(audio_w, track_h - 4.0));
+                let audio_w = editor.audio_duration * zoom;
+                let audio_x = rect.left() + editor.audio_start_secs * zoom;
+                let audio_rect = Rect::from_min_size(Pos2::new(audio_x, audio_y), Vec2::new(audio_w, track_h - 4.0));
                 painter.rect(audio_rect, 3.0, Color32::from_rgb(20, 48, 30), Stroke::new(1.2, Color32::from_rgb(39, 174, 96)));
+                
+                let audio_resp = ui.allocate_rect(audio_rect, Sense::click_and_drag());
+                if audio_resp.dragged() {
+                    let delta_x = audio_resp.drag_delta().x;
+                    editor.audio_start_secs = (editor.audio_start_secs + delta_x / zoom).max(0.0);
+                    editor.active_audios.clear();
+                }
+                
                 if audio_w > 20.0 {
                     let aname = ap.file_name().and_then(|n| n.to_str()).unwrap_or("audio");
                     painter.text(
@@ -2688,7 +2783,7 @@ fn draw_timeline(
                 if ruler_rect.contains(pos) && ui.input(|i| i.pointer.primary_down()) {
                     let new_ph = ((pos.x - rect.left()) / zoom).clamp(0.0, total_dur);
                     if (new_ph - editor.playhead).abs() > 0.05 {
-                        editor.audio_player = None; // перезапуск аудіо з нової позиції
+                        editor.active_audios.clear(); // перезапуск аудіо з нової позиції
                     }
                     editor.playhead = new_ph;
                 }

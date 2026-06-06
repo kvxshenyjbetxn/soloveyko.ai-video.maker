@@ -75,6 +75,8 @@ pub fn run_montage(
     #[derive(serde::Deserialize)]
     struct Timeline {
         total_duration_secs: f64,
+        #[serde(default)]
+        audio_start_secs: f64,
         segments: Vec<SegTiming>,
         #[serde(default)]
         overlay_tracks: Vec<OverlayTrack>,
@@ -95,22 +97,74 @@ pub fn run_montage(
         matches!(ext.as_str(), "mp4" | "mov" | "avi" | "mkv" | "webm")
     }
 
+    fn is_audio_ext(path: &str) -> bool {
+        let ext = std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac")
+    }
+
+    struct AudioClip {
+        path: String,
+        start_secs: f64,
+        duration: f64,
+    }
+
     // ─── Зчитуємо timeline.json ───────────────────────────────────────────────
     let mut clips: Vec<Clip> = Vec::new();
     let mut total_dur = 0.0f64;
+    let mut audio_start_secs = 0.0f64;
     let mut overlay_tracks: Vec<OverlayTrack> = Vec::new();
+    let mut extra_audios: Vec<AudioClip> = Vec::new();
     let timeline_path = save_dir.join("timeline.json");
 
     if timeline_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&timeline_path) {
             if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
                 total_dur = tl.total_duration_secs;
-                overlay_tracks = tl.overlay_tracks;
+                audio_start_secs = tl.audio_start_secs;
+                
+                let mut video_overlay_tracks = Vec::new();
+                for track in tl.overlay_tracks {
+                    let mut video_segs = Vec::new();
+                    for seg in track.segments {
+                        let dur = (seg.end_secs - seg.start_secs).max(0.05);
+                        if let Some(ref media) = seg.media {
+                            if is_audio_ext(media) {
+                                extra_audios.push(AudioClip {
+                                    path: media.clone(),
+                                    start_secs: seg.start_secs,
+                                    duration: dur,
+                                });
+                            } else {
+                                video_segs.push(seg);
+                            }
+                        }
+                    }
+                    if !video_segs.is_empty() {
+                        video_overlay_tracks.push(OverlayTrack {
+                            track_idx: track.track_idx,
+                            segments: video_segs,
+                        });
+                    }
+                }
+                overlay_tracks = video_overlay_tracks;
+
                 let seg_count = tl.segments.len();
                 for seg in &tl.segments {
                     let dur = (seg.end_secs - seg.start_secs).max(0.05);
                     if let Some(ref media) = seg.media {
-                        clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media) });
+                        if is_audio_ext(media) {
+                            extra_audios.push(AudioClip {
+                                path: media.clone(),
+                                start_secs: seg.start_secs,
+                                duration: dur,
+                            });
+                        } else {
+                            clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media) });
+                        }
                     } else {
                         if matches!(clips.last(), Some(Clip { path: None, .. })) {
                             clips.last_mut().unwrap().duration += dur;
@@ -120,8 +174,8 @@ pub fn run_montage(
                     }
                 }
                 log_fn(&format!(
-                    "timeline.json: {} segments → {} clips, {} overlay tracks, total={:.2}s",
-                    seg_count, clips.len(), overlay_tracks.len(), total_dur,
+                    "timeline.json: {} segments → {} clips, {} overlay tracks, {} extra audios, total={:.2}s",
+                    seg_count, clips.len(), overlay_tracks.len(), extra_audios.len(), total_dur,
                 ));
             } else {
                 log_fn("timeline.json: PARSE ERROR — invalid JSON format");
@@ -523,6 +577,50 @@ pub fn run_montage(
         format!("[{current}]")
     };
 
+    let audio_idx = media_file_count;
+    let extra_audio_start_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
+    let audio_map_label = if extra_audios.is_empty() {
+        if audio_start_secs > 0.001 {
+            let ms = (audio_start_secs * 1000.0).round() as i64;
+            filter_parts.push(format!(
+                "[{audio_idx}:a]adelay={ms}|{ms}[a_delayed]"
+            ));
+            "[a_delayed]".to_string()
+        } else {
+            format!("{audio_idx}:a")
+        }
+    } else {
+        if audio_start_secs > 0.001 {
+            let ms = (audio_start_secs * 1000.0).round() as i64;
+            filter_parts.push(format!(
+                "[{audio_idx}:a]adelay={ms}|{ms}[a_orig]"
+            ));
+        } else {
+            filter_parts.push(format!(
+                "[{audio_idx}:a]anull[a_orig]"
+            ));
+        }
+
+        for (i, ea) in extra_audios.iter().enumerate() {
+            let input_idx = extra_audio_start_idx + i;
+            let delay_ms = (ea.start_secs * 1000.0).round() as i64;
+            filter_parts.push(format!(
+                "[{input_idx}:a]atrim=end={dur:.6},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
+                dur = ea.duration,
+            ));
+        }
+
+        let mut mix_inputs = "[a_orig]".to_string();
+        for i in 0..extra_audios.len() {
+            mix_inputs.push_str(&format!("[a_extra_{i}]"));
+        }
+        let mix_count = 1 + extra_audios.len();
+        filter_parts.push(format!(
+            "{mix_inputs}amix=inputs={mix_count}:duration=longest:dropout_transition=0[a_mixed]"
+        ));
+        "[a_mixed]".to_string()
+    };
+
     let script = filter_parts.join(";");
     std::fs::write(save_dir.join("montage_script.txt"), &script)
         .map_err(|e| format!("Failed to write montage_script.txt: {e}"))?;
@@ -537,7 +635,6 @@ pub fn run_montage(
 
     // ─── FFmpeg аргументи ─────────────────────────────────────────────────────
     let ffmpeg = crate::bundle::ffmpeg_path();
-    let audio_idx = media_file_count;
     let bitr = format!("{bitrate_mbps}M");
     let bufsize = format!("{}M", bitrate_mbps * 2);
 
@@ -572,10 +669,15 @@ pub fn run_montage(
         args.extend(["-i".into(), op.clone()]);
     }
 
+    // Додаткові аудіокліпи
+    for ea in &extra_audios {
+        args.extend(["-i".into(), ea.path.clone()]);
+    }
+
     args.extend([
         "-filter_complex_script".into(), "montage_script.txt".into(),
         "-map".into(), video_map_label.clone(),
-        "-map".into(), format!("{audio_idx}:a"),
+        "-map".into(), audio_map_label,
         "-c:v".into(), "libx264".into(),
         "-preset".into(), preset.to_string(),
         "-b:v".into(), bitr.clone(),
