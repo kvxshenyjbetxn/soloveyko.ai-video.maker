@@ -58,8 +58,19 @@ src/
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
 │   ├── agent_chat_window.rs     — draw_agent_chat_window: вікно чату з агентом (история повідомлень, введення, відправка через --resume, кнопка "Продовжити пайплайн")
-│   ├── montage_editor/
-│   │   └── mod.rs               — draw_montage_editor_window: повноцінний редактор монтажу (медіа пул, прев'ю через ffmpeg pipe, інспектор кліпу, таймлінія, кнопка "Продовжити рендер")
+│   ├── montage_editor/           — повноцінний редактор монтажу, розбитий на 12 модулів:
+│   │   ├── mod.rs               — точка входу: декларації модулів, pub use реекспорти, draw_montage_editor_window, load_preview_texture, draw_montage_media_preview
+│   │   ├── types.rs             — константи (PREVIEW_FPS=15, PREVIEW_WIDTH=640, FRAME_CACHE_SIZE=200) + всі pub типи: ClipKind, DragMode, EditorClip, MontagePreviewSettings, MontageEditorActions, ClipDragState, PreviewDragMode, PreviewDragState
+│   │   ├── utils.rs             — path_hash (стабільний u64 хеш для папок кешу), probe_duration (ffprobe -show_entries), uuid_str (UUID через SystemTime)
+│   │   ├── audio.rs             — AudioPlayer (rodio OutputStream + Sink + skip_duration), PlayingAudio (метадані активного аудіопотоку)
+│   │   ├── media.rs             — MediaItem: pre-extraction кадрів у фоновому потоці (zображення через крейт image, відео через ffmpeg), AtomicBool extraction_complete, маркер .complete на диску
+│   │   ├── frame_cache.rs       — FrameCache: LRU кеш 200 TextureHandle через VecDeque + async префетчинг наступних 10 кадрів через mpsc канал
+│   │   ├── state.rs             — MontageEditorState: весь стан редактора; load() — завантаження timeline.json + пул + UUID-sync; save_to_timeline() — запис timeline.json з segments/overlay_tracks
+│   │   ├── topbar.rs            — draw_topbar: повзунок масштабу, лічильник кліпів, кнопка «▶ Продовжити рендер» (save + condvar signal)
+│   │   ├── inspector.rs         — draw_inspector: час/тривалість/доріжка DragValue, scale/pos_x/pos_y Slider, ефекти zoom/shake, видалення кліпу
+│   │   ├── media_pool.rs        — draw_media_pool: OS drag-and-drop, rfd::FileDialog picker, animate-all/selected кнопки, ghost card при drag, extraction status dots, context menu (animate/regen)
+│   │   ├── preview.rs           — draw_preview: UV-based зум/покачування, 11 груп xfade переходів, overlay compositing, transport controls, PreviewDragState для drag-трансформу overlay-кліпів
+│   │   └── timeline.rs          — draw_timeline: ruler, N доріжок, sticky labels (painter_at + offset.y sync), drag Move/TrimLeft/TrimRight, магнітний снеп, ghost preview, кнопка «+ Доріжка»
 │   ├── task_history.rs          — draw_task_history_panel: ліва фіксована панель (190px) на вкладці Main з историчними задачами; при кліку відновлює налаштування пайплайну і текст сценарію
 │   ├── topbar/
 │   │   ├── mod.rs               — draw_navigation_bar, draw_status_bar, draw_chip, draw_balance_chip, thread_load_color
@@ -176,7 +187,7 @@ src/
 
 **Hover-ефект без конфлікту widget ID:** фон картки малюється через `egui::Frame::fill(hover_fill)` — тобто ДО вмісту, тому текст не перекривається. Rect фрейму зберігається у `egui::Memory` після кожного рендеру (`data_mut(|d| d.insert_temp(id, rect))`), а в наступному фреймі перед рендером з нього читається hover-стан (`data(|d| d.get_temp::<Rect>(id))`). Lag одного фрейму непомітний. `frame_resp.response.interact(Sense::click())` не реєструє новий widget ID — лише розширює sense існуючого Response.
 
-### Редактор монтажу (`src/gui/montage_editor/mod.rs`)
+### Редактор монтажу (`src/gui/montage_editor/`)
 
 З'являється коли у секції «Контроль» увімкнено «Контроль монтажу» і задача зупиняється в стані `AwaitingMontageControl`. Відкривається через кнопку `✂` у картці задачі або кліком по картці задачі у статусі `AwaitingMontageControl`.
 
