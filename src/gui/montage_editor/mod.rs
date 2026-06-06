@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use eframe::egui;
 use egui::{Align2, Color32, Frame, Layout, Pos2, Rect, ScrollArea, Sense, Stroke, Vec2};
@@ -75,6 +75,8 @@ pub struct ClipDragState {
 #[derive(Clone, Debug)]
 pub struct EditorClip {
     pub id: String,
+    /// Стабільний ID медіа-елементу в пулі (не залежить від шляху файлу)
+    pub media_id: String,
     pub path: Option<PathBuf>,
     pub name: String,
     pub start_secs: f32,
@@ -224,6 +226,19 @@ impl MediaItem {
                 if matches!(status, Ok(s) if s.success()) {
                     std::fs::write(dir.join(".complete"), b"1").ok();
                     flag.store(true, Ordering::Relaxed);
+                } else {
+                    // Fallback: витягуємо тільки перший кадр без фільтрів
+                    let first_frame = dir.join("000001.jpg");
+                    let _ = std::process::Command::new("ffmpeg")
+                        .args([
+                            "-y", "-v", "error", "-threads", "1",
+                            "-i", &path_str,
+                            "-vframes", "1",
+                            "-q:v", "5",
+                            first_frame.to_str().unwrap_or(""),
+                        ])
+                        .status();
+                    flag.store(true, Ordering::Relaxed);
                 }
             });
         } else {
@@ -244,6 +259,10 @@ impl MediaItem {
 
     pub fn is_extraction_complete(&self) -> bool {
         if self.extraction_complete.load(Ordering::Relaxed) {
+            return true;
+        }
+        // Перший кадр вже є — можна показувати (витягування ще йде, але не блокуємо UI)
+        if self.cache_dir.join("000001.jpg").exists() {
             return true;
         }
         // Fallback після перезапуску: перевіряємо маркер на диску
@@ -304,9 +323,13 @@ impl FrameCache {
 
         // Cache miss — читаємо JPG з диска
         let frame_path = media.cache_dir.join(format!("{:06}.jpg", frame_idx));
-        if !frame_path.exists() {
-            return None;
-        }
+        // Якщо точний кадр ще не витягнутий — спробуємо перший кадр (показуємо хоч щось під час витягування)
+        let frame_path = if frame_path.exists() {
+            frame_path
+        } else {
+            let first = media.cache_dir.join("000001.jpg");
+            if first.exists() { first } else { return None; }
+        };
         let bytes = std::fs::read(&frame_path).ok()?;
         let img = image::load_from_memory(&bytes).ok()?;
         let rgba = img.to_rgba8();
@@ -392,6 +415,18 @@ fn rand_u32() -> u32 {
 
 // ─── Стан редактора ───────────────────────────────────────────────────────────
 
+/// Дії що редактор монтажу повертає для обробки в app.rs за кожен кадр
+pub struct MontageEditorActions {
+    /// Шляхи зображень для оживлення (image → video)
+    pub animate_paths: Vec<PathBuf>,
+    /// Дія перегенерації (файл, налаштування, is_custom, job_id, job_name)
+    pub regen_action: Option<crate::gui::gallery::RegenAction>,
+}
+
+impl Default for MontageEditorActions {
+    fn default() -> Self { Self { animate_paths: vec![], regen_action: None } }
+}
+
 pub struct MontageEditorState {
     pub job_name: String,
     pub save_path: PathBuf,
@@ -418,11 +453,21 @@ pub struct MontageEditorState {
     pub audio_player: Option<AudioPlayer>,
     /// Стан інтерактивного drag-трансформу на превью
     pub preview_drag: Option<PreviewDragState>,
+    /// Виділені медіа в пулі (для групової анімації)
+    pub selected_media_ids: HashSet<String>,
+    /// Тимчасові шляхи для оживлення (заповнюються draw_*, обробляються в draw_montage_editor_window)
+    pub pending_animate_paths: Vec<PathBuf>,
+    /// Тимчасова дія перегенерації (заповнюється draw_*, обробляється в draw_montage_editor_window)
+    pub pending_regen: Option<(PathBuf, bool)>,
+    /// Шлях медіа що зараз відкрите у fullscreen preview
+    pub pool_preview: Option<PathBuf>,
+    /// Кешована текстура для fullscreen preview (шлях, текстура)
+    pub pool_preview_texture: Option<(PathBuf, egui::TextureHandle)>,
 }
 
 impl MontageEditorState {
     pub fn load(save_path: &Path, job_name: &str) -> Self {
-        let (clips, total_duration) = load_timeline_clips(save_path);
+        let (mut clips, total_duration) = load_timeline_clips(save_path);
         let audio_path = find_audio_file(save_path);
         let mut media_pool = load_media_pool(save_path);
 
@@ -431,6 +476,30 @@ impl MontageEditorState {
             if let Some(ref path) = clip.path {
                 if path.exists() && !media_pool.iter().any(|m| m.path == *path) {
                     media_pool.push(MediaItem::new(path.clone(), save_path));
+                }
+            }
+        }
+
+        // Виправляємо кліпи що вказують на .jpg якого вже немає (оживлення → .mp4 є в пулі)
+        for clip in &mut clips {
+            if let Some(ref path) = clip.path.clone() {
+                if !path.exists() {
+                    let mp4 = path.with_extension("mp4");
+                    if let Some(pm) = media_pool.iter().find(|m| m.path == mp4) {
+                        clip.path = Some(pm.path.clone());
+                        clip.kind = ClipKind::Video;
+                        clip.name = pm.name.clone();
+                    }
+                }
+            }
+        }
+
+        // Синхронізуємо media_id кліпів з реальними UUID пулу
+        // (UUID змінюються при кожному перезавантаженні, тому ID з JSON вже застарілі)
+        for clip in &mut clips {
+            if let Some(ref path) = clip.path.clone() {
+                if let Some(m) = media_pool.iter().find(|m| m.path == *path) {
+                    clip.media_id = m.id.clone();
                 }
             }
         }
@@ -458,6 +527,11 @@ impl MontageEditorState {
             timeline_height: 220.0,
             audio_player: None,
             preview_drag: None,
+            selected_media_ids: HashSet::new(),
+            pending_animate_paths: vec![],
+            pending_regen: None,
+            pool_preview: None,
+            pool_preview_texture: None,
         }
     }
 
@@ -513,6 +587,7 @@ impl MontageEditorState {
                 "start_secs": actual_start as f64,
                 "end_secs": actual_end as f64,
                 "media": media_rel,
+                "media_id": clip.media_id,
                 "zoom_enabled": clip.zoom_enabled,
                 "shake_enabled": clip.shake_enabled,
             }));
@@ -534,6 +609,7 @@ impl MontageEditorState {
                     "start_secs": clip.start_secs as f64,
                     "end_secs": clip.end_secs() as f64,
                     "media": media_rel,
+                    "media_id": clip.media_id,
                     "scale": clip.scale as f64,
                     "pos_x": clip.pos_x as f64,
                     "pos_y": clip.pos_y as f64,
@@ -588,8 +664,10 @@ fn clip_from_json_seg(
     // Якщо поле відсутнє (старий формат) — вважаємо ефекти увімкненими для сумісності
     let zoom_enabled = seg["zoom_enabled"].as_bool().unwrap_or(true);
     let shake_enabled = seg["shake_enabled"].as_bool().unwrap_or(true);
+    let media_id = seg["media_id"].as_str().unwrap_or("").to_string();
     EditorClip {
         id: uuid_str(),
+        media_id,
         path: Some(full_path),
         name,
         start_secs: start,
@@ -680,10 +758,11 @@ pub fn draw_montage_editor_window(
     open_job: &mut Option<u64>,
     state: &mut Option<MontageEditorState>,
     jobs: &[crate::queue::PipelineJob],
-) {
+    anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
+) -> MontageEditorActions {
     let job_id = match *open_job {
         Some(id) => id,
-        None => return,
+        None => return MontageEditorActions::default(),
     };
 
     if state.is_none() {
@@ -694,7 +773,7 @@ pub fn draw_montage_editor_window(
             ));
         } else {
             *open_job = None;
-            return;
+            return MontageEditorActions::default();
         }
     }
 
@@ -715,8 +794,72 @@ pub fn draw_montage_editor_window(
 
     let editor = match state {
         Some(s) => s,
-        None => return,
+        None => return MontageEditorActions::default(),
     };
+
+    // Очищаємо накопичені дії попереднього кадру
+    editor.pending_animate_paths.clear();
+    editor.pending_regen = None;
+
+    // Після завершення оживлення (.jpg → .mp4): оновлюємо пул та кліпи
+    {
+        let loading = anim_loading.lock().unwrap();
+        let mut replacements: Vec<(PathBuf, PathBuf)> = vec![];
+        let mut to_remove: Vec<usize> = vec![];
+        for (i, m) in editor.media_pool.iter().enumerate() {
+            if !m.path.exists() && !loading.contains(&m.path) {
+                let mp4 = m.path.with_extension("mp4");
+                if mp4.exists() { replacements.push((m.path.clone(), mp4)); }
+                else            { to_remove.push(i); }
+            }
+        }
+        drop(loading);
+
+        for (old, new) in replacements {
+            let save_path = editor.save_path.clone();
+            for clip in &mut editor.clips {
+                if clip.path.as_deref() == Some(old.as_path()) {
+                    clip.path = Some(new.clone());
+                    clip.kind = ClipKind::Video;
+                    clip.name = new.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                }
+            }
+            if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == old) {
+                let old_id = m.id.clone();
+                *m = MediaItem::new(new.clone(), &save_path);
+                m.id = old_id; // зберігаємо ID щоб кліпи знаходили медіа по media_id
+            }
+            if editor.pool_preview.as_deref() == Some(old.as_path()) {
+                editor.pool_preview = Some(new);
+                editor.pool_preview_texture = None;
+            }
+        }
+        for &i in to_remove.iter().rev() {
+            editor.media_pool.remove(i);
+        }
+
+        // Другий прохід: кліпи що вказують на неіснуючий файл, але в пулі вже є відповідний .mp4
+        let clip_fixes: Vec<(String, PathBuf, String)> = editor.clips.iter()
+            .filter_map(|clip| {
+                clip.path.as_ref().and_then(|p| {
+                    if !p.exists() {
+                        let mp4 = p.with_extension("mp4");
+                        editor.media_pool.iter().find(|m| m.path == mp4)
+                            .map(|pm| (clip.id.clone(), pm.path.clone(), pm.name.clone()))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        for (id, new_path, new_name) in clip_fixes {
+            if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == id) {
+                clip.path = Some(new_path);
+                clip.kind = ClipKind::Video;
+                clip.name = new_name;
+            }
+        }
+    }
 
     if editor.is_playing {
         let elapsed = editor.last_frame_time.elapsed().as_secs_f32();
@@ -766,7 +909,7 @@ pub fn draw_montage_editor_window(
                 .exact_height(editor.timeline_height)
                 .frame(Frame::none().fill(Color32::from_rgb(14, 14, 17)).inner_margin(egui::Margin::symmetric(4.0, 4.0)))
                 .show_inside(ui, |ui| {
-                    draw_timeline(ui, language, editor);
+                    draw_timeline(ui, language, editor, anim_loading);
                 });
 
             // Превью + бічні панелі заповнюють решту простору
@@ -779,7 +922,7 @@ pub fn draw_montage_editor_window(
                         .min_width(160.0)
                         .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
                         .show_inside(ui, |ui| {
-                            draw_media_pool(ui, language, editor);
+                            draw_media_pool(ui, language, editor, anim_loading);
                         });
 
                     egui::SidePanel::right("editor_inspector")
@@ -799,10 +942,150 @@ pub fn draw_montage_editor_window(
                 });
         });
 
+    // Збираємо дії з pending полів editor
+    let animate_paths = std::mem::take(&mut editor.pending_animate_paths);
+    let regen_opt = editor.pending_regen.take();
+    let regen_action = regen_opt.and_then(|(path, is_custom)| {
+        jobs.iter().find(|j| j.id == job_id).map(|job| {
+            (path, job.settings.clone(), is_custom, job_id, job.name.clone())
+        })
+    });
+
     if !is_open || close_after {
         *open_job = None;
         *state = None;
+        return MontageEditorActions { animate_paths, regen_action };
     }
+
+    // Fullscreen preview (подвійний клік на медіа в пулі або кліп у таймлінії)
+    if let Some(ref preview_path) = editor.pool_preview.clone() {
+        let need_load = editor.pool_preview_texture
+            .as_ref().map(|(p, _)| p != preview_path).unwrap_or(true);
+        if need_load {
+            let tex = load_preview_texture(ctx, preview_path, &editor.media_pool);
+            editor.pool_preview_texture = tex.map(|t| (preview_path.clone(), t));
+        }
+
+        if let Some((_, ref texture)) = editor.pool_preview_texture.clone() {
+            let is_anim = anim_loading.lock().unwrap().contains(preview_path);
+            let (keep_open, regen_kind) = draw_montage_media_preview(ctx, texture, is_anim);
+            if !keep_open {
+                editor.pool_preview = None;
+                editor.pool_preview_texture = None;
+            }
+            if let Some(is_custom) = regen_kind {
+                editor.pending_regen = Some((preview_path.clone(), is_custom));
+            }
+        } else {
+            // Текстуру не вдалось завантажити — закриваємо preview
+            editor.pool_preview = None;
+        }
+    }
+
+    MontageEditorActions { animate_paths, regen_action }
+}
+
+/// Завантажує текстуру для fullscreen preview: зображення читає напряму,
+/// відео — перший кадр з cache_dir.
+fn load_preview_texture(
+    ctx: &egui::Context,
+    path: &Path,
+    media_pool: &[MediaItem],
+) -> Option<egui::TextureHandle> {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
+        crate::gui::gallery::preview::load_image_texture(ctx, path)
+    } else if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
+        media_pool.iter()
+            .find(|m| m.path == path)
+            .and_then(|m| {
+                let frame = m.cache_dir.join("000001.jpg");
+                if frame.exists() {
+                    crate::gui::gallery::preview::load_image_texture(ctx, &frame)
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    }
+}
+
+/// Fullscreen preview поверх всього UI з повним блокуванням кліків.
+/// Повертає (keep_open, regen_kind): keep_open=false → закрити;
+/// regen_kind: Some(false)=ті ж налаштування, Some(true)=кастомні.
+fn draw_montage_media_preview(
+    ctx: &egui::Context,
+    texture: &egui::TextureHandle,
+    is_animating: bool,
+) -> (bool, Option<bool>) {
+    let mut keep_open = true;
+    let mut regen_kind: Option<bool> = None;
+
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        return (false, None);
+    }
+
+    let screen = ctx.screen_rect();
+    let pad = 40.0;
+    let img_sz = texture.size_vec2();
+    let scale = ((screen.width() - pad * 2.0) / img_sz.x)
+        .min((screen.height() - pad * 2.0) / img_sz.y);
+    let disp = img_sz * scale;
+    let img_rect = egui::Rect::from_center_size(screen.center(), disp);
+
+    // Order::Tooltip перехоплює всі події поверх Window
+    egui::Area::new(egui::Id::new("montage_editor_preview_area"))
+        .fixed_pos(egui::Pos2::ZERO)
+        .order(egui::Order::Tooltip)
+        .interactable(true)
+        .show(ctx, |ui| {
+            // Фон — поглинає всі кліки поза зображенням
+            let bg = ui.allocate_rect(screen, Sense::click());
+            ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(215));
+
+            ui.put(img_rect, egui::Image::from_texture(texture).fit_to_exact_size(disp));
+
+            if is_animating {
+                ui.painter().rect_filled(img_rect, 0.0, Color32::from_black_alpha(120));
+                ui.put(img_rect, egui::Spinner::new().size(32.0));
+            }
+
+            let btn_sz = egui::vec2(36.0, 36.0);
+            let top_y  = screen.top() + 22.0;
+
+            let close_c = egui::pos2(screen.right() - 22.0, top_y);
+            let close_r  = ui.interact(egui::Rect::from_center_size(close_c, btn_sz), egui::Id::new("mep_close"), Sense::click());
+            let cc = if close_r.hovered() { Color32::WHITE } else { Color32::from_gray(160) };
+            let r = 8.0;
+            let st = Stroke::new(2.0, cc);
+            ui.painter().line_segment([close_c + Vec2::new(-r,-r), close_c + Vec2::new(r,r)], st);
+            ui.painter().line_segment([close_c + Vec2::new(r,-r), close_c + Vec2::new(-r,r)], st);
+
+            let cust_c = egui::pos2(screen.right() - 66.0, top_y);
+            let cust_r = ui.interact(egui::Rect::from_center_size(cust_c, btn_sz), egui::Id::new("mep_custom"), Sense::click());
+            let cc = if cust_r.hovered() { Color32::WHITE } else { Color32::from_gray(160) };
+            crate::gui::gallery::icons::draw_menu_icon(ui.painter(), cust_c, 8.0, Stroke::new(2.0, cc));
+
+            let same_c = egui::pos2(screen.right() - 110.0, top_y);
+            let same_r = ui.interact(egui::Rect::from_center_size(same_c, btn_sz), egui::Id::new("mep_same"), Sense::click());
+            let cc = if same_r.hovered() { Color32::WHITE } else { Color32::from_gray(160) };
+            crate::gui::gallery::icons::draw_refresh_icon(ui.painter(), same_c, 9.0, Stroke::new(2.0, cc));
+
+            if close_r.clicked() {
+                keep_open = false;
+            } else if same_r.clicked() {
+                regen_kind = Some(false);
+            } else if cust_r.clicked() {
+                regen_kind = Some(true);
+            } else if bg.clicked() {
+                if let Some(pos) = bg.interact_pointer_pos() {
+                    if !img_rect.contains(pos) { keep_open = false; }
+                }
+            }
+        });
+
+    (keep_open, regen_kind)
 }
 
 // ─── Топ-бар ─────────────────────────────────────────────────────────────────
@@ -866,7 +1149,12 @@ fn draw_topbar(
 
 // ─── Медіа-пул ───────────────────────────────────────────────────────────────
 
-fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {
+fn draw_media_pool(
+    ui: &mut egui::Ui,
+    language: Language,
+    editor: &mut MontageEditorState,
+    anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
+) {
     const VALID_EXTS: &[&str] = &["mp4", "mov", "webm", "jpg", "jpeg", "png", "webp", "mp3", "wav"];
 
     // ── Drag-and-drop з файлової системи ─────────────────────────────────────
@@ -902,6 +1190,42 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
                     for path in paths {
                         if !editor.media_pool.iter().any(|m| m.path == path) {
                             editor.media_pool.push(MediaItem::new(path, &save_path));
+                        }
+                    }
+                }
+            }
+
+            // Кнопка "Оживити все" — тільки якщо в пулі є зображення
+            let all_image_paths: Vec<PathBuf> = editor.media_pool.iter()
+                .filter(|m| matches!(m.kind, ClipKind::Image))
+                .map(|m| m.path.clone())
+                .collect();
+            if !all_image_paths.is_empty() {
+                if ui.small_button("🎬").on_hover_text(translate(language, "montage_editor_animate_all")).clicked() {
+                    let loading = anim_loading.lock().unwrap();
+                    for path in all_image_paths {
+                        if !loading.contains(&path) {
+                            editor.pending_animate_paths.push(path);
+                        }
+                    }
+                }
+            }
+
+            // Кнопка "Оживити обрані" — тільки якщо виділені зображення
+            let selected_image_paths: Vec<PathBuf> = editor.media_pool.iter()
+                .filter(|m| matches!(m.kind, ClipKind::Image) && editor.selected_media_ids.contains(&m.id))
+                .map(|m| m.path.clone())
+                .collect();
+            if !selected_image_paths.is_empty() {
+                let cnt = selected_image_paths.len();
+                if ui.small_button(translate(language, "montage_editor_animate_selected"))
+                    .on_hover_text(format!("({cnt})"))
+                    .clicked()
+                {
+                    let loading = anim_loading.lock().unwrap();
+                    for path in selected_image_paths {
+                        if !loading.contains(&path) {
+                            editor.pending_animate_paths.push(path);
                         }
                     }
                 }
@@ -943,39 +1267,67 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
             return;
         }
         let mut to_remove: Option<usize> = None;
+        let mut toggle_select_id: Option<String> = None;
+        let mut context_animate: Option<PathBuf> = None;
+        let mut context_regen: Option<(PathBuf, bool)> = None;
+
         for (idx, media) in editor.media_pool.iter().enumerate() {
             let item_w = (ui.available_width() - 30.0).max(80.0);
+            let media_id = media.id.clone();
+            let media_path = media.path.clone();
+            let media_kind = media.kind.clone();
+            let is_selected = editor.selected_media_ids.contains(&media.id);
+            let is_animating = anim_loading.lock().unwrap().contains(&media.path);
+
             ui.horizontal(|ui| {
                 let (rect, resp) = ui.allocate_exact_size(Vec2::new(item_w, 26.0), Sense::click_and_drag());
 
                 if resp.drag_started() {
-                    editor.dragged_media_id = Some(media.id.clone());
+                    editor.dragged_media_id = Some(media_id.clone());
                 }
                 if resp.dragged() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
                 }
 
-                let is_dragged = editor.dragged_media_id.as_deref() == Some(media.id.as_str());
+                let is_dragged = editor.dragged_media_id.as_deref() == Some(media_id.as_str());
                 let is_hovered = resp.hovered();
 
-                let bg = if is_dragged {
+                let bg = if is_animating {
+                    Color32::from_rgba_unmultiplied(200, 140, 0, 35)
+                } else if is_dragged {
                     Color32::from_rgba_unmultiplied(9, 123, 244, 40)
+                } else if is_selected {
+                    Color32::from_rgba_unmultiplied(39, 160, 80, 35)
                 } else if is_hovered {
                     Color32::from_rgb(38, 38, 42)
                 } else {
                     Color32::from_rgb(28, 28, 30)
                 };
-                let stroke_col = if is_dragged { Color32::from_rgb(9, 123, 244) } else { Color32::from_rgb(45, 45, 50) };
+                let stroke_col = if is_selected {
+                    Color32::from_rgb(39, 160, 80)
+                } else if is_dragged {
+                    Color32::from_rgb(9, 123, 244)
+                } else {
+                    Color32::from_rgb(45, 45, 50)
+                };
                 ui.painter().rect(rect, 4.0, bg, Stroke::new(1.0, stroke_col));
 
-                // Індикатор прогресу витягування кадрів
+                // Спінер оживлення поверх елементу
+                if is_animating {
+                    ui.painter().rect_filled(rect, 4.0, Color32::from_black_alpha(150));
+                    let spin_rect = Rect::from_center_size(rect.center(), Vec2::splat(14.0));
+                    ui.put(spin_rect, egui::Spinner::new().size(14.0));
+                    ui.ctx().request_repaint();
+                }
+
+                // Індикатор прогресу витягування кадрів / анімування
                 let done = media.is_extraction_complete();
                 let icon = match media.kind {
                     ClipKind::Video => "🎥",
                     ClipKind::Image => "🖼",
                     ClipKind::Audio => "🎵",
                 };
-                let status_dot = if done { "" } else { " ⏳" };
+                let status_dot = if is_animating { " 🎬" } else if done { "" } else { " ⏳" };
                 let dur_text = format!("{:.1}s", media.duration_secs);
                 let display = if media.name.chars().count() > 16 {
                     format!("{} {}…{} {}", icon, media.name.chars().take(13).collect::<String>(), status_dot, dur_text)
@@ -994,8 +1346,51 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
                         to_remove = Some(idx);
                     }
                 });
+
+                // Клік → виділення; подвійний клік → fullscreen preview
+                if resp.double_clicked() {
+                    editor.pool_preview = Some(media_path.clone());
+                    editor.pool_preview_texture = None;
+                } else if resp.clicked() {
+                    toggle_select_id = Some(media_id.clone());
+                }
+
+                // Контекстне меню (правий клік)
+                resp.context_menu(|ui| {
+                    if matches!(media_kind, ClipKind::Image) {
+                        if is_animating {
+                            ui.add_enabled(false, egui::Button::new(format!("⏳ {}", translate(language, "gallery_regen_loading"))));
+                        } else if ui.button(translate(language, "montage_editor_animate")).clicked() {
+                            context_animate = Some(media_path.clone());
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                    }
+                    if ui.button(translate(language, "montage_editor_regen_same")).clicked() {
+                        context_regen = Some((media_path.clone(), false));
+                        ui.close_menu();
+                    }
+                    if ui.button(translate(language, "montage_editor_regen_custom")).clicked() {
+                        context_regen = Some((media_path.clone(), true));
+                        ui.close_menu();
+                    }
+                });
             });
             ui.add_space(2.0);
+        }
+
+        if let Some(id) = toggle_select_id {
+            if !editor.selected_media_ids.remove(&id) {
+                editor.selected_media_ids.insert(id);
+            }
+        }
+        if let Some(path) = context_animate {
+            if !anim_loading.lock().unwrap().contains(&path) {
+                editor.pending_animate_paths.push(path);
+            }
+        }
+        if let Some(regen) = context_regen {
+            editor.pending_regen = Some(regen);
         }
         if let Some(idx) = to_remove {
             editor.media_pool.remove(idx);
@@ -1138,6 +1533,33 @@ fn render_clip_frame(
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
+/// Шукає медіа для кліпу — як у demo.video.editor.rust:
+/// 1. По media_id (стабільний UUID, не залежить від шляху)
+/// 2. Fallback: по точному шляху
+/// 3. Fallback: по стему файлу (для .jpg → .mp4 після оживлення)
+fn find_media_for_clip<'a>(pool: &'a [MediaItem], clip: &EditorClip) -> Option<&'a MediaItem> {
+    // 1. По ID (найнадійніше)
+    if !clip.media_id.is_empty() {
+        if let Some(m) = pool.iter().find(|m| m.id == clip.media_id) {
+            return Some(m);
+        }
+    }
+    // 2. По шляху
+    if let Some(ref path) = clip.path {
+        if let Some(m) = pool.iter().find(|m| m.path == *path) {
+            return Some(m);
+        }
+        // 3. По стему (image.jpg → image.mp4)
+        let stem = path.file_stem().and_then(|s| s.to_str())?;
+        let parent = path.parent()?;
+        return pool.iter().find(|m| {
+            m.path.parent() == Some(parent)
+                && m.path.file_stem().and_then(|s| s.to_str()) == Some(stem)
+        });
+    }
+    None
+}
+
 fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let ph = editor.playhead;
     let settings = editor.preview_settings.clone();
@@ -1178,13 +1600,35 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let in_transition = transition_progress > 0.0;
 
     // Медіа-елементи (clone щоб розділити borrow від frame_cache)
-    let active_media: Option<MediaItem> = active.as_ref()
-        .and_then(|c| c.path.as_ref())
-        .and_then(|p| editor.media_pool.iter().find(|m| m.path == *p))
-        .cloned();
+    // Якщо не знайдено в пулі але файл існує — додаємо в пул на ходу (захист від десинхронізації)
+    let active_media: Option<MediaItem> = {
+        let found = active.as_ref()
+            .and_then(|c| find_media_for_clip(&editor.media_pool, c))
+            .cloned();
+        if found.is_none() {
+            if let Some(clip) = active.as_ref() {
+                if let Some(path) = clip.path.as_ref() {
+                    if path.exists() && !editor.media_pool.iter().any(|m| m.path == *path) {
+                        let sp = editor.save_path.clone();
+                        let m = MediaItem::new(path.clone(), &sp);
+                        let mid = m.id.clone();
+                        editor.media_pool.push(m);
+                        let cid = clip.id.clone();
+                        if let Some(c) = editor.clips.iter_mut().find(|c| c.id == cid) {
+                            c.media_id = mid;
+                        }
+                    }
+                }
+            }
+            active.as_ref()
+                .and_then(|c| find_media_for_clip(&editor.media_pool, c))
+                .cloned()
+        } else {
+            found
+        }
+    };
     let prev_media: Option<MediaItem> = prev_clip.as_ref()
-        .and_then(|c| c.path.as_ref())
-        .and_then(|p| editor.media_pool.iter().find(|m| m.path == *p))
+        .and_then(|c| find_media_for_clip(&editor.media_pool, c))
         .cloned();
 
     // Текстури
@@ -1371,6 +1815,13 @@ fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                 rect.center() + Vec2::new(0.0, 28.0), Align2::CENTER_CENTER,
                 "Підготовка превью...",
                 egui::FontId::proportional(10.0), Color32::from_rgb(180, 180, 100),
+            );
+        } else if active.is_some() && active_media.is_some() {
+            // Медіа є в пулі, але кадрів ще немає (витягування в процесі або відео не підтримується)
+            ui.ctx().request_repaint();
+            painter.text(
+                rect.center() - Vec2::new(0.0, 12.0), Align2::CENTER_CENTER,
+                "🎬", egui::FontId::proportional(36.0), Color32::from_rgb(60, 60, 80),
             );
         } else if active.is_some() {
             painter.text(
@@ -1775,7 +2226,12 @@ fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdi
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
 
-fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {
+fn draw_timeline(
+    ui: &mut egui::Ui,
+    language: Language,
+    editor: &mut MontageEditorState,
+    anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
+) {
     let track_h = 40.0;
     let ruler_h = 22.0;
     let label_w = 70.0;
@@ -1924,10 +2380,12 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                                 let name = media.name.clone();
                                 let path = Some(media.path.clone());
                                 let duration = media.duration_secs;
+                                let media_id = media.id.clone();
                                 let new_id = uuid_str();
                                 editor.selected_clip_id = Some(new_id.clone());
                                 editor.clips.push(EditorClip {
                                     id: new_id,
+                                    media_id,
                                     path,
                                     name,
                                     start_secs: start,
@@ -1961,6 +2419,10 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                     Vec2::new(cw, track_h - 4.0),
                 );
 
+                let is_anim = clip.path.as_ref()
+                    .map(|p| anim_loading.lock().unwrap().contains(p))
+                    .unwrap_or(false);
+
                 let is_sel = editor.selected_clip_id.as_deref() == Some(clip.id.as_str());
                 let (bg, accent) = match clip.kind {
                     ClipKind::Video => (Color32::from_rgb(18, 32, 55), Color32::from_rgb(9, 100, 220)),
@@ -1969,6 +2431,26 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                 };
                 let border = if is_sel { Color32::WHITE } else { accent };
                 painter.rect(clip_rect, 3.0, bg, Stroke::new(if is_sel { 2.0 } else { 1.2 }, border));
+
+                // Індикатор оживлення поверх кліпу (painter-based, надійно в ScrollArea)
+                if is_anim {
+                    painter.rect_filled(clip_rect, 3.0, Color32::from_black_alpha(155));
+                    let t = ui.ctx().input(|i| i.time) as f32;
+                    let center = clip_rect.center();
+                    let r = (cw * 0.5).min(clip_rect.height() * 0.38).min(9.0).max(4.0);
+                    let segs = 20usize;
+                    for s in 0..segs {
+                        let a0 = t * std::f32::consts::TAU + s as f32 * std::f32::consts::TAU / segs as f32;
+                        let a1 = a0 + std::f32::consts::TAU / segs as f32;
+                        let alpha = (s as f32 / segs as f32 * 200.0) as u8 + 30;
+                        painter.line_segment(
+                            [center + Vec2::new(a0.cos() * r, a0.sin() * r),
+                             center + Vec2::new(a1.cos() * r, a1.sin() * r)],
+                            Stroke::new(1.8, Color32::from_rgba_unmultiplied(255, 180, 50, alpha)),
+                        );
+                    }
+                    ui.ctx().request_repaint();
+                }
 
                 let handle_w = 6.0;
                 let handle_col = if is_sel { Color32::WHITE } else { accent.linear_multiply(0.6) };
@@ -2015,7 +2497,13 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                 }
 
                 let clip_resp = ui.allocate_rect(clip_rect, Sense::click_and_drag());
-                if clip_resp.clicked() {
+                if clip_resp.double_clicked() {
+                    // Подвійний клік → fullscreen preview
+                    if let Some(ref path) = clip.path {
+                        editor.pool_preview = Some(path.clone());
+                        editor.pool_preview_texture = None;
+                    }
+                } else if clip_resp.clicked() {
                     editor.selected_clip_id = Some(clip.id.clone());
                 }
                 if clip_resp.drag_started() {
@@ -2038,6 +2526,32 @@ fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdit
                         });
                         editor.selected_clip_id = Some(clip.id.clone());
                     }
+                }
+
+                // Контекстне меню (правий клік) для кліпів з медіафайлом
+                if let Some(ref path) = clip.path {
+                    let clip_path = path.clone();
+                    let clip_kind = clip.kind.clone();
+                    let is_animating = anim_loading.lock().unwrap().contains(&clip_path);
+                    clip_resp.context_menu(|ui| {
+                        if matches!(clip_kind, ClipKind::Image) {
+                            if is_animating {
+                                ui.add_enabled(false, egui::Button::new(format!("⏳ {}", translate(language, "gallery_regen_loading"))));
+                            } else if ui.button(translate(language, "montage_editor_animate")).clicked() {
+                                editor.pending_animate_paths.push(clip_path.clone());
+                                ui.close_menu();
+                            }
+                            ui.separator();
+                        }
+                        if ui.button(translate(language, "montage_editor_regen_same")).clicked() {
+                            editor.pending_regen = Some((clip_path.clone(), false));
+                            ui.close_menu();
+                        }
+                        if ui.button(translate(language, "montage_editor_regen_custom")).clicked() {
+                            editor.pending_regen = Some((clip_path.clone(), true));
+                            ui.close_menu();
+                        }
+                    });
                 }
             }
 

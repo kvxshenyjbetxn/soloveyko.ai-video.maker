@@ -1,5 +1,5 @@
 - прочитай перед початком: soloveyko.ai-video.maker/README.md
-
+Before editing any file, read it first. Before modifying a function, grep for all callers. Research before you edit.
 - відповідаеш завжди українською мовою.
 - стек програми rust + egui
 - пишеш простий та лаконічний код, який легко читати та розуміти.

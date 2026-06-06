@@ -1757,13 +1757,70 @@ impl eframe::App for VideoMakerApp {
         );
 
         // Редактор монтажу
-        crate::gui::montage_editor::draw_montage_editor_window(
+        let montage_actions = crate::gui::montage_editor::draw_montage_editor_window(
             ctx,
             self.language,
             &mut self.montage_editor_open_job,
             &mut self.montage_editor_state,
             &self.jobs,
+            &self.gallery_anim_loading,
         );
+
+        // Оживлення зображень з редактора монтажу
+        {
+            let anim_loading = std::sync::Arc::clone(&self.gallery_anim_loading);
+            let job_id = self.montage_editor_open_job.unwrap_or(0);
+            let job_name = self.jobs.iter().find(|j| j.id == job_id)
+                .map(|j| j.name.clone()).unwrap_or_default();
+            for path in montage_actions.animate_paths {
+                if anim_loading.lock().unwrap().contains(&path) { continue; }
+                crate::core::pipeline::animate_single_image(
+                    path,
+                    self.googler_video_priority.clone(),
+                    self.googler_key.clone(),
+                    job_id,
+                    job_name.clone(),
+                    ctx.clone(),
+                    std::sync::Arc::clone(&anim_loading),
+                );
+            }
+        }
+
+        // Перегенерація медіа з редактора монтажу (аналогічно до галереї)
+        if let Some((file, settings, is_custom, job_id, job_name)) = montage_actions.regen_action {
+            if is_custom {
+                self.media_regen_target = Some(file.clone());
+                self.media_regen_media_type = settings.video_media_type.clone();
+                self.media_regen_image_priority = settings.googler_image_priority.clone();
+                self.media_regen_video_priority = settings.googler_video_priority.clone();
+                self.media_regen_prompt = crate::core::pipeline::read_prompt_for_file(&file);
+                self.media_regen_base_settings = Some(settings);
+                self.media_regen_job_id = job_id;
+                self.media_regen_job_name = job_name;
+                self.media_regen_error = None;
+                self.media_regen_window_open = true;
+            } else {
+                let priority = if settings.video_media_type == "video" {
+                    settings.googler_video_priority.clone()
+                } else {
+                    settings.googler_image_priority.clone()
+                };
+                self.media_regen_target = Some(file.clone());
+                self.media_regen_error = None;
+                crate::core::pipeline::regenerate_single_media(
+                    file,
+                    settings.video_media_type.clone(),
+                    priority,
+                    settings.googler_key.clone(),
+                    None,
+                    job_id,
+                    job_name,
+                    ctx.clone(),
+                    std::sync::Arc::clone(&self.media_regen_result),
+                    std::sync::Arc::clone(&self.media_regen_loading),
+                );
+            }
+        }
 
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).

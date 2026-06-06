@@ -205,14 +205,15 @@ src/
 
 При додаванні медіафайлу в пул одразу запускається фоновий потік, який витягує **всі кадри наперед** на диск. Під час відтворення або скрабінгу FFmpeg **не викликається** — лише читання JPG з диску. Плавний playback без лагів.
 
-- **`MediaItem::new(path, cache_base)`** — створює елемент пулу і стартує фонове витягування. `cache_base` = `save_path` задачі. Папка кешу: `save_path/.frame_cache/{path_hash}/` де `path_hash` — стабільний `u64` хеш шляху (`DefaultHasher`), не змінюється між запусками.
+- **`MediaItem::new(path, cache_base)`** — створює елемент пулу і стартує фонове витягування. Кожен виклик генерує **новий** UUID (`id: String`). `cache_base` = `save_path` задачі. Папка кешу: `save_path/.frame_cache/{path_hash}/` де `path_hash` — стабільний `u64` хеш шляху (`DefaultHasher`), не змінюється між запусками.
 - **Зображення** — декодуються через крейт `image` (`image::open` → `thumbnail(640, 1280)` → `.save` як JPG `000001.jpg`). Жодного FFmpeg.
-- **Відео** — `ffmpeg -vf scale=640:-2,fps=15 -q:v 5 %06d.jpg`. 15 FPS, 640px ширина. Кадри: `000001.jpg`, `000002.jpg`, …
+- **Відео** — `ffmpeg -vf scale=640:-2,fps=15 -q:v 5 %06d.jpg`. 15 FPS, 640px ширина. Кадри: `000001.jpg`, `000002.jpg`, … Fallback при помилці: витягується тільки `000001.jpg` без фільтрів, `extraction_complete = true` ставиться завжди (щоб UI не завис в «Підготовка превью…» вічно).
 - **`.complete` маркер** — файл-флаг що витягування завершено. При повторному відкритті редактора — перевіряється першим, повторне витягування не відбувається.
-- **`AtomicBool extraction_complete`** у `Arc` — спільний між `MediaItem` у пулі і фоновим потоком. При завершенні потік ставить `true`; оскільки `MediaItem` клонується через `Arc`, UI бачить оновлення без додаткових каналів.
-- **`FrameCache::get_frame(ctx, media, time)`** — LRU кеш 200 текстур. Ключ: `{media_id}_{frame_idx:06}`. Cache miss → читає `{:06}.jpg` з диску → `image::load_from_memory` → `load_texture`. LRU через `VecDeque<String>` (hit → переміщення в кінець; евікція — з початку).
-- **Пошук `MediaItem` для кліпу** у `draw_preview` — за точним збігом `m.path == clip_path`. На Windows шляхи з `timeline.json` нормалізуються через `.components().collect::<PathBuf>()` (fix: `PathBuf::join("a/b")` дає мішані `\`/`/` на Windows, що ламає `==`). Fallback у `MontageEditorState::load()`: якщо файл кліпу не знайдено в пулі — додається автоматично.
-- **Індикатори у UI:** під час витягування — спіннер у превью + текст «Підготовка превью...»; якщо кадр вже є але витягування ще триває — жовта крапка у куті; ⏳ у рядку медіа-пулу.
+- **`AtomicBool extraction_complete`** у `Arc` — спільний між `MediaItem` у пулі і фоновим потоком. При завершенні потік ставить `true`; оскільки `MediaItem` клонується через `Arc`, UI бачить оновлення без додаткових каналів. `is_extraction_complete()` додатково перевіряє `000001.jpg` на диску — кадр вже доступний до встановлення `flag`.
+- **`FrameCache::get_frame(ctx, media, time)`** — LRU кеш 200 текстур. Ключ: `{media_id}_{frame_idx:06}`. Cache miss → читає `{:06}.jpg` з диску → `image::load_from_memory` → `load_texture`. Fallback: якщо точний кадр відсутній → намагається `000001.jpg` (показує перший кадр поки витягування ще йде). LRU через `VecDeque<String>`.
+- **`EditorClip.media_id`** — стабільний UUID пулу, встановлюється при drag-drop кліпу на таймлінію (`media_id = media.id.clone()`). Зберігається у `timeline.json`. При завантаженні сесії UUID з JSON вже **застарілий** (кожен `MediaItem::new` генерує нові UUID), тому `MontageEditorState::load()` робить прохід після побудови пулу: `clip.media_id = pool_item.id` для всіх кліпів чий шлях збігається з пулом. Без цього кроку ID-lookup завжди провалювався б при перезапуску.
+- **`find_media_for_clip(pool, clip)`** — три рівні пошуку: 1) по `media_id` UUID (надійне — для поточної сесії після sync); 2) по точному шляху (`m.path == clip.path`); 3) по стему файлу (для `.jpg` → `.mp4` після оживлення). Якщо всі три провалились але `clip.path.exists()` — `draw_preview` автоматично додає медіа в пул, оновлює `clip.media_id` і повторно шукає у тому ж кадрі. Завдяки цьому «Файл не знайдено у медіа-пулі» ніколи не показується для файлів що фізично існують на диску.
+- **Індикатори у UI:** під час витягування — спіннер у превью + текст «Підготовка превью...»; якщо кадр вже є але витягування ще триває — жовта крапка у куті; ⏳ у рядку медіа-пулу; 🎬 — якщо медіа в пулі але жодного кадру немає (FFmpeg не встановлено або відео не підтримується).
 
 **Рендеринг ефектів у прев'ю (`draw_preview`):**
 
@@ -235,10 +236,12 @@ src/
 **Трансформ та ефекти кліпів (`EditorClip`):**
 
 Кожен кліп у таймлінії має поля:
+- `id: String` — UUID кліпу (унікальний у таймлінії, генерується при drag-drop).
+- `media_id: String` — UUID відповідного `MediaItem` у пулі. Встановлюється при drag-drop. При завантаженні з JSON синхронізується з актуальним UUID пулу в `MontageEditorState::load()`.
 - `scale: f32`, `pos_x: f32`, `pos_y: f32` — трансформ для overlay. Для базової доріжки не застосовується.
 - `zoom_enabled: bool`, `shake_enabled: bool` — чи застосовувати відповідний ефект у прев'ю та в FFmpeg для цього кліпу.
 
-**Зворотна сумісність:** `clip_from_json_seg` при десеріалізації використовує `unwrap_or(true)` для обох ефектів — старі кліпи без цих полів у `timeline.json` зберігають ефекти увімкненими. Нові кліпи, що додаються drag-drop, отримують `zoom_enabled: false, shake_enabled: false` за замовчуванням.
+**Зворотна сумісність:** `clip_from_json_seg` при десеріалізації використовує `unwrap_or(true)` для обох ефектів — старі кліпи без цих полів у `timeline.json` зберігають ефекти увімкненими. Нові кліпи, що додаються drag-drop, отримують `zoom_enabled: false, shake_enabled: false` за замовчуванням. `media_id` зберігається у `timeline.json` — при відсутності поля (старий формат) читається як `""` і синхронізується в `load()` по шляху.
 
 **Drag-трансформ на прев'ю (`PreviewDragState`, `update_preview_drag`):** при кліку на прев'ю коли виділено overlay-кліп — стартує `PreviewDragState`. При перетягуванні `pos_x`/`pos_y` вибраного кліпу оновлюються пропорційно до delta/rect_size. Зміни одразу відображаються в інспекторі і у прев'ю.
 
@@ -267,6 +270,8 @@ pub struct ClipDragState {
 `strip_prefix` використовує canonicalize-fallback для надійності на Windows. `run_montage` читає саме цей файл і накладає overlay-доріжки через FFmpeg `overlay` фільтр поверх основного відео.
 
 **«▶ Продовжити рендер»** — доступна лише коли задача в стані `AwaitingMontageControl`. При кліку: 1) `save_to_timeline()` записує зміни та логує результат (кількість кліпів і шлях); 2) сигналізує `montage_control_resume` condvar — пайплайн продовжується до `run_montage`; 3) вікно редактора **закривається автоматично**. Можливість відкрити редактор знову через кнопку `✂` у картці задачі при цьому зберігається.
+
+**`draw_montage_editor_window` повертає `MontageEditorActions`** — структуру з двома полями: `animate_paths: Vec<PathBuf>` (зображення для оживлення image-to-video) та `regen_action: Option<(file, settings, is_custom, job_id, job_name)>` (запит перегенерації медіа). `app.rs` обробляє ці дії поза редактором: `animate_paths` передаються у `animate_single_image` (той самий `gallery_anim_loading` що й у Галереї), `regen_action` або відкриває `media_regen_window` (is_custom=true) або одразу викликає `regenerate_single_media`. Такий підхід уникає дублювання логіки між Галереєю і редактором монтажу.
 
 **Нюанс borrow checker у таймлінії:** `ui.painter()` повертає `&Painter` (immutable borrow — конфліктує з подальшими `ui.allocate_rect()`). Рішення: `ui.painter_at(rect)` → owned `Painter`. `update_clip_drag` не приймає `&mut Ui` — лише `ctx: &egui::Context`, що дозволяє `ctx.input(...)` та `ctx.request_repaint()` без borrow конфлікту.
 
@@ -749,6 +754,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`draw_chip` — єдина база для обох типів чіпів.** `draw_balance_chip` та чіпи нижнього рядка побудовані на одній функції. Це гарантує ідентичний hover-ефект та padding між топбаром і нижнім рядком.
 
 - **Потоки Googler рахуються локально, а не з сервера.** `GooglerImageLimiter::get().active_count()` та `GooglerVideoLimiter::get().active_count()` — єдине джерело даних у вікні потоків та нижньому рядку. Раніше ці числа брались з `googler_balance` (запит до API `/v3/account/usage`) і були умовними (не відображались доки баланс не завантажено). Тепер чіпи `Googler img` / `Googler vid` у нижньому рядку **завжди видимі** (починаючи з 0/N, як і решта сервісів). Слайдери у вікні потоків тепер додатково викликають `set_max_threads()` при зміні — реакція миттєва.
+
+- **`MediaItem.id` — новий UUID кожної сесії.** `MediaItem::new` викликає `uuid_str()` при кожному створенні. UUID з `timeline.json` (`media_id` кліпу) застарівають після перезапуску програми. `MontageEditorState::load()` синхронізує `clip.media_id` з `pool_item.id` через path-lookup після побудови пулу. Без цього ID-lookup у `find_media_for_clip` завжди провалювався б при роботі зі збереженими таймлайнами. Нові кліпи, додані drag-drop у поточній сесії, мають актуальний `media_id` з самого початку.
 
 - **`has_active` у `draw_queue_panel` — включає всі «waiting» статуси.** Кнопка «🗑 Очистити» блокується якщо `has_active == true`. Перевірка охоплює: `Running | AwaitingControl | AwaitingMediaControl | AwaitingAgentControl | AwaitingMontageControl`. Якщо не включити `AwaitingMontageControl`, можна очистити чергу поки пайплайн заблокований на Condvar — condvar більше ніхто не розблокує і задача зависне в фоновому потоці.
 
