@@ -344,6 +344,8 @@ pub struct MontageEditorState {
     pub frame_cache: FrameCache,
     /// Налаштування ефектів превью (синхронізуються з JobSettings кожного кадру)
     pub preview_settings: MontagePreviewSettings,
+    /// Висота панелі таймлайну (змінюється drag-handle)
+    pub timeline_height: f32,
 }
 
 impl MontageEditorState {
@@ -381,6 +383,7 @@ impl MontageEditorState {
             clip_drag_state: None,
             frame_cache: FrameCache::new(FRAME_CACHE_SIZE),
             preview_settings: MontagePreviewSettings::default(),
+            timeline_height: 220.0,
         }
     }
 
@@ -621,43 +624,44 @@ pub fn draw_montage_editor_window(
             }
             ui.separator();
 
-            let available = ui.available_size();
-            let bottom_h = 200.0;
-            let top_h = (available.y - bottom_h - 8.0).max(100.0);
+            // Таймлайн — фіксована нижня панель (як у demo.video.editor.rust)
+            // TopBottomPanel сам тримає висоту — вміст не може розтягнути вікно
+            egui::TopBottomPanel::bottom("montage_editor_timeline_panel")
+                .resizable(false)
+                .exact_height(editor.timeline_height)
+                .frame(Frame::none().fill(Color32::from_rgb(14, 14, 17)).inner_margin(egui::Margin::symmetric(4.0, 4.0)))
+                .show_inside(ui, |ui| {
+                    draw_timeline(ui, language, editor);
+                });
 
-            ui.horizontal(|ui| {
-                ui.set_max_height(top_h);
+            // Превью + бічні панелі заповнюють решту простору
+            egui::CentralPanel::default()
+                .frame(Frame::none())
+                .show_inside(ui, |ui| {
+                    egui::SidePanel::left("editor_media_pool")
+                        .resizable(true)
+                        .default_width(220.0)
+                        .min_width(160.0)
+                        .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
+                        .show_inside(ui, |ui| {
+                            draw_media_pool(ui, language, editor);
+                        });
 
-                egui::SidePanel::left("editor_media_pool")
-                    .resizable(true)
-                    .default_width(220.0)
-                    .min_width(160.0)
-                    .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
-                    .show_inside(ui, |ui| {
-                        draw_media_pool(ui, language, editor);
-                    });
+                    egui::SidePanel::right("editor_inspector")
+                        .resizable(true)
+                        .default_width(240.0)
+                        .min_width(180.0)
+                        .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
+                        .show_inside(ui, |ui| {
+                            draw_inspector(ui, language, editor);
+                        });
 
-                egui::SidePanel::right("editor_inspector")
-                    .resizable(true)
-                    .default_width(240.0)
-                    .min_width(180.0)
-                    .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
-                    .show_inside(ui, |ui| {
-                        draw_inspector(ui, language, editor);
-                    });
-
-                egui::CentralPanel::default()
-                    .frame(Frame::none().fill(Color32::from_rgb(10, 10, 12)).inner_margin(6.0))
-                    .show_inside(ui, |ui| {
-                        draw_preview(ui, editor);
-                    });
-            });
-
-            ui.separator();
-
-            ui.allocate_ui(Vec2::new(ui.available_width(), bottom_h), |ui| {
-                draw_timeline(ui, language, editor);
-            });
+                    egui::CentralPanel::default()
+                        .frame(Frame::none().fill(Color32::from_rgb(10, 10, 12)).inner_margin(6.0))
+                        .show_inside(ui, |ui| {
+                            draw_preview(ui, editor);
+                        });
+                });
         });
 
     if !is_open || close_after {
@@ -1344,60 +1348,66 @@ fn draw_inspector(ui: &mut egui::Ui, language: Language, editor: &mut MontageEdi
         ui.weak(translate(language, "montage_editor_no_selection"));
     }
 
-    ui.add_space(12.0);
-    ui.separator();
-
-    if ui.button(translate(language, "montage_editor_add_track")).clicked() {
-        editor.num_tracks += 1;
-    }
 }
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
 
-fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEditorState) {
+fn draw_timeline(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {
     let track_h = 40.0;
     let ruler_h = 22.0;
     let label_w = 70.0;
     let total_dur = editor.total_dur();
     let zoom = editor.timeline_zoom;
 
+    // Drag-handle для зміни висоти панелі таймлайну
+    let handle_h = 4.0;
+    let (handle_rect, handle_resp) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), handle_h),
+        Sense::drag(),
+    );
+    // Фон смужки + курсор
+    let handle_color = if handle_resp.hovered() || handle_resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+        Color32::from_rgb(9, 123, 244)
+    } else {
+        Color32::from_rgb(45, 45, 52)
+    };
+    ui.painter_at(handle_rect).rect_filled(handle_rect, 0.0, handle_color);
+    // Перетягування вгору (delta.y < 0) збільшує висоту, вниз — зменшує
+    if handle_resp.dragged() {
+        editor.timeline_height = (editor.timeline_height - handle_resp.drag_delta().y)
+            .clamp(80.0, 500.0);
+    }
+
+    // Рядок кнопки "додати доріжку" — вище таймлайну, всередині зарезервованого простору
     ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.set_max_width(label_w);
-            ui.add_space(ruler_h);
-
-            for track_idx in 0..editor.num_tracks {
-                let label = format!("V{}", track_idx + 1);
-                ui.allocate_ui(Vec2::new(label_w, track_h), |ui| {
-                    Frame::none()
-                        .fill(Color32::from_rgb(28, 28, 32))
-                        .stroke(Stroke::new(1.0, Color32::from_rgb(42, 42, 48)))
-                        .inner_margin(4.0)
-                        .show(ui, |ui| {
-                            ui.centered_and_justified(|ui| { ui.small(&label); });
-                        });
-                });
-                ui.add_space(2.0);
+        if ui.small_button(translate(language, "montage_editor_add_track")).clicked() {
+            // Зсуваємо всі кліпи вниз, щоб нова доріжка V1 з'явилась зверху
+            for clip in &mut editor.clips {
+                clip.track_idx += 1;
             }
+            editor.num_tracks += 1;
+        }
+        ui.weak(format!("{} {}", editor.num_tracks, translate(language, "montage_editor_tracks_count")));
+    });
 
-            if editor.audio_path.is_some() {
-                ui.add_space(2.0);
-                ui.allocate_ui(Vec2::new(label_w, track_h), |ui| {
-                    Frame::none()
-                        .fill(Color32::from_rgb(22, 32, 26))
-                        .stroke(Stroke::new(1.0, Color32::from_rgb(35, 52, 40)))
-                        .inner_margin(4.0)
-                        .show(ui, |ui| {
-                            ui.centered_and_justified(|ui| { ui.small("♪ Audio"); });
-                        });
-                });
-            }
-        });
+    let avail_h = ui.available_height();
+    let total_audio_tracks = if editor.audio_path.is_some() { 1 } else { 0 };
+    let total_tracks_h = ruler_h + (track_h + 2.0) * (editor.num_tracks + total_audio_tracks) as f32;
+    let timeline_w = (total_dur + 10.0) * zoom;
 
-        ScrollArea::horizontal().id_salt("editor_timeline_scroll").auto_shrink([false; 2]).show(ui, |ui| {
-            let total_audio_tracks = if editor.audio_path.is_some() { 1 } else { 0 };
-            let total_tracks_h = ruler_h + (track_h + 2.0) * (editor.num_tracks + total_audio_tracks) as f32;
-            let timeline_w = (total_dur + 10.0) * zoom;
+    ui.horizontal(|ui| {
+        // Резервуємо місце для sticky-колонки лейблів
+        let (labels_rect, _) = ui.allocate_exact_size(
+            Vec2::new(label_w, avail_h.min(total_tracks_h)),
+            Sense::hover(),
+        );
+
+        let output = ScrollArea::both()
+            .id_salt("editor_timeline_scroll")
+            .max_height(avail_h)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
 
             let (rect, resp) = ui.allocate_exact_size(Vec2::new(timeline_w, total_tracks_h), Sense::click_and_drag());
             let painter = ui.painter_at(rect);
@@ -1659,6 +1669,30 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
                 if !hit { editor.selected_clip_id = None; }
             }
         });
+
+        // Sticky лейбли доріжок — малюємо поверх через painter з урахуванням vertical offset
+        let v_off = output.state.offset.y;
+        let painter = ui.painter_at(labels_rect);
+        painter.rect_filled(labels_rect, 0.0, Color32::from_rgb(18, 18, 22));
+        painter.rect_filled(
+            Rect::from_min_size(labels_rect.min, Vec2::new(label_w, ruler_h)),
+            0.0, Color32::from_rgb(20, 20, 24),
+        );
+        for track_idx in 0..editor.num_tracks {
+            let track_y = labels_rect.top() + ruler_h + (track_h + 2.0) * track_idx as f32 - v_off;
+            if track_y + track_h < labels_rect.top() || track_y > labels_rect.bottom() { continue; }
+            let lrect = Rect::from_min_size(Pos2::new(labels_rect.left(), track_y), Vec2::new(label_w, track_h));
+            painter.rect(lrect, 0.0, Color32::from_rgb(28, 28, 32), Stroke::new(1.0, Color32::from_rgb(42, 42, 48)));
+            painter.text(lrect.center(), Align2::CENTER_CENTER, &format!("V{}", track_idx + 1), egui::FontId::proportional(11.0), Color32::from_rgb(160, 160, 170));
+        }
+        if editor.audio_path.is_some() {
+            let audio_y = labels_rect.top() + ruler_h + (track_h + 2.0) * editor.num_tracks as f32 + 2.0 - v_off;
+            if audio_y + track_h >= labels_rect.top() && audio_y <= labels_rect.bottom() {
+                let arect = Rect::from_min_size(Pos2::new(labels_rect.left(), audio_y), Vec2::new(label_w, track_h));
+                painter.rect(arect, 0.0, Color32::from_rgb(22, 32, 26), Stroke::new(1.0, Color32::from_rgb(35, 52, 40)));
+                painter.text(arect.center(), Align2::CENTER_CENTER, "♪ Audio", egui::FontId::proportional(11.0), Color32::from_rgb(100, 170, 120));
+            }
+        }
     });
 }
 

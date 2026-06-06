@@ -43,6 +43,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_clip_track" => "Track:",
         "montage_editor_delete_clip" => "🗑 Delete Clip",
         "montage_editor_add_track" => "+ Track",
+        "montage_editor_tracks_count" => "tracks",
         "translation" => "Translation",
         "voiceover" => "Voiceover",
         "video" => "Video Sequence",

@@ -43,6 +43,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_clip_track" => "Доріжка:",
         "montage_editor_delete_clip" => "🗑 Видалити кліп",
         "montage_editor_add_track" => "+ Доріжка",
+        "montage_editor_tracks_count" => "доріжок",
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",

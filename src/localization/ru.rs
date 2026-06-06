@@ -43,6 +43,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_clip_track" => "Дорожка:",
         "montage_editor_delete_clip" => "🗑 Удалить клип",
         "montage_editor_add_track" => "+ Дорожка",
+        "montage_editor_tracks_count" => "дорожек",
         "translation" => "Перевод",
         "voiceover" => "Озвучка",
         "video" => "Видеоряд",
