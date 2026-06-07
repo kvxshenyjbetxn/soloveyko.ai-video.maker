@@ -62,92 +62,117 @@ pub fn draw_editor(
     text_split_char_limit: usize,
     stats: &mut EditorStats,
 ) {
-    // 1. Обчислення статистики (виконується ліниво тільки при зміні вмісту тексту або ліміту символів)
-    let current_hash = calculate_hash(text);
-    if stats.last_text_hash != current_hash || stats.last_char_limit != text_split_char_limit {
-        stats.last_text_hash = current_hash;
-        stats.last_char_limit = text_split_char_limit;
-        
-        stats.char_count = text.chars().count();
-        stats.paragraph_count = text.lines().filter(|line| !line.trim().is_empty()).count();
-        stats.token_count = count_tokens(text);
-        stats.fragments_paragraphs = crate::core::pipeline::timeline::text_splitter::split_text(text, "paragraphs", 0).len();
-        stats.fragments_sentences  = crate::core::pipeline::timeline::text_splitter::split_text(text, "sentences",  0).len();
-        stats.fragments_char_limit = crate::core::pipeline::timeline::text_splitter::split_text(text, "char_limit", text_split_char_limit).len();
-    }
+    let id = ui.make_persistent_id("script_editor_section");
+    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+        ui.ctx(), id, true,
+    );
 
-    let char_count = stats.char_count;
-    let paragraph_count = stats.paragraph_count;
-    let token_count = stats.token_count;
-    let fragments_paragraphs = stats.fragments_paragraphs;
-    let fragments_sentences = stats.fragments_sentences;
-    let fragments_char_limit = stats.fragments_char_limit;
-
-    // 2. Рендеринг панелі статистики (фіксована вгорі)
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.add_space(12.0);
-
-        let text_color = ui.visuals().widgets.noninteractive.text_color();
-        let accent_color = ui.visuals().selection.bg_fill;
-        let bullet_color = text_color.linear_multiply(0.3);
-
-        // Символи
-        ui.label(egui::RichText::new(translate(language, "stats_chars")).size(16.0).color(text_color));
-        ui.label(egui::RichText::new(format!(" {}", char_count)).size(16.0).strong().color(accent_color));
-
-        // Роздільник
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
-
-        // Абзаци
-        ui.label(egui::RichText::new(translate(language, "stats_paragraphs")).size(16.0).color(text_color));
-        ui.label(egui::RichText::new(format!(" {}", paragraph_count)).size(16.0).strong().color(accent_color));
-
-        // Роздільник
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
-
-        // Токени
-        ui.label(egui::RichText::new(translate(language, "stats_tokens")).size(16.0).color(text_color));
-        ui.label(egui::RichText::new(format!(" {}", token_count)).size(16.0).strong().color(accent_color));
-
-        // Роздільник
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
-
-        // Фрагменти по абзацах
-        ui.label(egui::RichText::new(translate(language, "stats_fragments_paragraphs")).size(16.0).color(text_color));
-        ui.label(egui::RichText::new(format!(" {}", fragments_paragraphs)).size(16.0).strong().color(accent_color));
-
-        // Роздільник
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
-
-        // Фрагменти по реченнях
-        ui.label(egui::RichText::new(translate(language, "stats_fragments_sentences")).size(16.0).color(text_color));
-        ui.label(egui::RichText::new(format!(" {}", fragments_sentences)).size(16.0).strong().color(accent_color));
-
-        // Роздільник
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
-
-        // Фрагменти по ліміту символів
-        ui.label(egui::RichText::new(translate(language, "stats_fragments_chars")).size(16.0).color(text_color));
-        ui.label(egui::RichText::new(format!(" {}", fragments_char_limit)).size(16.0).strong().color(accent_color));
+    let header = ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+        let title_text = egui::RichText::new(translate(language, "script_editor"))
+            .size(16.0)
+            .strong();
+        let label = ui.add(egui::Label::new(title_text).sense(egui::Sense::click()));
+        label
     });
+    if header.inner.clicked() {
+        state.toggle(ui);
+    }
+    state.store(ui.ctx());
+
     ui.add_space(4.0);
     ui.separator();
 
-    // 3. Область прокрутки для безрамкового текстового поля
-    egui::ScrollArea::vertical()
-        .auto_shrink([false; 2]) // Запобігає стисканню скрол-області
-        .show(ui, |ui| {
-            // Задаємо легкий відступ від країв для покращення читабельності
-            ui.add_space(8.0);
+    if state.is_open() {
+        // 1. Обчислення статистики (виконується ліниво тільки при зміні вмісту тексту або ліміту символів)
+        let current_hash = calculate_hash(text);
+        if stats.last_text_hash != current_hash || stats.last_char_limit != text_split_char_limit {
+            stats.last_text_hash = current_hash;
+            stats.last_char_limit = text_split_char_limit;
             
-            let text_edit = egui::TextEdit::multiline(text)
-                .hint_text(translate(language, "editor_hint"))
-                .desired_width(f32::INFINITY)
-                .desired_rows(40) // Велика дефолтна кількість рядків
-                .frame(false);    // Безрамковий дизайн для чистішого вигляду
+            stats.char_count = text.chars().count();
+            stats.paragraph_count = text.lines().filter(|line| !line.trim().is_empty()).count();
+            stats.token_count = count_tokens(text);
+            stats.fragments_paragraphs = crate::core::pipeline::timeline::text_splitter::split_text(text, "paragraphs", 0).len();
+            stats.fragments_sentences  = crate::core::pipeline::timeline::text_splitter::split_text(text, "sentences",  0).len();
+            stats.fragments_char_limit = crate::core::pipeline::timeline::text_splitter::split_text(text, "char_limit", text_split_char_limit).len();
+        }
 
-            // Розтягуємо текстове поле на всю доступну область по горизонталі та вертикалі
-            ui.add_sized(ui.available_size(), text_edit);
+        let char_count = stats.char_count;
+        let paragraph_count = stats.paragraph_count;
+        let token_count = stats.token_count;
+        let fragments_paragraphs = stats.fragments_paragraphs;
+        let fragments_sentences = stats.fragments_sentences;
+        let fragments_char_limit = stats.fragments_char_limit;
+
+        // 2. Рендеринг панелі статистики (фіксована вгорі)
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+
+            let text_color = ui.visuals().widgets.noninteractive.text_color();
+            let accent_color = ui.visuals().selection.bg_fill;
+            let bullet_color = text_color.linear_multiply(0.3);
+
+            // Символи
+            ui.label(egui::RichText::new(translate(language, "stats_chars")).size(16.0).color(text_color));
+            ui.label(egui::RichText::new(format!(" {}", char_count)).size(16.0).strong().color(accent_color));
+
+            // Роздільник
+            ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+
+            // Абзаци
+            ui.label(egui::RichText::new(translate(language, "stats_paragraphs")).size(16.0).color(text_color));
+            ui.label(egui::RichText::new(format!(" {}", paragraph_count)).size(16.0).strong().color(accent_color));
+
+            // Роздільник
+            ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+
+            // Токени
+            ui.label(egui::RichText::new(translate(language, "stats_tokens")).size(16.0).color(text_color));
+            ui.label(egui::RichText::new(format!(" {}", token_count)).size(16.0).strong().color(accent_color));
+
+            // Роздільник
+            ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+
+            // Фрагменти по абзацах
+            ui.label(egui::RichText::new(translate(language, "stats_fragments_paragraphs")).size(16.0).color(text_color));
+            ui.label(egui::RichText::new(format!(" {}", fragments_paragraphs)).size(16.0).strong().color(accent_color));
+
+            // Роздільник
+            ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+
+            // Фрагменти по реченнях
+            ui.label(egui::RichText::new(translate(language, "stats_fragments_sentences")).size(16.0).color(text_color));
+            ui.label(egui::RichText::new(format!(" {}", fragments_sentences)).size(16.0).strong().color(accent_color));
+
+            // Роздільник
+            ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+
+            // Фрагменти по ліміту символів
+            ui.label(egui::RichText::new(translate(language, "stats_fragments_chars")).size(16.0).color(text_color));
+            ui.label(egui::RichText::new(format!(" {}", fragments_char_limit)).size(16.0).strong().color(accent_color));
         });
+        ui.add_space(4.0);
+        ui.separator();
+
+        // 3. Область прокрутки для безрамкового текстового поля
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2]) // Запобігає стисканню скрол-області
+            .show(ui, |ui| {
+                // Задаємо легкий відступ від країв для покращення читабельності
+                ui.add_space(8.0);
+                
+                let text_edit = egui::TextEdit::multiline(text)
+                    .hint_text(translate(language, "editor_hint"))
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(40) // Велика дефолтна кількість рядків
+                    .frame(false);    // Безрамковий дизайн для чистішого вигляду
+
+                // Розтягуємо текстове поле на всю доступну область по горизонталі та вертикалі
+                ui.add_sized(ui.available_size(), text_edit);
+            });
+    }
 }

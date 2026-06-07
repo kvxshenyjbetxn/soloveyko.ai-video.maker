@@ -215,18 +215,39 @@ pub fn draw_montage_editor_window(
         *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMontageControl
     }).unwrap_or(false);
 
-    egui::Window::new(&title)
-        .id(egui::Id::new("montage_editor_window"))
+    let win_id = if editor.maximized {
+        "montage_editor_window_maximized"
+    } else {
+        "montage_editor_window"
+    };
+
+    let mut window = egui::Window::new(&title)
+        .id(egui::Id::new(win_id))
         .open(&mut is_open)
-        .resizable(true)
-        .default_size([1100.0, 680.0])
-        .min_size([700.0, 480.0])
-        .collapsible(false)
-        .show(ctx, |ui| {
-            if topbar::draw_topbar(ui, language, editor, is_awaiting, job_id, jobs) {
-                close_after = true;
-            }
-            ui.separator();
+        .resizable(!editor.maximized)
+        .movable(!editor.maximized)
+        .collapsible(true);
+
+    if editor.maximized {
+        let screen = ctx.screen_rect();
+        // Враховуємо тіні та рамки вікна, щоб воно не вилазило за межі програми
+        let margin = 6.0;
+        let rect = egui::Rect::from_min_max(
+            egui::pos2(screen.min.x + margin, screen.min.y + margin),
+            egui::pos2(screen.max.x - margin, screen.max.y - margin),
+        );
+        window = window.fixed_rect(rect);
+    } else {
+        window = window
+            .default_size([1100.0, 680.0])
+            .min_size([700.0, 480.0]);
+    }
+
+    let window_response = window.show(ctx, |ui| {
+        if topbar::draw_topbar(ui, language, editor, is_awaiting, job_id, jobs) {
+            close_after = true;
+        }
+        ui.separator();
 
             egui::TopBottomPanel::bottom("montage_editor_timeline_panel")
                 .resizable(false)
@@ -264,6 +285,12 @@ pub fn draw_montage_editor_window(
                         });
                 });
         });
+
+    if let Some(ref inner_resp) = window_response {
+        if inner_resp.response.double_clicked() {
+            editor.maximized = !editor.maximized;
+        }
+    }
 
     // Збираємо дії з pending полів editor
     let animate_paths = std::mem::take(&mut editor.pending_animate_paths);

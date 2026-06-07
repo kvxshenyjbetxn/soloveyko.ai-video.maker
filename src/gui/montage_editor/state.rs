@@ -50,6 +50,8 @@ pub struct MontageEditorState {
     pub pool_preview: Option<PathBuf>,
     /// Кешована текстура для fullscreen preview (шлях, текстура)
     pub pool_preview_texture: Option<(PathBuf, eframe::egui::TextureHandle)>,
+    /// Чи максимізовано вікно редактора на весь екран програми
+    pub maximized: bool,
 }
 
 impl MontageEditorState {
@@ -126,6 +128,7 @@ impl MontageEditorState {
             pending_regen: None,
             pool_preview: None,
             pool_preview_texture: None,
+            maximized: false,
         }
     }
 

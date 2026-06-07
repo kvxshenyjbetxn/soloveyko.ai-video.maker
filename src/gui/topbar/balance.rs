@@ -19,6 +19,7 @@ pub fn draw_balance_window(
     egui::Window::new(translate(language, "balance_window_title"))
         .open(open)
         .resizable(false)
+        .vscroll(true)
         .collapsible(false)
         .default_width(300.0)
         .show(ctx, |ui| {
@@ -183,6 +184,7 @@ pub fn draw_threads_window(
     egui::Window::new(translate(language, "threads_window_title"))
         .open(open)
         .resizable(false)
+        .vscroll(true)
         .collapsible(false)
         .default_width(300.0)
         .show(ctx, |ui| {

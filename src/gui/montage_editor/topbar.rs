@@ -57,6 +57,22 @@ pub(super) fn draw_topbar(
                 }
                 continue_clicked = true;
             }
+
+            ui.add_space(8.0);
+
+            // Кнопка розгортання на весь екран / згортання у вікно
+            let max_text = if editor.maximized { "🗗" } else { "🗖" };
+            let max_tooltip = if editor.maximized {
+                translate(language, "montage_editor_restore")
+            } else {
+                translate(language, "montage_editor_maximize")
+            };
+            if ui.button(egui::RichText::new(max_text).size(14.0))
+                .on_hover_text(max_tooltip)
+                .clicked()
+            {
+                editor.maximized = !editor.maximized;
+            }
         });
     });
     continue_clicked

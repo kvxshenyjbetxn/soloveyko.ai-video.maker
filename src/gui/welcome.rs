@@ -350,6 +350,7 @@ pub fn draw_welcome_dialog(
     egui::Window::new(translate(language, "welcome_title"))
         .collapsible(false)
         .resizable(false)
+        .vscroll(true)
         .default_width(500.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {

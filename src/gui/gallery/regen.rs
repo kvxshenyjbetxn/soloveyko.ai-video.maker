@@ -34,6 +34,7 @@ pub fn draw_media_regen_window(
     egui::Window::new(title)
         .open(&mut is_open)
         .resizable(true)
+        .vscroll(true)
         .default_width(380.0)
         .collapsible(false)
         .show(ctx, |ui| {

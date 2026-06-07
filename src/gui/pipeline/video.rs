@@ -526,6 +526,7 @@ pub fn draw_video_section(
                 egui::Window::new(translate(language, "video_priorities_title"))
                     .open(&mut still_open)
                     .resizable(false)
+                    .vscroll(true)
                     .collapsible(false)
                     .default_width(320.0)
                     .show(ui.ctx(), |ui| {
