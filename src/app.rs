@@ -365,13 +365,13 @@ pub struct VideoMakerApp {
     /// Набір шляхів відео, для яких зараз витягуються hover-кадри.
     pub video_hover_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Результат фонового витягування hover-кадрів.
-    pub video_hover_result: std::sync::Arc<std::sync::Mutex<Option<(std::path::PathBuf, Vec<egui::TextureHandle>)>>>,
+    pub video_hover_result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Vec<egui::TextureHandle>)>>>,
     /// Кеш першого кадру відео як thumbnail: path → текстура.
     pub video_thumbnails: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Набір шляхів відео, для яких зараз витягується thumbnail.
     pub video_thumb_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Результат фонового витягування thumbnail.
-    pub video_thumb_result: std::sync::Arc<std::sync::Mutex<Option<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
+    pub video_thumb_result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
     /// Активний повноекранний відеоплеєр (якщо відео відкрите).
     pub video_player: Option<crate::gui::gallery::video_player::VideoPlayer>,
     /// Текст промту, який зараз показується у popup-вікні галереї. None = вікно закрите.
@@ -558,10 +558,10 @@ impl Default for VideoMakerApp {
             video_hover_frames: std::collections::HashMap::new(),
             video_hover_state: std::collections::HashMap::new(),
             video_hover_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            video_hover_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_hover_result: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             video_thumbnails: std::collections::HashMap::new(),
             video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             video_player: None,
             gallery_prompt_popup: None,
             editor_stats: crate::gui::editor::EditorStats::default(),
@@ -905,10 +905,10 @@ impl VideoMakerApp {
             video_hover_frames: std::collections::HashMap::new(),
             video_hover_state: std::collections::HashMap::new(),
             video_hover_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            video_hover_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_hover_result: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             video_thumbnails: std::collections::HashMap::new(),
             video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             video_player: None,
             gallery_prompt_popup: None,
             editor_stats: crate::gui::editor::EditorStats::default(),
@@ -1625,12 +1625,26 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Обробка результату hover-витягування
-        if let Some((path, frames)) = self.video_hover_result.lock().unwrap().take() {
+        let mut hover_results = Vec::new();
+        {
+            let mut lock = self.video_hover_result.lock().unwrap();
+            if !lock.is_empty() {
+                hover_results = std::mem::take(&mut *lock);
+            }
+        }
+        for (path, frames) in hover_results {
             self.video_hover_frames.insert(path, frames);
         }
 
         // Обробка результату thumbnail-витягування
-        if let Some((path, tex)) = self.video_thumb_result.lock().unwrap().take() {
+        let mut thumb_results = Vec::new();
+        {
+            let mut lock = self.video_thumb_result.lock().unwrap();
+            if !lock.is_empty() {
+                thumb_results = std::mem::take(&mut *lock);
+            }
+        }
+        for (path, tex) in thumb_results {
             self.video_thumbnails.insert(path, tex);
         }
 

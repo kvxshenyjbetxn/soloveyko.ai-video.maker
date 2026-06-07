@@ -51,14 +51,14 @@ pub fn start_thumbnail_extraction(
     path: PathBuf,
     ctx: egui::Context,
     loading: Arc<Mutex<std::collections::HashSet<PathBuf>>>,
-    result: Arc<Mutex<Option<(PathBuf, Option<egui::TextureHandle>)>>>,
+    result: Arc<Mutex<Vec<(PathBuf, Option<egui::TextureHandle>)>>>,
 ) {
     std::thread::spawn(move || {
         loading.lock().unwrap().insert(path.clone());
         ctx.request_repaint();
 
         let tex = extract_single_frame_pipe(&path, &ctx, 160);
-        *result.lock().unwrap() = Some((path.clone(), tex));
+        result.lock().unwrap().push((path.clone(), tex));
         loading.lock().unwrap().remove(&path);
         ctx.request_repaint();
     });
@@ -71,14 +71,14 @@ pub fn start_hover_extraction(
     path: PathBuf,
     ctx: egui::Context,
     loading: Arc<Mutex<std::collections::HashSet<PathBuf>>>,
-    result: Arc<Mutex<Option<(PathBuf, Vec<egui::TextureHandle>)>>>,
+    result: Arc<Mutex<Vec<(PathBuf, Vec<egui::TextureHandle>)>>>,
 ) {
     std::thread::spawn(move || {
         loading.lock().unwrap().insert(path.clone());
         ctx.request_repaint();
 
         let frames = extract_frames_file(&path, &ctx, Some(8), 160, 2.0).unwrap_or_default();
-        *result.lock().unwrap() = Some((path.clone(), frames));
+        result.lock().unwrap().push((path.clone(), frames));
         loading.lock().unwrap().remove(&path);
         ctx.request_repaint();
     });

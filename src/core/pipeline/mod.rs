@@ -167,6 +167,22 @@ fn get_mp3_duration_secs(path: &std::path::Path) -> Option<f64> {
     None
 }
 
+/// Валідує завантажені або декодовані медіа-байти на порожнечу та текстові помилки.
+fn validate_media_bytes(bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() {
+        return Err("Отримано порожній файл (0 байт)".to_string());
+    }
+    if bytes.len() < 500 {
+        if let Ok(text) = std::str::from_utf8(bytes) {
+            let trimmed = text.trim();
+            if trimmed.starts_with('{') || trimmed.starts_with('<') || trimmed.starts_with("Error") || trimmed.starts_with("Unauthorized") {
+                return Err(format!("Замість медіа-даних отримано текст помилки: {}", trimmed));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Декодує результат генерації (data URI або HTTP URL) і зберігає файл.
 /// Повертає шлях до збереженого файлу.
 fn decode_result(
@@ -195,6 +211,8 @@ fn decode_result(
             .decode(b64)
             .map_err(|e| format!("Base64 decode error: {}", e))?;
 
+        validate_media_bytes(&bytes)?;
+
         let path = media_dir.join(format!("{:04}.{}", index, ext));
         std::fs::write(&path, &bytes).map_err(|e| format!("Save error: {}", e))?;
         Ok(path)
@@ -204,7 +222,6 @@ fn decode_result(
             .rsplit('.').next()
             .filter(|e| e.len() <= 4 && e.chars().all(|c| c.is_ascii_alphanumeric()))
             .unwrap_or("jpg");
-        let path = media_dir.join(format!("{:04}.{}", index, ext));
 
         use std::io::Read;
         let resp = ureq::get(result).call()
@@ -212,6 +229,10 @@ fn decode_result(
         let mut bytes = Vec::new();
         resp.into_reader().read_to_end(&mut bytes)
             .map_err(|e| format!("Read error: {}", e))?;
+
+        validate_media_bytes(&bytes)?;
+
+        let path = media_dir.join(format!("{:04}.{}", index, ext));
         std::fs::write(&path, &bytes).map_err(|e| format!("Save error: {}", e))?;
         Ok(path)
     }
@@ -2682,14 +2703,23 @@ pub fn upscale_video_if_needed(
         .args(&args)
         .output();
 
+    let restore_original = || {
+        if temp_path.exists() {
+            if video_path.exists() {
+                let _ = std::fs::remove_file(video_path);
+            }
+            let _ = std::fs::rename(&temp_path, video_path);
+        }
+    };
+
     let clean_up = || {
         let _ = std::fs::remove_file(&temp_path);
     };
 
     match child {
         Ok(output) => {
-            clean_up();
             if output.status.success() {
+                clean_up();
                 crate::logger::log_job(
                     job_id,
                     job_name,
@@ -2697,12 +2727,13 @@ pub fn upscale_video_if_needed(
                 );
                 Ok(())
             } else {
+                restore_original();
                 let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
                 Err(format!("FFmpeg error: {}", err_msg.trim()))
             }
         }
         Err(e) => {
-            clean_up();
+            restore_original();
             Err(format!("Не вдалося запустити FFmpeg: {}", e))
         }
     }
