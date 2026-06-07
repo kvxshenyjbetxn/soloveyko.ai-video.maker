@@ -86,24 +86,18 @@ pub fn call_claude_code_new_session(
 
     log(&format!("Starting Claude CLI agent session. Model: {}, session: {}", model, session_id));
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new("cmd");
-    #[cfg(target_os = "windows")]
-    cmd.args(&["/C", "claude"]);
-
-    #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("claude");
-
     cmd.arg("--model").arg(model)
         .arg("-p").arg(user_content)
         .arg("--allowedTools").arg("Bash,Write,Read")
+        .arg("--permission-mode").arg("bypassPermissions")
         .arg("--session-id").arg(session_id);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
     }
 
-    log(&format!("Running: claude --model {} -p \"[prompt]\" --allowedTools Bash,Write,Read --session-id {}", model, session_id));
+    log(&format!("Running: claude --model {} -p \"[prompt]\" --allowedTools Bash,Write,Read --permission-mode bypassPermissions --session-id {}", model, session_id));
 
     let output = cmd.output().map_err(|e| {
         format!("Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.", e)
@@ -145,17 +139,11 @@ pub fn call_claude_code_resume(
 
     log(&format!("Resuming Claude CLI session: {}", session_id));
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new("cmd");
-    #[cfg(target_os = "windows")]
-    cmd.args(&["/C", "claude"]);
-
-    #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("claude");
-
     cmd.arg("--model").arg(model)
         .arg("-p").arg(message)
         .arg("--allowedTools").arg("Bash,Write,Read")
+        .arg("--permission-mode").arg("bypassPermissions")
         .arg("--resume").arg(session_id);
 
     if let Some(dir) = working_dir {
@@ -204,34 +192,22 @@ pub fn call_claude_code(
 
     log(&format!("Starting Claude CLI translation. Model: {}", model));
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new("cmd");
-    #[cfg(target_os = "windows")]
-    cmd.args(&["/C", "claude"]);
-
-    #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("claude");
-
-    // Запускаємо: claude --model <model> -p "<prompt>" [--allowedTools Bash,Write,Read]
     cmd.arg("--model")
         .arg(model)
         .arg("-p")
         .arg(user_content);
 
     if allow_tools {
-        cmd.arg("--allowedTools").arg("Bash,Write,Read");
+        cmd.arg("--allowedTools").arg("Bash,Write,Read")
+            .arg("--permission-mode").arg("bypassPermissions");
     }
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
     }
 
-    // Записуємо інформацію про команду у лог
-    let debug_command = format!(
-        "claude --model {} -p \"[prompt and script text]\"",
-        model
-    );
-    log(&format!("Running: {}", debug_command));
+    log(&format!("Running: claude --model {} -p \"[prompt and script text]\"", model));
 
     let output = cmd.output().map_err(|e| {
         let err_msg = format!("Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.", e);

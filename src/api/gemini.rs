@@ -85,14 +85,7 @@ pub fn call_gemini_new_session(
 
     log(&format!("Starting Gemini CLI agent session. Model: {}, session: {}", model, session_id));
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new("cmd");
-    #[cfg(target_os = "windows")]
-    cmd.args(&["/C", "gemini"]);
-
-    #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("gemini");
-
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(user_content)
@@ -147,14 +140,7 @@ pub fn call_gemini_resume(
 
     log(&format!("Resuming Gemini CLI session: {}", session_id));
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new("cmd");
-    #[cfg(target_os = "windows")]
-    cmd.args(&["/C", "gemini"]);
-
-    #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("gemini");
-
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(message)
@@ -210,12 +196,6 @@ pub fn call_gemini_cli(
 
     log(&format!("Starting Gemini CLI translation. Model: {}", model));
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new("cmd");
-    #[cfg(target_os = "windows")]
-    cmd.args(&["/C", "gemini"]);
-
-    #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("gemini");
 
     // Запускаємо: gemini --model <model> --output-format json --prompt "<prompt>" --yolo --skip-trust
