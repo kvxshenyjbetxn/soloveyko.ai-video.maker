@@ -67,7 +67,7 @@ impl<'a> Drop for ClaudePermit<'a> {
     }
 }
 
-/// Читає stdout по chunks в реальному часі та викликає `on_chunk` для кожного.
+/// Читає stdout по рядках (NDJSON), парсить JSON-події та викликає `on_chunk` з відформатованим текстом.
 pub fn call_claude_code_new_session_streaming(
     model: &str,
     user_content: &str,
@@ -96,6 +96,8 @@ pub fn call_claude_code_new_session_streaming(
         .arg("-p").arg(user_content)
         .arg("--allowedTools").arg("Bash,Write,Read")
         .arg("--dangerously-skip-permissions")
+        .arg("--output-format").arg("stream-json")
+        .arg("--verbose")
         .arg("--session-id").arg(session_id)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -104,7 +106,7 @@ pub fn call_claude_code_new_session_streaming(
         cmd.current_dir(dir);
     }
 
-    log(&format!("Running: claude --model {} -p \"[prompt]\" --allowedTools Bash,Write,Read --permission-mode bypassPermissions --session-id {}", model, session_id));
+    log(&format!("Running: claude --model {} -p \"[prompt]\" --allowedTools Bash,Write,Read --dangerously-skip-permissions --output-format stream-json --session-id {}", model, session_id));
 
     let mut child = cmd.spawn().map_err(|e| {
         format!("Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.", e)
@@ -121,15 +123,36 @@ pub fn call_claude_code_new_session_streaming(
     };
 
     let mut stdout = child.stdout.take().unwrap();
-    let mut full_output = String::new();
+    let mut line_buf = String::new();
+    let mut final_result = String::new();
+    let mut raw_output = String::new();
     let mut buf = [0u8; 512];
 
     loop {
         let n = stdout.read(&mut buf).map_err(|e| format!("Read error: {}", e))?;
         if n == 0 { break; }
         let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
-        full_output.push_str(&chunk);
-        on_chunk(&chunk);
+        raw_output.push_str(&chunk);
+        line_buf.push_str(&chunk);
+
+        // Обробляємо повні рядки NDJSON
+        while let Some(pos) = line_buf.find('\n') {
+            let line = line_buf[..pos].to_string();
+            line_buf = line_buf[pos + 1..].to_string();
+            let trimmed = line.trim();
+            if trimmed.is_empty() { continue; }
+            if let Some(text) = format_claude_json_event(trimmed, &mut final_result) {
+                on_chunk(&text);
+            }
+        }
+    }
+
+    // Обробляємо залишок буфера (якщо останній рядок без '\n')
+    let remaining = line_buf.trim().to_string();
+    if !remaining.is_empty() {
+        if let Some(text) = format_claude_json_event(&remaining, &mut final_result) {
+            on_chunk(&text);
+        }
     }
 
     let exit_status = child.wait().map_err(|e| format!("Wait error: {}", e))?;
@@ -137,14 +160,113 @@ pub fn call_claude_code_new_session_streaming(
 
     if exit_status.success() {
         log("Claude CLI agent session completed successfully.");
-        Ok((full_output.trim().to_string(), session_id.to_string()))
+        Ok((final_result.trim().to_string(), session_id.to_string()))
     } else {
         let err_msg = format!(
             "Claude CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            exit_status.code(), stderr.trim(), full_output.trim()
+            exit_status.code(), stderr.trim(), raw_output.trim()
         );
         log(&err_msg);
         Err(format!("Claude CLI error: {}", stderr.trim()))
+    }
+}
+
+/// Парсить одну NDJSON-подію від Claude CLI --output-format stream-json та повертає людиночитаний текст.
+///
+/// Структура подій stream-json:
+/// - "assistant": містить message.content[] з блоками "text" (роздум) та "tool_use" (виклик інструменту)
+/// - "user":      містить message.content[] з блоками "tool_result" (результат виконання)
+/// - "result":    фінальна подія з полем "result" — фінальна відповідь агента
+fn format_claude_json_event(line: &str, final_result: &mut String) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let event_type = v.get("type")?.as_str()?;
+
+    match event_type {
+        "assistant" => {
+            let content = v.get("message")?.get("content")?.as_array()?;
+            let mut parts = Vec::new();
+            for item in content {
+                match item.get("type").and_then(|t| t.as_str()) {
+                    Some("text") => {
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            let trimmed = text.trim();
+                            if !trimmed.is_empty() {
+                                parts.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                    Some("tool_use") => {
+                        let name = item.get("name").and_then(|n| n.as_str()).unwrap_or("Tool");
+                        let input = item.get("input").unwrap_or(&serde_json::Value::Null);
+                        let detail = match name {
+                            "Bash" => input.get("command").and_then(|c| c.as_str()).map(|c| format!("$ {}", c)),
+                            "Read" => input.get("file_path").or_else(|| input.get("path")).and_then(|p| p.as_str()).map(|p| p.to_string()),
+                            "Write" => input.get("file_path").or_else(|| input.get("path")).and_then(|p| p.as_str()).map(|p| p.to_string()),
+                            _ => Some(input.to_string()),
+                        }.unwrap_or_default();
+                        parts.push(format!("[{}] {}", name, detail));
+                    }
+                    _ => {}
+                }
+            }
+            if parts.is_empty() { None } else { Some(format!("{}\n", parts.join("\n"))) }
+        }
+        "user" => {
+            // Tool results повертаються як "user" повідомлення
+            let content = v.get("message")?.get("content")?.as_array()?;
+            let mut results = Vec::new();
+            for item in content {
+                if item.get("type").and_then(|t| t.as_str()) == Some("tool_result") {
+                    let is_error = item.get("is_error").and_then(|e| e.as_bool()).unwrap_or(false);
+                    // [->] і [!!] — ASCII-маркери, рендерер малює іконки вручну
+                    let prefix = if is_error { "[!!] " } else { "[->] " };
+                    // content може бути рядком або масивом блоків
+                    if let Some(text) = item.get("content").and_then(|c| c.as_str()) {
+                        let first_line = text.trim().lines().next().unwrap_or("").trim();
+                        if !first_line.is_empty() {
+                            let preview = if first_line.len() > 150 { format!("{}...", &first_line[..150]) } else { first_line.to_string() };
+                            results.push(format!("{}{}", prefix, preview));
+                        }
+                    } else if let Some(blocks) = item.get("content").and_then(|c| c.as_array()) {
+                        for block in blocks {
+                            if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                                if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                                    let first_line = text.trim().lines().next().unwrap_or("").trim();
+                                    if !first_line.is_empty() {
+                                        let preview = if first_line.len() > 150 { format!("{}...", &first_line[..150]) } else { first_line.to_string() };
+                                        results.push(format!("{}{}", prefix, preview));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if results.is_empty() { None } else { Some(format!("{}\n", results.join("\n"))) }
+        }
+        "result" => {
+            if let Some(result) = v.get("result").and_then(|r| r.as_str()) {
+                *final_result = result.to_string();
+            }
+            // Структурований маркер [STATS] — рендерер малює статистику вручну через Painter
+            let duration_s   = v.get("duration_ms").and_then(|d| d.as_f64()).map(|ms| ms / 1000.0);
+            let cost         = v.get("total_cost_usd").and_then(|c| c.as_f64());
+            let input_tokens = v.get("usage").and_then(|u| u.get("input_tokens")).and_then(|t| t.as_u64());
+            let output_tokens= v.get("usage").and_then(|u| u.get("output_tokens")).and_then(|t| t.as_u64());
+            let num_turns    = v.get("num_turns").and_then(|t| t.as_u64());
+
+            let has_data = duration_s.is_some() || input_tokens.is_some() || cost.is_some();
+            if !has_data { return None; }
+            Some(format!("\n[STATS]{:.1}|{}|{}|{:.6}|{}\n",
+                duration_s.unwrap_or(0.0),
+                input_tokens.unwrap_or(0),
+                output_tokens.unwrap_or(0),
+                cost.unwrap_or(0.0),
+                num_turns.unwrap_or(0),
+            ))
+        }
+        _ => None,
     }
 }
 
@@ -174,6 +296,8 @@ pub fn call_claude_code_resume(
         .arg("-p").arg(message)
         .arg("--allowedTools").arg("Bash,Write,Read")
         .arg("--dangerously-skip-permissions")
+        .arg("--output-format").arg("stream-json")
+        .arg("--verbose")
         .arg("--resume").arg(session_id);
 
     if let Some(dir) = working_dir {
@@ -185,9 +309,11 @@ pub fn call_claude_code_resume(
     })?;
 
     if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let response = parse_claude_json_response(&stdout)
+            .unwrap_or_else(|| stdout.trim().to_string());
         log("Claude CLI resume completed.");
-        Ok(stdout)
+        Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -198,6 +324,23 @@ pub fn call_claude_code_resume(
         log(&err_msg);
         Err(format!("Claude CLI error: {}", stderr))
     }
+}
+
+/// Витягує фінальну відповідь з NDJSON-виводу Claude CLI --output-format json.
+/// Шукає подію типу "result" та повертає її поле "result".
+fn parse_claude_json_response(output: &str) -> Option<String> {
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() { continue; }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if v.get("type").and_then(|t| t.as_str()) == Some("result") {
+                if let Some(result) = v.get("result").and_then(|r| r.as_str()) {
+                    return Some(result.trim().to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Викликає Claude CLI для виконання перекладу сценарію або іншого тексту та повертає результат.

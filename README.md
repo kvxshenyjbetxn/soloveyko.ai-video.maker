@@ -35,7 +35,7 @@ src/
 │   ├── voicebot.rs              — fetch_balance (баланс VoiceBot у символах) + VoiceBotLimiter (семафор лімітування запитів, фіксовано 5 потоків)
 │   ├── edgetts.rs               — fetch_voices (завантаження голосів через msedge-tts) + EdgeTTSLimiter (семафор лімітування запитів до Edge TTS) + synthesize (генерація аудіо)
 │   ├── googler.rs               — check_key + fetch_balance (ліміти зображень/відео) + GooglerImageLimiter + GooglerVideoLimiter (локальний підрахунок активних потоків генерації)
-│   ├── claude.rs                — call_claude_code_new_session_streaming (--session-id, spawn()+BufReader: читає stdout chunks в реальному часі, on_chunk callback) + call_claude_code_resume (--resume, для продовження чату) + call_claude_code (звичайний виклик, allow_tools: bool) + ClaudeLimiter (семафор); всі агентні виклики: --permission-mode bypassPermissions; запуск напряму Command::new("claude") без cmd /C (Windows і macOS)
+│   ├── claude.rs                — call_claude_code_new_session_streaming (--output-format stream-json --verbose: читає NDJSON рядки в реальному часі, парсить події через format_claude_json_event, on_chunk отримує читабельний текст) + call_claude_code_resume (--resume + --output-format stream-json, результат витягується через parse_claude_json_response) + call_claude_code (звичайний виклик, allow_tools: bool) + ClaudeLimiter (семафор); запуск напряму Command::new("claude") без cmd /C
 │   ├── gemini.rs                — call_gemini_new_session_streaming (--session-id, spawn()+BufReader, on_chunk викликається один раз з parsed JSON у кінці) + call_gemini_resume (--resume) + call_gemini_cli (звичайний виклик, --yolo) + GeminiLimiter (семафор); запуск напряму Command::new("gemini") без cmd /C
 │   ├── codex.rs                 — call_codex_new_session_streaming (spawn()+BufReader, автовизначення session_id з stdout, on_chunk callback) + call_codex_resume (exec resume) + call_codex (звичайний виклик для перекладу) + CodexLimiter (семафор); запуск напряму Command::new("codex") без cmd /C
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
@@ -60,7 +60,7 @@ src/
 │           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
-│   ├── agent_chat_window.rs     — draw_agent_chat_window: вікно чату з агентом (история повідомлень, введення, відправка через --resume, кнопка "Продовжити пайплайн")
+│   ├── agent_chat_window.rs     — draw_agent_chat_window: вікно чату з агентом (640×760 за замовчуванням, resizable); render_message_content — рендерить NDJSON-теговані рядки: [->]/[!!] → L-стрілка/×, [STATS] → рядок статистики; всі іконки намальовані вручну через egui::Painter (не Unicode); спінер внизу поруч з кнопкою «Надіслати» для всіх агентів
 │   ├── montage_editor/           — повноцінний редактор монтажу, розбитий на 12 модулів:
 │   │   ├── mod.rs               — точка входу: декларації модулів, pub use реекспорти, draw_montage_editor_window, load_preview_texture, draw_montage_media_preview
 │   │   ├── types.rs             — константи (PREVIEW_FPS=15, PREVIEW_WIDTH=640, FRAME_CACHE_SIZE=200) + всі pub типи: ClipKind, DragMode, EditorClip, MontagePreviewSettings, MontageEditorActions, ClipDragState, PreviewDragMode, PreviewDragState
@@ -504,8 +504,9 @@ pub struct ClipDragState {
 Кнопка 💬 з'являється у картці задачі (поруч з ✂ редактором) коли обрано `Claude Code`, `Gemini CLI` або `Codex CLI` як сервіс відеоряду — незалежно від `agent_control_enabled`. Дозволяє відкрити чат у будь-який момент, щоб спостерігати за роботою агента в реальному часі.
 
 `draw_agent_chat_window` відображає:
-- **Чат:** повідомлення `user` / `Agent` у різнокольорових бульбашках. Перше повідомлення агента — аргументи запуску (модель, session_id), далі — стримінговий вивід по мірі відповіді CLI.
-- **Спінер** з текстом "Agent is thinking…" показується коли: (а) іде запит через UI (`is_loading = true`), або (б) задача в статусі `Running` і останнє повідомлення від агента (`pipeline_generating`). Оба сигнали об'єднуються: `show_spinner = is_loading || pipeline_generating`.
+- **Чат:** повідомлення `user` / `Agent` у різнокольорових бульбашках. Для Claude — стримінгові події NDJSON в реальному часі через `--output-format stream-json --verbose`. ScrollArea динамічно росте разом із вікном: `(available_height - 120).max(80)`.
+- **Рендеринг повідомлень агента** (`render_message_content`): парсить теговані рядки — `[->]` (результат тулу, намальована L-стрілка ↳), `[!!]` (помилка, намальований ×), `[STATS]duration|in_tok|out_tok|cost|turns` (рядок статистики з горизонтальними лініями, намальованими стрілками ↑↓ та крапками-роздільниками). Усі іконки намальовані через `egui::Painter` — Unicode-символи рендеряться як □ в egui.
+- **Спінер** (`show_spinner = is_loading || pipeline_generating`) відображається **для всіх агентів** внизу вікна поруч з кнопкою «Надіслати» — не всередині scroll area.
 - **Поле введення** (Enter = відправити, Shift+Enter = новий рядок) і кнопка «Надіслати» — доступні лише якщо є збережена сесія (`agent_session`).
 - **Кнопка «Продовжити пайплайн»** — показується лише коли `agent_control_enabled = true`, сигналізує condvar → пайплайн відновлюється.
 
