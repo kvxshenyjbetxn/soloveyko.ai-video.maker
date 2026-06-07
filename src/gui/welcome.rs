@@ -398,8 +398,8 @@ fn draw_whisper_amd_row(
     ui: &mut egui::Ui,
     language: Language,
     download: &BinaryDownload,
-    download_arc: Arc<Mutex<BinaryDownload>>,
-    ctx: &egui::Context,
+    _download_arc: Arc<Mutex<BinaryDownload>>,
+    _ctx: &egui::Context,
 ) {
     let is_installed = crate::bundle::whisper_amd_local_exists();
 
@@ -449,13 +449,13 @@ fn draw_whisper_amd_row(
                     BinaryDownload::Idle | BinaryDownload::Done => {
                         ui.add_space(2.0);
                         if ui.small_button(translate(language, "welcome_whisper_amd_install_btn")).clicked() {
-                            start_whisper_amd_download(download_arc, ctx.clone());
+                            start_whisper_amd_download(_download_arc, _ctx.clone());
                         }
                     }
                     BinaryDownload::Failed(_) => {
                         ui.add_space(2.0);
                         if ui.small_button(translate(language, "welcome_recheck_btn")).clicked() {
-                            start_whisper_amd_download(download_arc, ctx.clone());
+                            start_whisper_amd_download(_download_arc, _ctx.clone());
                         }
                     }
                     _ => {}
