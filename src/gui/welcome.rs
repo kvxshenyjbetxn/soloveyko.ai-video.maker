@@ -96,7 +96,18 @@ impl ToolChecks {
                 .args(&["/C", name, version_flag])
                 .output();
 
-            #[cfg(not(target_os = "windows"))]
+            // На macOS .app не успадковує PATH з терміналу, тому шукаємо в типових місцях
+            // і передаємо розширений PATH щоб Node.js/Python скрипти теж могли знайти свій рантайм
+            #[cfg(target_os = "macos")]
+            let result = {
+                let candidate = Self::find_binary_macos(name);
+                std::process::Command::new(&candidate)
+                    .arg(version_flag)
+                    .env("PATH", Self::macos_extended_path())
+                    .output()
+            };
+
+            #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
             let result = std::process::Command::new(name)
                 .arg(version_flag)
                 .output();
@@ -116,6 +127,47 @@ impl ToolChecks {
             *status.lock().unwrap() = new_status;
             ctx.request_repaint();
         });
+    }
+
+    /// Шукає бінарник у типових місцях macOS (PATH з терміналу недоступний у .app).
+    #[cfg(target_os = "macos")]
+    fn find_binary_macos(name: &str) -> String {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let candidates = [
+            format!("/usr/local/bin/{}", name),
+            format!("/opt/homebrew/bin/{}", name),
+            format!("{}/.local/bin/{}", home, name),
+            format!("{}/.npm-global/bin/{}", home, name),
+            format!("/usr/bin/{}", name),
+        ];
+        candidates
+            .iter()
+            .find(|p| std::path::Path::new(p.as_str()).exists())
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    }
+
+    /// Розширений PATH для macOS .app — додає типові директорії де живуть node, python тощо.
+    #[cfg(target_os = "macos")]
+    fn macos_extended_path() -> String {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let system_path = std::env::var("PATH").unwrap_or_default();
+        let extra = [
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            &format!("{}/.local/bin", home),
+            &format!("{}/.npm-global/bin", home),
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ];
+        let mut parts: Vec<&str> = extra.iter().map(|s| *s).collect();
+        if !system_path.is_empty() {
+            parts.push(&system_path);
+        }
+        parts.join(":")
     }
 
     /// Перевіряє ffmpeg (враховує ~/bin/), при відсутності — авто-скачує.

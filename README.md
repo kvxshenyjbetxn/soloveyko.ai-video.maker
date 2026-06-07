@@ -732,7 +732,9 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 **`BinaryDownload` (раніше `FfmpegDownload`):** загальний тип для всіх бінарників з авто-завантаженням. `FfmpegDownload` залишений як type alias для зворотної сумісності всередині файлу. Функція `draw_download_row` (раніше `draw_ffmpeg_row`) тепер використовується для обох: FFmpeg та Whisper.
 
-**Важливо:** FFmpeg використовує одинарний дефіс `-version`. На Windows всі перевірки CLI (Gemini, Claude) проксуються через `cmd /C <name> <flag>`.
+**Важливо:** FFmpeg використовує одинарний дефіс `-version`. На Windows всі перевірки CLI (Gemini, Claude) проксуються через `cmd /C <name> <flag>`. На macOS `.app`-бандл запускається без успадкування `PATH` з терміналу — тому `gemini`/`claude` шукаються через `find_binary_macos`, а процес запускається з розширеним `PATH` через `macos_extended_path`.
+
+**Логіка перевірки CLI на macOS (`find_binary_macos` + `macos_extended_path`):** Скомпільований `.app` отримує мінімальний PATH (`/usr/bin:/bin:/usr/sbin:/sbin`). `gemini` і `claude` зазвичай встановлені в `/usr/local/bin/` або `/opt/homebrew/bin/` — там їх і шукає `find_binary_macos`. Але `gemini` — це Node.js скрипт із shebang `#!/usr/bin/env node`, тому навіть якщо бінарник знайдено, `env` не знайде `node` в урізаному PATH. Рішення: `Command` отримує `.env("PATH", macos_extended_path())`, де `macos_extended_path` будує рядок з усіх типових директорій (`/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`, `~/.npm-global/bin` тощо). Так `node` знаходиться при запуску скрипту. На Windows і Linux ця логіка не задіяна.
 
 **«↺ Перевірити знову»** — кнопка у нижній панелі поруч з «Зрозуміло». Викликає `ToolChecks::restart()`, що скидає всі статуси в `Checking` та обидва `BinaryDownload` в `Idle` і перезапускає всі перевірки.
 
@@ -974,6 +976,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Обмеження обсягу логу:** Глобальний логер тримає в пам'яті не більше 1000 записів, автоматично очищаючи старі для оптимізації споживання ОЗП.
 
 - **Фонова валідація CLI-інструментів через `pending_tool_check`:** логіка відстежує зміну `translation_service` під час кожного `update()` та неблокуюче запускає перевірки `gemini`, `claude`. npm більше не перевіряється тут — Gemini залежить лише від самого `gemini` CLI (встановлюється через brew на macOS).
+
+- **macOS `.app` не успадковує PATH з терміналу — CLI-перевірки потребують явного PATH.** Скомпільований `.app`-бандл запускається з мінімальним PATH (`/usr/bin:/bin:/usr/sbin:/sbin`). `gemini` і `claude` встановлені через npm/brew у `/usr/local/bin/` або `/opt/homebrew/bin/` — тому `Command::new("gemini")` просто провалюється. `welcome.rs` вирішує це двома хелперами: `find_binary_macos(name)` шукає бінарник у відомих місцях і повертає повний шлях; `macos_extended_path()` будує розширений PATH рядок для передачі у `.env("PATH", ...)`. Це критично для Node.js-скриптів (зокрема `gemini`, який є `#!/usr/bin/env node`): навіть якщо сам бінарник знайдено, `env` не знайде `node` без правильного PATH. `cargo run` не має цієї проблеми бо запускається з терміналу де PATH вже розширений.
 
 - **Контроль агента використовує `--session-id` / `--resume`, а не `call_llm`.** Для режиму чату потрібно зберегти session_id між викликами. `call_llm` цього не підтримує (один stateless виклик). Тому `run_agent_timeline` при `agent_control_enabled=true` безпосередньо викликає `call_agent_new_session` (перший виклик з `--session-id <uuid>`) і `call_agent_resume` (продовження через `--resume <uuid>`). Ці функції публічні у `crate::core::pipeline` щоб вікно чату могло викликати resume без доступу до внутрішніх деталей CLI.
 
