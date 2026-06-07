@@ -126,6 +126,8 @@ pub fn call_claude_code_new_session_streaming(
     let mut line_buf = String::new();
     let mut final_result = String::new();
     let mut raw_output = String::new();
+    let mut acc_in: u64 = 0;
+    let mut acc_out: u64 = 0;
     let mut buf = [0u8; 512];
 
     loop {
@@ -141,7 +143,7 @@ pub fn call_claude_code_new_session_streaming(
             line_buf = line_buf[pos + 1..].to_string();
             let trimmed = line.trim();
             if trimmed.is_empty() { continue; }
-            if let Some(text) = format_claude_json_event(trimmed, &mut final_result) {
+            if let Some(text) = format_claude_json_event(trimmed, &mut final_result, &mut acc_in, &mut acc_out) {
                 on_chunk(&text);
             }
         }
@@ -150,7 +152,7 @@ pub fn call_claude_code_new_session_streaming(
     // Обробляємо залишок буфера (якщо останній рядок без '\n')
     let remaining = line_buf.trim().to_string();
     if !remaining.is_empty() {
-        if let Some(text) = format_claude_json_event(&remaining, &mut final_result) {
+        if let Some(text) = format_claude_json_event(&remaining, &mut final_result, &mut acc_in, &mut acc_out) {
             on_chunk(&text);
         }
     }
@@ -174,10 +176,17 @@ pub fn call_claude_code_new_session_streaming(
 /// Парсить одну NDJSON-подію від Claude CLI --output-format stream-json та повертає людиночитаний текст.
 ///
 /// Структура подій stream-json:
-/// - "assistant": містить message.content[] з блоками "text" (роздум) та "tool_use" (виклик інструменту)
-/// - "user":      містить message.content[] з блоками "tool_result" (результат виконання)
-/// - "result":    фінальна подія з полем "result" — фінальна відповідь агента
-fn format_claude_json_event(line: &str, final_result: &mut String) -> Option<String> {
+/// - "assistant": message.content[] з блоками "thinking", "text", "tool_use"; message.usage з токенами
+/// - "user":      message.content[] з блоками "tool_result"
+/// - "result":    фінальна подія з полем "result" та загальною статистикою
+///
+/// acc_in/acc_out — накопичені токени сесії (для [LIVE_STATS]).
+fn format_claude_json_event(
+    line: &str,
+    final_result: &mut String,
+    acc_in: &mut u64,
+    acc_out: &mut u64,
+) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(line).ok()?;
     let event_type = v.get("type")?.as_str()?;
 
@@ -187,6 +196,17 @@ fn format_claude_json_event(line: &str, final_result: &mut String) -> Option<Str
             let mut parts = Vec::new();
             for item in content {
                 match item.get("type").and_then(|t| t.as_str()) {
+                    Some("thinking") => {
+                        // Блоки роздумів — тільки для моделей з extended thinking
+                        if let Some(text) = item.get("thinking").and_then(|t| t.as_str()) {
+                            let trimmed = text.trim();
+                            if !trimmed.is_empty() {
+                                for tline in trimmed.lines() {
+                                    parts.push(format!("[THINK]{}", tline));
+                                }
+                            }
+                        }
+                    }
                     Some("text") => {
                         if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
                             let trimmed = text.trim();
@@ -208,6 +228,14 @@ fn format_claude_json_event(line: &str, final_result: &mut String) -> Option<Str
                     }
                     _ => {}
                 }
+            }
+            // Накопичуємо токени та додаємо live-рядок статистики після кожного ходу
+            if let Some(usage) = v.get("message").and_then(|m| m.get("usage")) {
+                let in_tok  = usage.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0);
+                let out_tok = usage.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0);
+                *acc_in  += in_tok;
+                *acc_out += out_tok;
+                parts.push(format!("[LIVE_STATS]{}|{}", acc_in, acc_out));
             }
             if parts.is_empty() { None } else { Some(format!("{}\n", parts.join("\n"))) }
         }

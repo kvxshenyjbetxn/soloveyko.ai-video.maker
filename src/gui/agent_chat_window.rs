@@ -73,9 +73,12 @@ pub fn draw_agent_chat_window(
                 let chat_snapshot = agent_chat_arc.lock().unwrap().clone();
 
                 let is_loading = *agent_chat_loading.lock().unwrap();
-                // Спінер для всіх агентів — показується внизу біля кнопки надіслати
+                // Спінер для всіх агентів — показується внизу біля кнопки надіслати.
+                // pipeline_generating = false коли агент завершив роботу (є [STATS] в останньому повідомленні).
                 let pipeline_generating = job_status == crate::queue::JobStatus::Running
-                    && chat_snapshot.last().map(|m| m.role == "agent").unwrap_or(false);
+                    && chat_snapshot.last().map(|m| {
+                        m.role == "agent" && !m.content.contains("[STATS]")
+                    }).unwrap_or(false);
                 let show_spinner = is_loading || pipeline_generating;
 
                 // ScrollArea займає весь простір вікна за винятком нижньої панелі (~120px)
@@ -246,20 +249,38 @@ pub fn draw_agent_chat_window(
 }
 
 /// Рендерить вміст повідомлення агента рядок за рядком.
-/// Розпізнає маркери [->], [!!], [STATS] і малює для них кастомні іконки через Painter.
+/// Розпізнає маркери [->], [!!], [STATS], [LIVE_STATS], [THINK] — малює іконки через Painter.
 fn render_message_content(ui: &mut egui::Ui, content: &str) {
-    for line in content.split('\n') {
+    let lines: Vec<&str> = content.split('\n').collect();
+
+    // Якщо є фінальний [STATS] — [LIVE_STATS] ігноруємо, інакше показуємо лише останній.
+    let has_final_stats = lines.iter().any(|l| l.starts_with("[STATS]"));
+    let last_live_idx = if has_final_stats {
+        None
+    } else {
+        lines.iter().rposition(|l| l.starts_with("[LIVE_STATS]"))
+    };
+
+    for (i, line) in lines.iter().enumerate() {
         if let Some(data) = line.strip_prefix("[STATS]") {
             render_stats_line(ui, data);
+        } else if line.starts_with("[LIVE_STATS]") {
+            // показуємо тільки останній live-рядок (якщо нема фінального [STATS])
+            if Some(i) == last_live_idx {
+                if let Some(data) = line.strip_prefix("[LIVE_STATS]") {
+                    render_live_stats_line(ui, data);
+                }
+            }
         } else if let Some(text) = line.strip_prefix("[->] ") {
             render_result_line(ui, text, false);
         } else if let Some(text) = line.strip_prefix("[!!] ") {
             render_result_line(ui, text, true);
+        } else if let Some(text) = line.strip_prefix("[THINK]") {
+            render_think_line(ui, text);
         } else if line.is_empty() {
-            // порожній рядок — невелике відступання
             ui.add_space(2.0);
         } else {
-            ui.add(egui::Label::new(egui::RichText::new(line).size(12.0)).wrap());
+            ui.add(egui::Label::new(egui::RichText::new(*line).size(12.0)).wrap());
         }
     }
 }
@@ -324,6 +345,45 @@ fn render_stats_line(ui: &mut egui::Ui, data: &str) {
     ui.add_space(4.0);
     draw_h_line(ui, sep_color);
     ui.add_space(2.0);
+}
+
+/// Рядок live-статистики під час роботи агента: накопичені токени вхід/вихід.
+/// Формат data: "acc_in|acc_out". Показується лише поки не з'явиться фінальний [STATS].
+fn render_live_stats_line(ui: &mut egui::Ui, data: &str) {
+    let mut iter = data.split('|');
+    let in_tok:  u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let out_tok: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+
+    let dim = ui.visuals().weak_text_color().linear_multiply(0.5);
+    ui.horizontal(|ui| {
+        ui.add_space(4.0);
+        let green = egui::Color32::from_rgb(46, 180, 100).linear_multiply(0.7);
+        draw_icon_arrow_up(ui, green);
+        ui.label(egui::RichText::new(format!("{}", in_tok)).size(10.0).color(green));
+        ui.add_space(4.0);
+        let blue = egui::Color32::from_rgb(52, 152, 219).linear_multiply(0.7);
+        draw_icon_arrow_down(ui, blue);
+        ui.label(egui::RichText::new(format!("{} tok", out_tok)).size(10.0).color(blue));
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("...").size(10.0).color(dim));
+    });
+}
+
+/// Рядок роздумів моделі (extended thinking). Відображається курсивом із лівою рискою.
+fn render_think_line(ui: &mut egui::Ui, text: &str) {
+    ui.horizontal(|ui| {
+        // Вертикальна риска зліва — візуальний маркер блоку думок
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 14.0), egui::Sense::hover());
+        if ui.is_rect_visible(rect) {
+            let color = ui.visuals().weak_text_color().linear_multiply(0.4);
+            ui.painter().rect_filled(rect, egui::Rounding::ZERO, color);
+        }
+        ui.add_space(5.0);
+        let color = ui.visuals().weak_text_color().linear_multiply(0.7);
+        ui.add(egui::Label::new(
+            egui::RichText::new(text).size(11.0).color(color).italics()
+        ).wrap());
+    });
 }
 
 // --- Базові функції малювання ---
