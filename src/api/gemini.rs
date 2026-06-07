@@ -1,5 +1,5 @@
 use std::io::{BufReader, Read};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
 /// Лімітер одночасних запитів до Gemini CLI (семафор)
@@ -88,7 +88,7 @@ pub fn call_gemini_new_session_streaming(
 
     log(&format!("Starting Gemini CLI agent session. Model: {}, session: {}", model, session_id));
 
-    let mut cmd = Command::new("gemini");
+    let mut cmd = crate::bundle::new_cli_command("gemini");
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(user_content)
@@ -163,7 +163,7 @@ pub fn call_gemini_resume(
 
     log(&format!("Resuming Gemini CLI session: {}", session_id));
 
-    let mut cmd = Command::new("gemini");
+    let mut cmd = crate::bundle::new_cli_command("gemini");
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(message)
@@ -219,7 +219,7 @@ pub fn call_gemini_cli(
 
     log(&format!("Starting Gemini CLI translation. Model: {}", model));
 
-    let mut cmd = Command::new("gemini");
+    let mut cmd = crate::bundle::new_cli_command("gemini");
 
     // Запускаємо: gemini --model <model> --output-format json --prompt "<prompt>" --yolo --skip-trust
     // JSON-формат гарантує чисту відповідь без технічного сміття у полі "response"

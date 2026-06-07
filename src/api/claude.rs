@@ -1,5 +1,5 @@
 use std::io::{BufReader, Read};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
 /// Лімітер одночасних запитів до Claude Code (семафор)
@@ -87,7 +87,7 @@ pub fn call_claude_code_new_session_streaming(
 
     log(&format!("Starting Claude CLI agent session. Model: {}, session: {}", model, session_id));
 
-    let mut cmd = Command::new("claude");
+    let mut cmd = crate::bundle::new_cli_command("claude");
     cmd.arg("--model").arg(model)
         .arg("-p").arg(user_content)
         .arg("--allowedTools").arg("Bash,Write,Read")
@@ -164,7 +164,7 @@ pub fn call_claude_code_resume(
 
     log(&format!("Resuming Claude CLI session: {}", session_id));
 
-    let mut cmd = Command::new("claude");
+    let mut cmd = crate::bundle::new_cli_command("claude");
     cmd.arg("--model").arg(model)
         .arg("-p").arg(message)
         .arg("--allowedTools").arg("Bash,Write,Read")
@@ -217,7 +217,9 @@ pub fn call_claude_code(
 
     log(&format!("Starting Claude CLI translation. Model: {}", model));
 
-    let mut cmd = Command::new("claude");
+    let mut cmd = crate::bundle::new_cli_command("claude");
+
+    // Запускаємо: claude --model <model> -p "<prompt>" [--allowedTools Bash,Write,Read]
     cmd.arg("--model")
         .arg(model)
         .arg("-p")
