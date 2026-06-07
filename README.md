@@ -637,9 +637,10 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 **Активація:** toggle `capcut_enabled` + поле `capcut_draft_path` (шлях до папки чернеток CapCut, наприклад `E:\capcut\com.lveditor.draft`). Якщо шлях не вказано — пайплайн завершується помилкою.
 
 **Функція `generate_capcut_project`** (`src/core/pipeline/capcut/mod.rs`):
-- Зчитує `timeline.json` — масив сегментів з полями `start_secs`, `end_secs`, `media`.
-- Конвертує секунди → мікросекунди (`secs_to_us`): `(secs * 1_000_000.0) as i64`.
+- Зчитує `timeline.json` — основну доріжку (`segments`) та overlay-доріжки (`overlay_tracks`).
+- Конвертує секунди → мікросекунди (`secs_to_us`): `(secs * 1_000_000.0).round() as i64`.
 - Генерує детерміновані UUID через `gen_uuid(seed, counter)` (SHA-подібне хешування `seed + counter`).
+- Медіафайли збираються з **обох** джерел (основна + всі overlay) в один `media_map` без дублів.
 - Створює папку проекту: `{capcut_draft_path}/{project_name}/`.
 
 **Структура файлів що генеруються:**
@@ -660,17 +661,19 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 **`draft_content.json` — ключові особливості:**
 - `canvas_config.ratio = "original"` — обов'язково, не `"16:9"`.
+- `platform.os` / `last_modified_platform.os` — визначається динамічно: `"mac"` на macOS, `"windows"` на Windows. CapCut перевіряє це поле при відкритті проекту.
 - `platform` block, `config` block, `function_assistant_info`, `last_modified_platform` — CapCut відмовляється відкривати проект без цих блоків.
 - `render_index_track_mode_on: true`, `source: "default"`, `draft_type: "video"`.
-- Кожен кліп у треку — об'єкт з 30+ полями: `id`, `is_main_sequence`, `material_id`, `target_timerange: {duration, start}`, `source_timerange: {duration, start}`, `roughcut_time_range: {duration: 33333, start: 0}` (НЕ `-1`, інакше CapCut крашиться).
+- Кожен кліп у треку — об'єкт з 30+ полями: `id`, `material_id`, `target_timerange: {duration, start}`, `source_timerange: {duration, start}`, `roughcut_time_range: {duration: 33333, start: 0}` (НЕ `-1`, інакше CapCut крашиться).
 - Матеріали зображень/відео — окремий великий JSON-об'єкт (~100 полів). Будується через `serde_json::Map` (не `json!` макрос — recursion limit).
+- **Overlay-доріжки (track_idx ≥ 1)** з редактора монтажу → окремі `type: "video"` треки у масиві `tracks`. Позиція з редактора (`pos_x`, `pos_y` ∈ [-1, 1], де 0 = центр) конвертується у CapCut-пікселі: `transform.x = pos_x × 960`, `transform.y = pos_y × 540` (для canvas 1920×1080). `scale` → `clip.scale.x/y` напряму.
 
 **Обробка `#![recursion_limit = "256"]` у `main.rs`:** великий JSON сегменту в `json!` макросі перевищує стандартний ліміт рекурсії компілятора Rust. Ліміт підвищено в `src/main.rs` щоб уникнути помилки компіляції.
 
-**Два хелпери для шляхів:**
-- `forward_path(p: &Path) -> String` — замінює `\` на `/` (для `draft_fold_path`).
-- `native_path(p: &Path) -> String` — зберігає нативні роздільники ОС (для `draft_root_path`).
-- `drive_letter(p: &Path) -> Option<String>` — витягує букву диска з Windows-шляху.
+**Три хелпери для шляхів і платформ:**
+- `forward_path(p: &Path) -> String` — замінює `\` на `/` (для `draft_fold_path`; на macOS — no-op).
+- `native_path(p: &Path) -> String` — зберігає нативні роздільники ОС (для `draft_root_path`; на macOS повертає `/`-шляхи).
+- `drive_letter(p: &Path) -> String` — витягує букву диска з Windows-шляху (`"E:\\..."` → `"E"`). Обгорнуто у `#[cfg(target_os = "windows")]` — на macOS завжди повертає порожній рядок.
 
 **Визначення тривалості аудіо** (`core/pipeline/mod.rs`) — після збереження файлу `run_pipeline` зчитує його та визначає тривалість чистим Rust без залежностей:
 - **MP3** (`get_mp3_duration_secs`): знаходить перший валідний MPEG1 Layer3 фрейм, пропускаючи ID3v2 тег. Якщо є Xing/Info VBR заголовок з полем `total_frames` — рахує точно. Якщо CBR — оцінює з розміру файлу та бітрейту.
@@ -976,11 +979,15 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **Вирівнювання при переносі логу через `LayoutJob`**: Щоб уникнути зсувів та порожнеч при переносі довгих рядків логів на другу строчку, мітка часу та текст повідомлення об'єднуються в єдиний `egui::text::LayoutJob`. Рядок рендериться як один віджет `egui::Label` і переноситься цілісно під лівий край (під мітку часу), що забезпечує ідеальний вигляд терміналу.
 
-- **CapCut `draft_root_path` vs `draft_fold_path` — різні формати слешів.** `draft_fold_path` — повний шлях до папки проекту з прямими слешами (`forward_path`): CapCut Desktop при читанні цього поля очікує POSIX-формат навіть на Windows. `draft_root_path` — шлях до батьківської папки чернеток з нативними зворотними слешами Windows (`native_path`). Якщо обидва вказати з однаковим форматом — CapCut видає «Неприемлемый адрес».
+- **CapCut `draft_root_path` vs `draft_fold_path` — різні формати слешів.** `draft_fold_path` — повний шлях до папки проекту з прямими слешами (`forward_path`): CapCut Desktop при читанні цього поля очікує POSIX-формат навіть на Windows. `draft_root_path` — шлях до батьківської папки чернеток з нативними роздільниками ОС (`native_path`): зворотні слеші на Windows, прямі на macOS. Якщо обидва вказати з однаковим форматом — CapCut видає «Неприемлемый адрес».
 
-- **CapCut `draft_removable_storage_device` — обов'язково для не-C: дисків.** CapCut Desktop перевіряє диск проекту. Якщо диск відрізняється від `C:`, поле `draft_removable_storage_device` у `draft_meta_info.json` має містити `"E:"` (або відповідну букву + двокрапку). Відсутнє або порожнє поле для знімного/другого диску → «Неприемлемый адрес».
+- **CapCut `draft_removable_storage_device` — обов'язково для не-C: дисків (Windows).** CapCut Desktop перевіряє диск проекту. Якщо диск відрізняється від `C:`, поле `draft_removable_storage_device` у `draft_meta_info.json` має містити `"E:"` (або відповідну букву + двокрапку). Відсутнє або порожнє поле для знімного/другого диску → «Неприемлемый адрес». На macOS поле завжди порожнє — `drive_letter()` огорнуто у `#[cfg(target_os = "windows")]`.
+
+- **CapCut `platform.os` — `"mac"` на macOS, `"windows"` на Windows.** CapCut при відкритті проекту перевіряє це поле у `platform` та `last_modified_platform`. Якщо вказано `"windows"` на Mac (або навпаки) — проект відкривається некоректно або не відкривається. Визначається через `cfg!(target_os = "macos")` у змінній `os_name`.
 
 - **CapCut `roughcut_time_range.start` — НЕ `-1`.** CapCut внутрішньо крашиться при `start: -1` у `roughcut_time_range` кожного сегменту. Правильне значення — `{duration: 33333, start: 0}`.
+
+- **CapCut overlay-треки: координатна система відрізняється від редактора монтажу.** У редакторі `pos_x`/`pos_y` ∈ [-1, 1], де 0 = центр, ±1 = край прев'ю. У CapCut `clip.transform.x/y` — піксельний зсув від центру canvas: для 1920×1080 → `transform.x = pos_x × 960`, `transform.y = pos_y × 540`. `scale` відповідає CapCut `clip.scale.x/y` напряму. Кожна overlay-доріжка (track_idx ≥ 1) стає окремим `type: "video"` треком у масиві `tracks`.
 
 - **`json!` macro recursion limit для CapCut.** Великий JSON-об'єкт матеріалу (~100 полів) перевищує стандартний ліміт рекурсії компілятора при використанні `json!` макросу. Вирішено двома способами: (1) `serde_json::Map` для найбільшого об'єкту (відеоматеріал) — обходить ліміт повністю; (2) `#![recursion_limit = "256"]` у `main.rs` — для решти великих `json!` об'єктів.
 

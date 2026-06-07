@@ -35,14 +35,17 @@ fn native_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// Літера диска без двокрапки: "E:\\..." → "E".
+/// Літера диска без двокрапки: "E:\\..." → "E". На macOS завжди порожній рядок.
 fn drive_letter(path: &Path) -> String {
-    let s = path.to_string_lossy();
-    if s.len() >= 2 && s.as_bytes()[1] == b':' {
-        s[..1].to_uppercase()
-    } else {
-        String::new()
+    #[cfg(target_os = "windows")]
+    {
+        let s = path.to_string_lossy();
+        if s.len() >= 2 && s.as_bytes()[1] == b':' {
+            return s[..1].to_uppercase();
+        }
     }
+    let _ = path;
+    String::new()
 }
 
 /// Зчитує розміри зображення (jpg/png/webp).
@@ -116,11 +119,31 @@ pub fn generate_capcut_project(
         media: Option<String>,
     }
     #[derive(serde::Deserialize)]
+    struct OverlaySegTiming {
+        start_secs: f64,
+        end_secs: f64,
+        media: Option<String>,
+        #[serde(default = "default_one")]
+        scale: f64,
+        #[serde(default)]
+        pos_x: f64,
+        #[serde(default)]
+        pos_y: f64,
+    }
+    fn default_one() -> f64 { 1.0 }
+    #[derive(serde::Deserialize)]
+    struct OverlayTrackData {
+        track_idx: usize,
+        segments: Vec<OverlaySegTiming>,
+    }
+    #[derive(serde::Deserialize)]
     struct TimelineData {
         total_duration_secs: f64,
         #[serde(default)]
         audio_start_secs: f64,
         segments: Vec<SegTiming>,
+        #[serde(default)]
+        overlay_tracks: Vec<OverlayTrackData>,
     }
 
     let tl_text = std::fs::read_to_string(save_dir.join("timeline.json"))
@@ -148,11 +171,18 @@ pub fn generate_capcut_project(
     let mut media_map: std::collections::HashMap<String, usize> = Default::default();
     let mut media_list: Vec<MediaInfo> = Vec::new();
 
-    for seg in &tl.segments {
-        let rel = match &seg.media {
-            Some(m) if !m.is_empty() => m.clone(),
-            _ => continue,
-        };
+    // Збираємо всі медіа-шляхи з основної доріжки та overlay-доріжок
+    let all_media_rels: Vec<String> = tl.segments.iter()
+        .filter_map(|s| s.media.clone())
+        .chain(
+            tl.overlay_tracks.iter()
+                .flat_map(|t| t.segments.iter())
+                .filter_map(|s| s.media.clone())
+        )
+        .filter(|m| !m.is_empty())
+        .collect();
+
+    for rel in all_media_rels {
         if media_map.contains_key(&rel) { continue; }
 
         let abs_path = save_dir.join(&rel);
@@ -485,7 +515,125 @@ pub fn generate_capcut_project(
     let total_dur_us = secs_to_us(tl.total_duration_secs)
         .max(audio_target_start + audio_dur_us);
 
-    // ─── 12. Треки ───────────────────────────────────────────────────────────
+    // ─── 12. Overlay-треки (доріжки 1+) ─────────────────────────────────────
+    // pos_x/pos_y у редакторі: 0 = центр, ±1 = край canvas.
+    // CapCut transform.x/y — піксельний зсув від центру (1920×1080 → ±960, ±540).
+    const CANVAS_HALF_W: f64 = 960.0;
+    const CANVAS_HALF_H: f64 = 540.0;
+
+    let mut overlay_capcut_tracks: Vec<Value> = Vec::new();
+    for ot in &tl.overlay_tracks {
+        let mut ov_segments: Vec<Value> = Vec::new();
+        for seg in &ot.segments {
+            let rel = match &seg.media {
+                Some(m) if !m.is_empty() => m,
+                _ => continue,
+            };
+            let mat = match media_map.get(rel).and_then(|&i| media_list.get(i)) {
+                Some(m) => m,
+                None => continue,
+            };
+
+            let seg_id       = uid();
+            let speed_id     = uid();
+            let ph_id        = uid();
+            let canvas_id    = uid();
+            let sound_map_id = uid();
+            let color_id     = uid();
+            let vocal_id     = uid();
+
+            let t_start = secs_to_us(seg.start_secs);
+            let t_dur   = secs_to_us(seg.end_secs - seg.start_secs);
+            let tx = seg.pos_x * CANVAS_HALF_W;
+            let ty = seg.pos_y * CANVAS_HALF_H;
+
+            mat_speeds.push(json!({ "id": speed_id, "type": "speed", "mode": 0, "speed": 1.0, "curve_speed": null }));
+            mat_ph_infos.push(json!({ "id": ph_id, "type": "placeholder_info", "meta_type": "none", "res_path": "", "res_text": "", "error_path": "", "error_text": "" }));
+            mat_canvases.push(json!({ "id": canvas_id, "type": "canvas_color", "color": "", "blur": 0.0, "image": "", "album_image": "", "image_id": "", "image_name": "", "source_platform": 0, "team_id": "" }));
+            mat_sound_maps.push(json!({ "id": sound_map_id, "type": "", "audio_channel_mapping": 0, "is_config_open": false }));
+            mat_colors.push(json!({ "id": color_id, "is_color_clip": false, "is_gradient": false, "solid_color": "", "gradient_colors": [], "gradient_percents": [], "gradient_angle": 90, "width": 0, "height": 0 }));
+            mat_vocal_seps.push(json!({ "id": vocal_id, "type": "vocal_separation", "choice": 0, "removed_sounds": [], "time_range": null, "production_path": "", "final_algorithm": "", "enter_from": "" }));
+
+            ov_segments.push(json!({
+                "id": seg_id,
+                "source_timerange": { "start": 0, "duration": t_dur },
+                "target_timerange": { "start": t_start, "duration": t_dur },
+                "render_timerange": { "start": 0, "duration": 0 },
+                "desc": "",
+                "state": 0,
+                "speed": 1.0,
+                "is_loop": false,
+                "is_tone_modify": false,
+                "reverse": false,
+                "intensifies_audio": false,
+                "cartoon": false,
+                "volume": 1.0,
+                "last_nonzero_volume": 1.0,
+                "clip": {
+                    "scale": { "x": seg.scale, "y": seg.scale },
+                    "rotation": 0.0,
+                    "transform": { "x": tx, "y": ty },
+                    "flip": { "vertical": false, "horizontal": false },
+                    "alpha": 1.0
+                },
+                "uniform_scale": { "on": true, "value": seg.scale },
+                "material_id": mat.mat_id,
+                "extra_material_refs": [speed_id, ph_id, canvas_id, sound_map_id, color_id, vocal_id],
+                "render_index": 0,
+                "track_render_index": ot.track_idx,
+                "track_attribute": 0,
+                "keyframe_refs": [],
+                "common_keyframes": [],
+                "enable_lut": true,
+                "enable_adjust": true,
+                "enable_hsl": false,
+                "enable_color_curves": true,
+                "enable_hsl_curves": true,
+                "enable_color_wheels": true,
+                "enable_smart_color_adjust": false,
+                "enable_color_match_adjust": false,
+                "enable_color_correct_adjust": false,
+                "enable_adjust_mask": false,
+                "enable_video_mask": true,
+                "enable_mask_stroke": false,
+                "enable_mask_shadow": false,
+                "enable_color_adjust_pro": false,
+                "visible": true,
+                "group_id": "",
+                "template_id": "",
+                "template_scene": "default",
+                "is_placeholder": false,
+                "caption_info": null,
+                "lyric_keyframes": null,
+                "hdr_settings": { "mode": 1, "intensity": 1.0, "nits": 1000 },
+                "responsive_layout": {
+                    "enable": false,
+                    "target_follow": "",
+                    "size_layout": 0,
+                    "horizontal_pos_layout": 0,
+                    "vertical_pos_layout": 0
+                },
+                "source": "segmentsourcenormal",
+                "raw_segment_id": "",
+                "digital_human_template_group_id": "",
+                "color_correct_alg_result": ""
+            }));
+        }
+        if !ov_segments.is_empty() {
+            let track_id = uid();
+            overlay_capcut_tracks.push(json!({
+                "id": track_id,
+                "type": "video",
+                "flag": 0,
+                "attribute": 0,
+                "name": "",
+                "is_default_name": true,
+                "segments": ov_segments
+            }));
+        }
+    }
+
+    // ─── 13. Всі треки ───────────────────────────────────────────────────────
     let mut tracks = vec![json!({
         "id": video_track_id,
         "type": "video",
@@ -495,6 +643,8 @@ pub fn generate_capcut_project(
         "is_default_name": true,
         "segments": video_segments
     })];
+    // Overlay-треки йдуть після основного відеотреку
+    tracks.extend(overlay_capcut_tracks);
     if voice_path.is_some() {
         tracks.push(json!({
             "id": audio_track_id,
@@ -507,7 +657,10 @@ pub fn generate_capcut_project(
         }));
     }
 
-    // ─── 13. draft_content.json ──────────────────────────────────────────────
+    // Назва ОС для блоку platform у draft_content.json
+    let os_name = if cfg!(target_os = "macos") { "mac" } else { "windows" };
+
+    // ─── 14. draft_content.json ──────────────────────────────────────────────
     let draft_content = json!({
         "id": timeline_id,
         "version": 360000,
@@ -636,7 +789,7 @@ pub fn generate_capcut_project(
         "extra_info": null,
         "group_container": null,
         "platform": {
-            "os": "windows",
+            "os": os_name,
             "app_id": 359289,
             "app_version": "8.7.0",
             "app_source": "cc",
@@ -645,7 +798,7 @@ pub fn generate_capcut_project(
             "mac_address": ""
         },
         "last_modified_platform": {
-            "os": "windows",
+            "os": os_name,
             "app_id": 359289,
             "app_version": "8.7.0",
             "app_source": "cc",
@@ -701,12 +854,12 @@ pub fn generate_capcut_project(
         }
     });
 
-    // ─── 14. Шляхи до папки проекту ─────────────────────────────────────────
+    // ─── 15. Шляхи до папки проекту ─────────────────────────────────────────
     let project_dir = draft_root.join(project_name);
 
-    // draft_root_path — з нативними слешами (як CapCut зберігає на Windows)
+    // draft_root_path — нативні слеші (backslash на Windows, forward slash на macOS)
     let root_path_native = native_path(draft_root);
-    // drive letter для removable_storage_device (порожній якщо C:)
+    // removable_storage_device актуальний лише на Windows (для не-C: дисків)
     let drv = drive_letter(draft_root);
     let removable_device = if !drv.is_empty() && drv.to_uppercase() != "C" {
         format!("{}:", drv)
@@ -714,7 +867,7 @@ pub fn generate_capcut_project(
         String::new()
     };
 
-    // ─── 15. Медіапул для draft_meta_info ────────────────────────────────────
+    // ─── 16. Медіапул для draft_meta_info ────────────────────────────────────
     let mut pool: Vec<Value> = vec![json!({
         "ai_group_type": "",
         "create_time": now_secs,
@@ -789,7 +942,7 @@ pub fn generate_capcut_project(
         }));
     }
 
-    // ─── 16. draft_meta_info.json ────────────────────────────────────────────
+    // ─── 17. draft_meta_info.json ────────────────────────────────────────────
     let draft_meta_info = json!({
         "cloud_draft_cover": false,
         "cloud_draft_sync": false,
@@ -852,7 +1005,7 @@ pub fn generate_capcut_project(
         "tm_duration": total_dur_us
     });
 
-    // ─── 17. Timelines/project.json ──────────────────────────────────────────
+    // ─── 18. Timelines/project.json ──────────────────────────────────────────
     let timelines_project = json!({
         "config": {
             "color_space": -1,
@@ -873,7 +1026,7 @@ pub fn generate_capcut_project(
         "version": 0
     });
 
-    // ─── 18. Записуємо файли ─────────────────────────────────────────────────
+    // ─── 19. Записуємо файли ─────────────────────────────────────────────────
     std::fs::create_dir_all(&project_dir)
         .map_err(|e| format!("Не вдалося створити папку проекту: {}", e))?;
 
