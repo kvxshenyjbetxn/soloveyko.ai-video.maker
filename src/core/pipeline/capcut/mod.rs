@@ -154,7 +154,7 @@ pub fn generate_capcut_project(
     log_fn(&format!("CapCut: завантажено {} сегментів із timeline.json", tl.segments.len()));
 
     // ─── 2. Знаходимо аудіофайл ─────────────────────────────────────────────
-    let voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
+    let mut voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
         .iter()
         .map(|n| save_dir.join(n))
         .find(|p| p.exists());
