@@ -124,6 +124,9 @@ pub fn draw_media_regen_window(
                                 ctx.clone(),
                                 std::sync::Arc::clone(media_regen_result),
                                 std::sync::Arc::clone(media_regen_loading),
+                                base.googler_video_upscale_enabled,
+                                base.googler_video_upscale_resolution.clone(),
+                                base.googler_video_upscale_quality.clone(),
                             );
                             should_close = true;
                         }

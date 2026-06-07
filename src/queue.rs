@@ -90,7 +90,11 @@ pub struct JobSettings {
     pub googler_image_priority: Vec<String>,
     pub googler_video_priority: Vec<String>,
     pub googler_image_max_threads: usize,
+    pub googler_video_upscale_enabled: bool,
+    pub googler_video_upscale_resolution: String,
+    pub googler_video_upscale_quality: String,
     pub video_media_type: String,
+
     pub assemblyai_key: String,
     pub subtitles_enabled: bool,
     pub subtitles_service: String,

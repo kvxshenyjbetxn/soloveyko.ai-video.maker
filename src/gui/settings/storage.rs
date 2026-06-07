@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn default_true() -> bool { true }
+fn default_upscale_quality() -> String { "balanced".to_string() }
+fn default_upscale_resolution() -> String { "1080p".to_string() }
+
 fn default_image_priority() -> Vec<String> {
     vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()]
 }
@@ -328,7 +331,17 @@ pub struct AppSettings {
     /// Список тригерів накладення медіа
     #[serde(default)]
     pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    /// Чи увімкнено автоматичний апскейл Googler відео
+    #[serde(default)]
+    pub googler_video_upscale_enabled: bool,
+    /// Роздільна здатність апскейлу ("1080p", "2K", "4K")
+    #[serde(default = "default_upscale_resolution")]
+    pub googler_video_upscale_resolution: String,
+    /// Якість апскейлу ("fast", "balanced", "max")
+    #[serde(default = "default_upscale_quality")]
+    pub googler_video_upscale_quality: String,
 }
+
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -421,9 +434,13 @@ impl Default for AppSettings {
             video_llm_temperature: 0.7,
             overlay_triggers_enabled: false,
             overlay_triggers: vec![],
+            googler_video_upscale_enabled: false,
+            googler_video_upscale_resolution: "1080p".to_string(),
+            googler_video_upscale_quality: "balanced".to_string(),
         }
     }
 }
+
 
 /// Повертає кросплатформений шлях до папки конфігурації проєкту: <UserConfigDir>/Soloveyko.AI-Video.Maker
 pub fn get_settings_dir() -> Option<PathBuf> {
@@ -725,7 +742,17 @@ pub struct PipelineTemplate {
     /// Температура ЛЛМ для відео-промтів
     #[serde(default = "default_temperature")]
     pub video_llm_temperature: f32,
+    /// Чи увімкнено автоматичний апскейл Googler відео
+    #[serde(default)]
+    pub googler_video_upscale_enabled: bool,
+    /// Роздільна здатність апскейлу ("1080p", "2K", "4K")
+    #[serde(default = "default_upscale_resolution")]
+    pub googler_video_upscale_resolution: String,
+    /// Якість апскейлу ("fast", "balanced", "max")
+    #[serde(default = "default_upscale_quality")]
+    pub googler_video_upscale_quality: String,
 }
+
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
 pub fn get_templates_dir() -> Option<PathBuf> {
@@ -811,7 +838,11 @@ pub fn save_template(
     video_llm_temperature: f32,
     overlay_triggers_enabled: bool,
     overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: &str,
+    googler_video_upscale_quality: &str,
 ) -> Result<(), std::io::Error> {
+
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
 
@@ -891,7 +922,11 @@ pub fn save_template(
             video_llm_temperature,
             overlay_triggers_enabled,
             overlay_triggers,
+            googler_video_upscale_enabled,
+            googler_video_upscale_resolution: googler_video_upscale_resolution.to_string(),
+            googler_video_upscale_quality: googler_video_upscale_quality.to_string(),
         };
+
 
         let json = serde_json::to_string_pretty(&template)?;
         fs::write(path, json)?;

@@ -1245,6 +1245,10 @@ fn run_video_branch(
         let job_id_c   = job_id;
         let job_name_c = job_name.clone();
 
+        let upscale_enabled = settings.googler_video_upscale_enabled;
+        let upscale_resolution = settings.googler_video_upscale_resolution.clone();
+        let upscale_quality = settings.googler_video_upscale_quality.clone();
+
         let handle = std::thread::spawn(move || -> (usize, Result<(), String>) {
             sem.acquire();
 
@@ -1279,6 +1283,22 @@ fn run_video_branch(
                                 job_id_c, &job_name_c,
                                 &format!("{} {}/{} saved: {}", if use_video { "Video" } else { "Image" }, i + 1, total, path.display()),
                             );
+                            if use_video {
+                                if let Err(err) = upscale_video_if_needed(
+                                    &path,
+                                    upscale_enabled,
+                                    &upscale_resolution,
+                                    &upscale_quality,
+                                    job_id_c,
+                                    &job_name_c,
+                                ) {
+                                    crate::logger::log_job(
+                                        job_id_c, &job_name_c,
+                                        &format!("Помилка апскейлу для сегмента {}: {}", i + 1, err),
+                                    );
+                                }
+                            }
+
                             if let Ok(mut mp) = media_progress_c.lock() {
                                 if let Some((ref mut done, _)) = *mp {
                                     *done += 1;
@@ -2304,7 +2324,11 @@ pub fn animate_single_image(
     job_name: String,
     ctx: egui::Context,
     loading_set: Arc<Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: String,
+    googler_video_upscale_quality: String,
 ) {
+
     std::thread::spawn(move || {
         loading_set.lock().unwrap().insert(file_path.clone());
         ctx.request_repaint();
@@ -2342,7 +2366,19 @@ pub fn animate_single_image(
             let video_path = file_path.with_extension("mp4");
             save_media_bytes(&api_result, &video_path)?;
 
+            if let Err(e) = upscale_video_if_needed(
+                &video_path,
+                googler_video_upscale_enabled,
+                &googler_video_upscale_resolution,
+                &googler_video_upscale_quality,
+                job_id,
+                &job_name,
+            ) {
+                crate::logger::log_job(job_id, &job_name, &format!("Помилка апскейлу/кропу анімованого відео {}: {}", file_name, e));
+            }
+
             // Видаляємо оригінальне зображення
+
             if video_path != file_path {
                 let _ = std::fs::remove_file(&file_path);
             }
@@ -2422,7 +2458,11 @@ pub fn regenerate_single_media(
     ctx: egui::Context,
     result_slot: Arc<Mutex<Option<Result<(), String>>>>,
     loading: Arc<Mutex<bool>>,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: String,
+    googler_video_upscale_quality: String,
 ) {
+
     std::thread::spawn(move || {
         *loading.lock().unwrap() = true;
 
@@ -2454,8 +2494,21 @@ pub fn regenerate_single_media(
             Ok(data_uri) => match save_media_bytes(&data_uri, &file_path) {
                 Ok(()) => {
                     crate::logger::log_job(job_id, &job_name, &format!("Regen {} done.", file_name));
+                    if media_type == "video" {
+                        if let Err(e) = upscale_video_if_needed(
+                            &file_path,
+                            googler_video_upscale_enabled,
+                            &googler_video_upscale_resolution,
+                            &googler_video_upscale_quality,
+                            job_id,
+                            &job_name,
+                        ) {
+                            crate::logger::log_job(job_id, &job_name, &format!("Помилка апскейлу/кропу перегенерованого відео {}: {}", file_name, e));
+                        }
+                    }
                     Ok(())
                 }
+
                 Err(e) => {
                     crate::logger::log_job(job_id, &job_name, &format!("Regen {} save error: {}", file_name, e));
                     Err(e)
@@ -2468,3 +2521,190 @@ pub fn regenerate_single_media(
         ctx.request_repaint();
     });
 }
+
+/// Виконує апскейл та кроп відеофайлу за допомогою FFmpeg.
+/// Робить це in-place: перейменовує файл у тимчасовий, запускає FFmpeg,
+/// записує результат у оригінальний шлях, видаляє тимчасовий файл.
+pub fn upscale_video_if_needed(
+    video_path: &std::path::Path,
+    enabled: bool,
+    resolution: &str,
+    quality: &str,
+    job_id: u64,
+    job_name: &str,
+) -> Result<(), String> {
+    if !video_path.exists() {
+        return Err(format!("Файл не існує: {}", video_path.display()));
+    }
+
+    crate::logger::log_job(
+        job_id,
+        job_name,
+        &format!("Обробка відео (апскейл: {}, роздільна здатність: {}, кроп: 107% (дефолт), якість: {})...", enabled, resolution, quality),
+    );
+
+    // Створюємо шлях для тимчасового файлу
+    let temp_path = video_path.with_extension("upscale_temp.mp4");
+    if let Err(e) = std::fs::rename(video_path, &temp_path) {
+        return Err(format!("Не вдалося перейменувати файл для апскейлу: {}", e));
+    }
+
+    // Виконуємо ffprobe для зчитування FPS та розмірів відео
+    let ffprobe_cmd = crate::bundle::ffprobe_path();
+    let ffprobe_out = std::process::Command::new(&ffprobe_cmd)
+        .args([
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,duration",
+            "-of", "csv=p=0",
+        ])
+        .arg(&temp_path)
+        .output();
+
+    let mut width = 1280;
+    let mut height = 720;
+    let mut fps = 30.0;
+    if let Ok(out) = ffprobe_out {
+        let s = String::from_utf8_lossy(&out.stdout);
+        let parts: Vec<&str> = s.trim().split(',').collect();
+        if parts.len() >= 4 {
+            width = parts[0].trim().parse().unwrap_or(1280);
+            height = parts[1].trim().parse().unwrap_or(720);
+            let r_fps = parts[2];
+            let avg_fps = parts[3];
+            
+            let mut calculated_fps = None;
+            if parts.len() >= 6 {
+                let nb_frames: f64 = parts[4].trim().parse().unwrap_or(0.0);
+                let duration: f64 = parts[5].trim().parse().unwrap_or(0.0);
+                if duration > 0.0 && nb_frames > 0.0 {
+                    calculated_fps = Some(nb_frames / duration);
+                }
+            }
+
+            let parsed_fps = calculated_fps.unwrap_or_else(|| {
+                let rate = if avg_fps != "0/0" && !avg_fps.is_empty() { avg_fps } else { r_fps };
+                if rate.contains('/') {
+                    let subparts: Vec<&str> = rate.split('/').collect();
+                    if subparts.len() == 2 {
+                        let num: f64 = subparts[0].trim().parse().unwrap_or(30.0);
+                        let den: f64 = subparts[1].trim().parse().unwrap_or(1.0);
+                        if den > 0.0 { num / den } else { 30.0 }
+                    } else {
+                        30.0
+                    }
+                } else {
+                    rate.trim().parse().unwrap_or(30.0)
+                }
+            });
+
+            if parsed_fps > 1.0 && parsed_fps < 120.0 {
+                fps = (parsed_fps * 1000.0).round() / 1000.0;
+            }
+        }
+    }
+
+    let (target_w, target_h) = if enabled {
+        match resolution {
+            "2K" => (2560, 1440),
+            "4K" => (3840, 2160),
+            _ => (1920, 1080), // 1080p
+        }
+    } else {
+        (width, height)
+    };
+
+    let sharpen = if enabled {
+        match quality {
+            "fast" => "unsharp=5:5:0.55:3:3:0.25".to_string(),
+            "max" => "hqdn3d=1.5:1.5:5:5,unsharp=7:7:0.85:5:5:0.4".to_string(),
+            _ => "hqdn3d=1.2:1.2:4:4,unsharp=5:5:0.75:5:5:0.35".to_string(), // balanced
+        }
+    } else {
+        "".to_string()
+    };
+    
+    let ffmpeg_preset = if enabled {
+        match quality {
+            "fast" => "veryfast",
+            "max" => "slow",
+            _ => "medium", // balanced
+        }
+    } else {
+        "ultrafast"
+    };
+    
+    let crf = if enabled {
+        match quality {
+            "fast" => "20",
+            "max" => "16",
+            _ => "18", // balanced
+        }
+    } else {
+        "18"
+    };
+    
+    let scale_w = ((target_w as f64 * 1.07).round() as i32) & !1;
+    let scale_h = ((target_h as f64 * 1.07).round() as i32) & !1;
+    let fit = format!("scale={}:{}:flags=lanczos:force_original_aspect_ratio=increase,crop={}:{}:iw-{}:0", scale_w, scale_h, target_w, target_h, target_w);
+
+    let vf = if sharpen.is_empty() {
+        format!("setpts=N/({}*TB),{}", fps, fit)
+    } else {
+        format!("setpts=N/({}*TB),{},{}", fps, fit, sharpen)
+    };
+    let fps_str = format!("{}", fps);
+
+    let ffmpeg_cmd = crate::bundle::ffmpeg_path();
+    let mut args = vec![
+        "-y",
+        "-hide_banner",
+        "-fflags", "+genpts",
+        "-i", temp_path.to_str().unwrap(),
+        "-vf", &vf,
+        "-r", &fps_str,
+        "-fps_mode", "cfr",
+        "-c:v", "libx264",
+        "-preset", ffmpeg_preset,
+        "-crf", crf,
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+    ];
+
+    if !enabled {
+        args.extend_from_slice(&["-threads", "2"]);
+    }
+
+    args.extend_from_slice(&["-map", "0:v:0", "-map", "0:a?", "-c:a", "aac", "-b:a", "192k"]);
+    args.push(video_path.to_str().unwrap());
+
+    let child = std::process::Command::new(&ffmpeg_cmd)
+        .args(&args)
+        .output();
+
+    let clean_up = || {
+        let _ = std::fs::remove_file(&temp_path);
+    };
+
+    match child {
+        Ok(output) => {
+            clean_up();
+            if output.status.success() {
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    &format!("Апскейл/кроп завершено успішно: {}", video_path.file_name().unwrap_or_default().to_string_lossy()),
+                );
+                Ok(())
+            } else {
+                let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("FFmpeg error: {}", err_msg.trim()))
+            }
+        }
+        Err(e) => {
+            clean_up();
+            Err(format!("Не вдалося запустити FFmpeg: {}", e))
+        }
+    }
+}
+

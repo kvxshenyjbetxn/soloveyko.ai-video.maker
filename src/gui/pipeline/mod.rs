@@ -166,7 +166,11 @@ pub fn draw_pipeline_panel(
     montage_image_shake_intensity: &mut f32,
     overlay_triggers_enabled: &mut bool,
     overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    googler_video_upscale_enabled: &mut bool,
+    googler_video_upscale_resolution: &mut String,
+    googler_video_upscale_quality: &mut String,
     text_input: &str,
+
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
     queue_error: &mut Option<String>,
@@ -279,7 +283,11 @@ pub fn draw_pipeline_panel(
                             *video_llm_temperature,
                             *overlay_triggers_enabled,
                             overlay_triggers.clone(),
+                            *googler_video_upscale_enabled,
+                            googler_video_upscale_resolution,
+                            googler_video_upscale_quality,
                         ) {
+
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
                                 template_name_input.clear();
@@ -414,6 +422,9 @@ pub fn draw_pipeline_panel(
                                     capcut_draft_path,
                                     overlay_triggers_enabled,
                                     overlay_triggers,
+                                    googler_video_upscale_enabled,
+                                    googler_video_upscale_resolution,
+                                    googler_video_upscale_quality,
                                 );
                             });
                         }
@@ -611,6 +622,9 @@ pub fn draw_pipeline_panel(
                                     openrouter_models_loading,
                                     overlay_triggers_enabled,
                                     overlay_triggers,
+                                    googler_video_upscale_enabled,
+                                    googler_video_upscale_resolution,
+                                    googler_video_upscale_quality,
                                 );
                             });
                         }
@@ -858,7 +872,11 @@ pub fn draw_pipeline_panel(
                                             googler_image_priority.clone(),
                                             googler_video_priority.clone(),
                                             *googler_image_max_threads,
+                                            *googler_video_upscale_enabled,
+                                            googler_video_upscale_resolution,
+                                            googler_video_upscale_quality,
                                             assemblyai_key,
+
                                             *pipeline_subtitles_enabled,
                                             subtitles_service,
                                             whisper_language,
@@ -941,6 +959,9 @@ pub fn draw_pipeline_panel(
                                         googler_image_priority.clone(),
                                         googler_video_priority.clone(),
                                         *googler_image_max_threads,
+                                        *googler_video_upscale_enabled,
+                                        googler_video_upscale_resolution,
+                                        googler_video_upscale_quality,
                                         assemblyai_key,
                                         *pipeline_subtitles_enabled,
                                         subtitles_service,
@@ -1026,7 +1047,11 @@ fn build_job_settings(
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     googler_image_max_threads: usize,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: &str,
+    googler_video_upscale_quality: &str,
     assemblyai_key: &str,
+
     subtitles_enabled: bool,
     subtitles_service: &str,
     whisper_language: &str,
@@ -1093,7 +1118,11 @@ fn build_job_settings(
         googler_image_priority,
         googler_video_priority,
         googler_image_max_threads,
+        googler_video_upscale_enabled,
+        googler_video_upscale_resolution: googler_video_upscale_resolution.to_string(),
+        googler_video_upscale_quality: googler_video_upscale_quality.to_string(),
         assemblyai_key: assemblyai_key.to_string(),
+
         subtitles_enabled,
         subtitles_service: subtitles_service.to_string(),
         whisper_language: whisper_language.to_string(),
@@ -1176,7 +1205,11 @@ fn validate_and_enqueue(
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     googler_image_max_threads: usize,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: &str,
+    googler_video_upscale_quality: &str,
     assemblyai_key: &str,
+
     subtitles_enabled: bool,
     subtitles_service: &str,
     whisper_language: &str,
@@ -1255,7 +1288,11 @@ fn validate_and_enqueue(
         googler_image_priority,
         googler_video_priority,
         googler_image_max_threads,
+        googler_video_upscale_enabled,
+        googler_video_upscale_resolution,
+        googler_video_upscale_quality,
         assemblyai_key,
+
         subtitles_enabled,
         subtitles_service,
         whisper_language,

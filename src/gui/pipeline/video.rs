@@ -125,7 +125,11 @@ pub fn draw_video_section(
     openrouter_models_loading: &Arc<Mutex<bool>>,
     overlay_triggers_enabled: &mut bool,
     overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    googler_video_upscale_enabled: &mut bool,
+    googler_video_upscale_resolution: &mut String,
+    googler_video_upscale_quality: &mut String,
 ) {
+
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
@@ -511,6 +515,47 @@ pub fn draw_video_section(
             });
 
             ui.add_space(8.0);
+            
+            
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(translate(language, "video_upscale_label")).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    super::toggle_switch(ui, googler_video_upscale_enabled);
+                });
+            });
+
+            if *googler_video_upscale_enabled {
+                ui.add_space(6.0);
+                ui.label(translate(language, "video_upscale_resolution_label"));
+                ui.add_space(2.0);
+                
+                let selected_res_text = match googler_video_upscale_resolution.as_str() {
+                    "2K" => "2K (2560x1440)",
+                    "4K" => "4K (3840x2160)",
+                    _ => "1080p (1920x1080)",
+                };
+                
+                egui::ComboBox::from_id_salt("googler_video_upscale_resolution_combo")
+                    .selected_text(selected_res_text)
+                    .width(ui.available_width() - 8.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(googler_video_upscale_resolution, "1080p".to_string(), "1080p (1920x1080)");
+                        ui.selectable_value(googler_video_upscale_resolution, "2K".to_string(), "2K (2560x1440)");
+                        ui.selectable_value(googler_video_upscale_resolution, "4K".to_string(), "4K (3840x2160)");
+                    });
+
+                ui.add_space(6.0);
+                ui.label(translate(language, "video_upscale_quality_label"));
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    ui.radio_value(googler_video_upscale_quality, "fast".to_string(), translate(language, "video_upscale_quality_fast"));
+                    ui.radio_value(googler_video_upscale_quality, "balanced".to_string(), translate(language, "video_upscale_quality_balanced"));
+                    ui.radio_value(googler_video_upscale_quality, "max".to_string(), translate(language, "video_upscale_quality_max"));
+                });
+            }
+
+            ui.add_space(8.0);
+
 
             // Кнопка відкриття вікна пріоритетів
             let prio_id = ui.make_persistent_id("video_priorities_open");

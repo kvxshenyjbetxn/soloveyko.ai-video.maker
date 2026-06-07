@@ -82,7 +82,11 @@ pub fn draw_templates_section(
     capcut_draft_path: &mut String,
     overlay_triggers_enabled: &mut bool,
     overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    googler_video_upscale_enabled: &mut bool,
+    googler_video_upscale_resolution: &mut String,
+    googler_video_upscale_quality: &mut String,
 ) {
+
     ui.vertical(|ui| {
         ui.add_space(2.0);
 
@@ -198,6 +202,9 @@ pub fn draw_templates_section(
                             *capcut_draft_path = template.capcut_draft_path;
                             *overlay_triggers_enabled = template.overlay_triggers_enabled;
                             *overlay_triggers = template.overlay_triggers;
+                            *googler_video_upscale_enabled = template.googler_video_upscale_enabled;
+                            *googler_video_upscale_resolution = if template.googler_video_upscale_resolution.is_empty() { "1080p".to_string() } else { template.googler_video_upscale_resolution };
+                            *googler_video_upscale_quality = if template.googler_video_upscale_quality.is_empty() { "balanced".to_string() } else { template.googler_video_upscale_quality };
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

@@ -155,8 +155,15 @@ pub struct VideoMakerApp {
     pub text_split_char_limit: usize,
     /// Промт для генерації зображень відеоряду.
     pub video_prompt: String,
+    /// Чи увімкнено автоматичний апскейл Googler відео
+    pub googler_video_upscale_enabled: bool,
+    /// Роздільна здатність апскейлу ("1080p", "2K", "4K")
+    pub googler_video_upscale_resolution: String,
+    /// Якість апскейлу ("fast", "balanced", "max")
+    pub googler_video_upscale_quality: String,
     /// Системна інструкція агенту для створення timeline.json.
     pub video_agent_prompt: String,
+
     /// Сервіс ЛЛМ для генерації промтів відеоряду.
     pub video_llm_service: String,
     /// Активна модель ЛЛМ для відео-промтів.
@@ -446,6 +453,9 @@ impl Default for VideoMakerApp {
             text_split_mode: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
+            googler_video_upscale_enabled: default_settings.googler_video_upscale_enabled,
+            googler_video_upscale_resolution: default_settings.googler_video_upscale_resolution.clone(),
+            googler_video_upscale_quality: default_settings.googler_video_upscale_quality.clone(),
             video_agent_prompt: String::new(),
             video_llm_service: "None".to_string(),
             video_llm_model: String::new(),
@@ -663,9 +673,13 @@ impl VideoMakerApp {
         };
         let googler_image_priority = saved.googler_image_priority.clone();
         let googler_video_priority = saved.googler_video_priority.clone();
+        let googler_video_upscale_enabled = saved.googler_video_upscale_enabled;
+        let googler_video_upscale_resolution = saved.googler_video_upscale_resolution.clone();
+        let googler_video_upscale_quality = saved.googler_video_upscale_quality.clone();
         let translation_temperature = saved.translation_temperature;
         let save_path_macos = saved.save_path_macos.clone();
         let save_path_windows = saved.save_path_windows.clone();
+
         let openrouter_max_threads = saved.openrouter_max_threads;
         let claude_max_threads = saved.claude_max_threads;
         let gemini_max_threads = saved.gemini_max_threads;
@@ -785,8 +799,12 @@ impl VideoMakerApp {
             text_split_mode,
             text_split_char_limit,
             video_prompt,
+            googler_video_upscale_enabled,
+            googler_video_upscale_resolution,
+            googler_video_upscale_quality,
             video_agent_prompt,
             video_llm_service,
+
             video_llm_model,
             video_llm_model_openrouter,
             video_llm_model_claude,
@@ -939,8 +957,12 @@ impl VideoMakerApp {
             googler_video_max_threads: self.googler_video_max_threads,
             voiceover_convert_to_wav: self.voiceover_convert_to_wav,
             video_prompt: self.video_prompt.clone(),
+            googler_video_upscale_enabled: self.googler_video_upscale_enabled,
+            googler_video_upscale_resolution: self.googler_video_upscale_resolution.clone(),
+            googler_video_upscale_quality: self.googler_video_upscale_quality.clone(),
             video_agent_prompt: self.video_agent_prompt.clone(),
             googler_image_priority: self.googler_image_priority.clone(),
+
             googler_video_priority: self.googler_video_priority.clone(),
             video_media_type: self.video_media_type.clone(),
             subtitles_service: self.subtitles_service.clone(),
@@ -1015,8 +1037,12 @@ impl VideoMakerApp {
         self.text_split_mode = t.text_split_mode;
         self.text_split_char_limit = t.text_split_char_limit;
         self.video_prompt = t.video_prompt;
+        self.googler_video_upscale_enabled = t.googler_video_upscale_enabled;
+        self.googler_video_upscale_resolution = if t.googler_video_upscale_resolution.is_empty() { "1080p".to_string() } else { t.googler_video_upscale_resolution.clone() };
+        self.googler_video_upscale_quality = if t.googler_video_upscale_quality.is_empty() { "balanced".to_string() } else { t.googler_video_upscale_quality.clone() };
         self.video_agent_prompt = t.video_agent_prompt;
         self.video_llm_service = t.video_llm_service.clone();
+
         self.video_llm_model_openrouter = t.video_llm_model_openrouter.clone();
         self.video_llm_model_claude = if t.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { t.video_llm_model_claude.clone() };
         self.video_llm_model_gemini = if t.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.video_llm_model_gemini.clone() };
@@ -1343,8 +1369,12 @@ impl eframe::App for VideoMakerApp {
                         &mut self.montage_image_shake_intensity,
                         &mut self.overlay_triggers_enabled,
                         &mut self.overlay_triggers,
+                        &mut self.googler_video_upscale_enabled,
+                        &mut self.googler_video_upscale_resolution,
+                        &mut self.googler_video_upscale_quality,
                         &self.text_input,
                         &mut self.jobs,
+
                         &mut self.job_counter,
                         &mut self.queue_error,
                         &mut self.job_name_dialog_open,
@@ -1556,6 +1586,9 @@ impl eframe::App for VideoMakerApp {
                     ctx.clone(),
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
+                    settings.googler_video_upscale_enabled,
+                    settings.googler_video_upscale_resolution.clone(),
+                    settings.googler_video_upscale_quality.clone(),
                 );
             }
         }
@@ -1629,6 +1662,9 @@ impl eframe::App for VideoMakerApp {
                             job.name.clone(),
                             ctx.clone(),
                             std::sync::Arc::clone(&anim_loading),
+                            job.settings.googler_video_upscale_enabled,
+                            job.settings.googler_video_upscale_resolution.clone(),
+                            job.settings.googler_video_upscale_quality.clone(),
                         );
                     }
                 }
@@ -1784,8 +1820,21 @@ impl eframe::App for VideoMakerApp {
         {
             let anim_loading = std::sync::Arc::clone(&self.gallery_anim_loading);
             let job_id = self.montage_editor_open_job.unwrap_or(0);
-            let job_name = self.jobs.iter().find(|j| j.id == job_id)
-                .map(|j| j.name.clone()).unwrap_or_default();
+            let job_opt = self.jobs.iter().find(|j| j.id == job_id);
+            let job_name = job_opt.map(|j| j.name.clone()).unwrap_or_default();
+            let (upscale_enabled, upscale_resolution, upscale_quality) = if let Some(job) = job_opt {
+                (
+                    job.settings.googler_video_upscale_enabled,
+                    job.settings.googler_video_upscale_resolution.clone(),
+                    job.settings.googler_video_upscale_quality.clone(),
+                )
+            } else {
+                (
+                    self.googler_video_upscale_enabled,
+                    self.googler_video_upscale_resolution.clone(),
+                    self.googler_video_upscale_quality.clone(),
+                )
+            };
             for path in montage_actions.animate_paths {
                 if anim_loading.lock().unwrap().contains(&path) { continue; }
                 crate::core::pipeline::animate_single_image(
@@ -1796,6 +1845,9 @@ impl eframe::App for VideoMakerApp {
                     job_name.clone(),
                     ctx.clone(),
                     std::sync::Arc::clone(&anim_loading),
+                    upscale_enabled,
+                    upscale_resolution.clone(),
+                    upscale_quality.clone(),
                 );
             }
         }
@@ -1832,6 +1884,9 @@ impl eframe::App for VideoMakerApp {
                     ctx.clone(),
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
+                    settings.googler_video_upscale_enabled,
+                    settings.googler_video_upscale_resolution.clone(),
+                    settings.googler_video_upscale_quality.clone(),
                 );
             }
         }
@@ -1940,8 +1995,12 @@ impl eframe::App for VideoMakerApp {
                 || self.capcut_draft_path != self.last_saved_settings.capcut_draft_path
                 || self.overlay_triggers_enabled != self.last_saved_settings.overlay_triggers_enabled
                 || self.overlay_triggers != self.last_saved_settings.overlay_triggers
+                || self.googler_video_upscale_enabled != self.last_saved_settings.googler_video_upscale_enabled
+                || self.googler_video_upscale_resolution != self.last_saved_settings.googler_video_upscale_resolution
+                || self.googler_video_upscale_quality != self.last_saved_settings.googler_video_upscale_quality
             {
                 let new_settings = AppSettings {
+
                     theme: current_theme_str,
                     accent_color: current_color_arr,
                     pipeline_width: self.pipeline_width,
@@ -2029,8 +2088,12 @@ impl eframe::App for VideoMakerApp {
                     montage_image_shake_intensity: self.montage_image_shake_intensity,
                     overlay_triggers_enabled: self.overlay_triggers_enabled,
                     overlay_triggers: self.overlay_triggers.clone(),
+                    googler_video_upscale_enabled: self.googler_video_upscale_enabled,
+                    googler_video_upscale_resolution: self.googler_video_upscale_resolution.clone(),
+                    googler_video_upscale_quality: self.googler_video_upscale_quality.clone(),
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
+
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску
                 save_settings(&new_settings);
@@ -2119,6 +2182,9 @@ impl eframe::App for VideoMakerApp {
                                     ctx.clone(),
                                     std::sync::Arc::clone(&self.media_regen_result),
                                     std::sync::Arc::clone(&self.media_regen_loading),
+                                    settings.googler_video_upscale_enabled,
+                                    settings.googler_video_upscale_resolution.clone(),
+                                    settings.googler_video_upscale_quality.clone(),
                                 );
                             }
                         }
