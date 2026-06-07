@@ -647,10 +647,18 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ```
 {capcut_draft_path}/{project_name}/
 ├── draft_meta_info.json          — метадані проекту для CapCut Desktop
-├── draft_content.json            — таймлінія, матеріали, конфіг полотна
-├── .locked                       — порожній lock-файл (CapCut вимагає)
+├── draft_content.json            — таймлінія, матеріали, конфіг полотна (Windows)
+├── draft_info.json               — те саме, потрібне на macOS (root_meta_info.json посилається сюди)
+├── draft_settings                — INI-файл (create_time/last_edit_time), обов'язковий на macOS
+├── resources/                    — лише на macOS: копії всіх медіафайлів + аудіо
+│   ├── 0001.jpg
+│   ├── 0002.jpg
+│   └── voice.mp3
 └── Timelines/
-    └── project.json              — дублікат draft_content.json (для нових версій CapCut)
+    ├── project.json              — маніфест таймлайнів (main_timeline_id → UUID папки)
+    └── {uuid}/
+        ├── draft_content.json    — копія таймлінії для Windows CapCut
+        └── draft_info.json       — копія таймлінії для macOS CapCut
 ```
 
 **`draft_meta_info.json` — критичні поля:**
@@ -978,6 +986,10 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Чітка обводка текстових полів у темних темах:** Для кращої видимості та естетичного сприйняття на темному та AMOLED фонах, у функцію `apply_theme` (`src/theme.rs`) додано примусове налаштування `widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_gray(100))` для неактивних елементів керування. Це забезпечує тонку стильну обводку навколо всіх полів введення замість зливання з фоном.
 
 - **Вирівнювання при переносі логу через `LayoutJob`**: Щоб уникнути зсувів та порожнеч при переносі довгих рядків логів на другу строчку, мітка часу та текст повідомлення об'єднуються в єдиний `egui::text::LayoutJob`. Рядок рендериться як один віджет `egui::Label` і переноситься цілісно під лівий край (під мітку часу), що забезпечує ідеальний вигляд терміналу.
+
+- **CapCut на macOS — sandboxed застосунок.** CapCut з App Store має `com.apple.security.app-sandbox = true` і може читати файли тільки з `~/Movies/` (entitlement `assets.movies.read-write`) або файли явно вибрані через file picker (з security-scoped bookmarks). Медіафайли задачі знаходяться у `Desktop/video/` — CapCut їх не бачить. Тому на macOS `generate_capcut_project` копіює всі медіафайли та голос у `project_dir/resources/` (всередині папки проекту в `~/Movies/CapCut/...`), а в JSON записуються нові шляхи `resources/0001.jpg`. На Windows копіювання не виконується — CapCut не sandboxed і читає файли за абсолютним шляхом. Код обгорнуто у `#[cfg(target_os = "macos")]`.
+
+- **CapCut macOS: `draft_info.json` + `draft_settings` обов'язкові.** Коли CapCut сканує нову папку проекту, він записує у `root_meta_info.json` поле `draft_json_file = {project}/draft_info.json` (завжди, незалежно від того чи файл існує). При наступному відкритті CapCut шукає саме цей файл — якщо його немає, показує «У текущего проекта неприемлемый адрес». Тому генеруємо і `draft_content.json` (Windows), і `draft_info.json` (macOS) з однаковим вмістом. `draft_settings` — INI-файл (формат `[General]\ndraft_create_time=...`) якого CapCut також вимагає при першому відкритті на macOS; без нього проект теж відображається як недійсний.
 
 - **CapCut `draft_root_path` vs `draft_fold_path` — різні формати слешів.** `draft_fold_path` — повний шлях до папки проекту з прямими слешами (`forward_path`): CapCut Desktop при читанні цього поля очікує POSIX-формат навіть на Windows. `draft_root_path` — шлях до батьківської папки чернеток з нативними роздільниками ОС (`native_path`): зворотні слеші на Windows, прямі на macOS. Якщо обидва вказати з однаковим форматом — CapCut видає «Неприемлемый адрес».
 

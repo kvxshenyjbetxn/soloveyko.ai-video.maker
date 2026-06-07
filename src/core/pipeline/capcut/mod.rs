@@ -154,10 +154,13 @@ pub fn generate_capcut_project(
     log_fn(&format!("CapCut: завантажено {} сегментів із timeline.json", tl.segments.len()));
 
     // ─── 2. Знаходимо аудіофайл ─────────────────────────────────────────────
-    let voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
+    let mut voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
         .iter()
         .map(|n| save_dir.join(n))
         .find(|p| p.exists());
+
+    // project_dir визначаємо рано — потрібно для копіювання медіа на macOS
+    let project_dir = draft_root.join(project_name);
 
     // ─── 3. UUID-генератор ───────────────────────────────────────────────────
     let seed = std::time::SystemTime::now()
@@ -224,6 +227,36 @@ pub fn generate_capcut_project(
         });
     }
     log_fn(&format!("CapCut: {} унікальних медіафайлів", media_list.len()));
+
+    // ─── 4.5. macOS: CapCut sandboxed — копіюємо медіа у папку проекту ──────
+    // На macOS CapCut не може читати файли поза ~/Movies/, тому копіюємо всі
+    // медіафайли та аудіо прямо в project_dir/resources/ де CapCut має доступ.
+    #[cfg(target_os = "macos")]
+    {
+        let res_dir = project_dir.join("resources");
+        std::fs::create_dir_all(&res_dir)
+            .map_err(|e| format!("Не вдалося створити resources/: {}", e))?;
+
+        for m in &mut media_list {
+            if m.path.exists() {
+                let fname = m.path.file_name().unwrap_or_default().to_os_string();
+                let dst = res_dir.join(&fname);
+                std::fs::copy(&m.path, &dst)
+                    .map_err(|e| format!("Копіювання {}: {}", fname.to_string_lossy(), e))?;
+                m.path = dst;
+            }
+        }
+        if let Some(ref vp) = voice_path.clone() {
+            if vp.exists() {
+                let fname = vp.file_name().unwrap_or_default().to_os_string();
+                let dst = res_dir.join(&fname);
+                std::fs::copy(vp, &dst)
+                    .map_err(|e| format!("Копіювання voice: {}", e))?;
+                voice_path = Some(dst);
+            }
+        }
+        log_fn("CapCut: медіафайли скопійовано в папку проекту (macOS sandbox)");
+    }
 
     // ─── 5. Тривалість аудіо ────────────────────────────────────────────────
     let audio_dur_secs = audio_duration_hint
@@ -855,7 +888,7 @@ pub fn generate_capcut_project(
     });
 
     // ─── 15. Шляхи до папки проекту ─────────────────────────────────────────
-    let project_dir = draft_root.join(project_name);
+    // (project_dir визначено вище, на початку функції)
 
     // draft_root_path — нативні слеші (backslash на Windows, forward slash на macOS)
     let root_path_native = native_path(draft_root);
@@ -1037,8 +1070,11 @@ pub fn generate_capcut_project(
     let content_json = serde_json::to_string_pretty(&draft_content)
         .map_err(|e| format!("Помилка серіалізації draft_content: {}", e))?;
 
+    // Windows шукає draft_content.json, macOS — draft_info.json; пишемо обидва
     std::fs::write(project_dir.join("draft_content.json"), &content_json)
         .map_err(|e| format!("draft_content.json: {}", e))?;
+    std::fs::write(project_dir.join("draft_info.json"), &content_json)
+        .map_err(|e| format!("draft_info.json: {}", e))?;
 
     std::fs::write(project_dir.join("draft_meta_info.json"),
         serde_json::to_string_pretty(&draft_meta_info)
@@ -1050,12 +1086,19 @@ pub fn generate_capcut_project(
             .map_err(|e| format!("Помилка серіалізації Timelines/project.json: {}", e))?)
         .map_err(|e| format!("Timelines/project.json: {}", e))?;
 
-    // Копія draft_content.json у Timelines/{uuid}/
+    // Timelines/{uuid}/ — теж обидва файли для крос-платформеності
     std::fs::write(tl_uuid_dir.join("draft_content.json"), &content_json)
         .map_err(|e| format!("Timelines/uuid/draft_content.json: {}", e))?;
+    std::fs::write(tl_uuid_dir.join("draft_info.json"), &content_json)
+        .map_err(|e| format!("Timelines/uuid/draft_info.json: {}", e))?;
 
-    // .locked — порожній lock-файл (CapCut використовує для блокування)
-    let _ = std::fs::write(project_dir.join(".locked"), "");
+    // draft_settings — обов'язковий на macOS; без нього CapCut показує "невірний адрес"
+    let draft_settings = format!(
+        "[General]\ndraft_create_time={}\ndraft_last_edit_time={}\nreal_edit_keys=1\nreal_edit_seconds=0\n",
+        now_secs, now_secs
+    );
+    std::fs::write(project_dir.join("draft_settings"), draft_settings)
+        .map_err(|e| format!("draft_settings: {}", e))?;
 
     log_fn(&format!("CapCut: проект створено — {}", forward_path(&project_dir)));
     Ok(())
