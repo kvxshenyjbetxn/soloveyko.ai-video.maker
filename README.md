@@ -35,8 +35,8 @@ src/
 │   ├── voicebot.rs              — fetch_balance (баланс VoiceBot у символах) + VoiceBotLimiter (семафор лімітування запитів, фіксовано 5 потоків)
 │   ├── edgetts.rs               — fetch_voices (завантаження голосів через msedge-tts) + EdgeTTSLimiter (семафор лімітування запитів до Edge TTS) + synthesize (генерація аудіо)
 │   ├── googler.rs               — check_key + fetch_balance (ліміти зображень/відео) + GooglerImageLimiter + GooglerVideoLimiter (локальний підрахунок активних потоків генерації)
-│   ├── claude.rs                — call_claude_code (звичайний виклик CLI; allow_tools: bool) + call_claude_code_new_session (--session-id, для першого запуску агента з контролем) + call_claude_code_resume (--resume, для продовження чату) + ClaudeLimiter (семафор); всі виклики агента використовують --permission-mode bypassPermissions; на Windows і macOS запускається напряму як Command::new("claude") без cmd /C
-│   ├── gemini.rs                — call_gemini_cli (звичайний виклик CLI; --yolo) + call_gemini_new_session (--session-id) + call_gemini_resume (--resume) + GeminiLimiter (семафор); на Windows і macOS запускається напряму як Command::new("gemini") без cmd /C
+│   ├── claude.rs                — call_claude_code_new_session_streaming (--session-id, spawn()+BufReader: читає stdout chunks в реальному часі, on_chunk callback) + call_claude_code_resume (--resume, для продовження чату) + call_claude_code (звичайний виклик, allow_tools: bool) + ClaudeLimiter (семафор); всі агентні виклики: --permission-mode bypassPermissions; запуск напряму Command::new("claude") без cmd /C (Windows і macOS)
+│   ├── gemini.rs                — call_gemini_new_session_streaming (--session-id, spawn()+BufReader, on_chunk викликається один раз з parsed JSON у кінці) + call_gemini_resume (--resume) + call_gemini_cli (звичайний виклик, --yolo) + GeminiLimiter (семафор); запуск напряму Command::new("gemini") без cmd /C
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
 │   └── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
 ├── core/
@@ -465,7 +465,7 @@ pub struct ClipDragState {
 Якщо у секції Відеоряд обрано `Claude Code` або `Gemini CLI`, пайплайн перемикається в агентний режим:
 
 1. **Послідовне виконання:** AV-гілка (Озвучка → Субтитри) виконується першою до кінця, щоб гарантувати наявність `subtitle.srt` до запуску агента.
-2. **`run_agent_timeline`** — читає `subtitle.srt`, підставляє вміст у `{{srt}}` і шлях до `timeline.json` у `{{path}}`. Якщо `agent_control_enabled = false` — звичайний `call_llm` з `allow_tools=true`. Якщо `true` — генерує `uuid_v4()`, запускає `call_agent_new_session` (з `--session-id <uuid>`), зберігає `AgentSessionInfo` і першу відповідь у `agent_chat`, записує `agent_chat.json`, потім переводить задачу в `AwaitingAgentControl` і блокується на `Condvar::wait()`. Після сигналу від UI — продовжує.
+2. **`run_agent_timeline`** — читає `subtitle.srt`, підставляє вміст у `{{srt}}` і шлях до `timeline.json` у `{{path}}`. Завжди використовує стримінговий виклик `call_agent_new_session_streaming`: генерує `uuid_v4()`, одразу додає в `agent_chat` початкове повідомлення з аргументами запуску (як в логах), потім отримує відповідь по чанках через callback `on_chunk`, який аппендить до останнього повідомлення і викликає `ctx.request_repaint()`. Після завершення зберігає `agent_chat.json`. `AgentSessionInfo` (session_id, service, model) зберігається лише коли `agent_control_enabled = true` (для можливості `--resume`). Якщо `agent_control_enabled = true` — задача переходить у `AwaitingAgentControl` та блокується на `Condvar::wait()`. Після сигналу від UI — продовжує.
 3. **`run_video_branch`** — зчитує сегменти вже зі створеного агентом `timeline.json` (поле `text`) і генерує медіа на їх основі. LLM-генерація промтів пропускається (уже є текст-опис від агента).
 4. **`assign_media_to_timeline`** — після генерації всіх медіафайлів заповнює поле `media` в `timeline.json` реальними шляхами (пропорційний розподіл STRETCH/SPLIT/NORMAL як у `build_timeline`).
 
@@ -488,20 +488,26 @@ pub struct ClipDragState {
 ```
 `media: null` обов'язкове — програма заповнює після генерації. `text` — опис для Googler, не транскрипція.
 
+**Кнопка 💬 та вікно чату з агентом:**
+
+Кнопка 💬 з'являється у картці задачі (поруч з ✂ редактором) коли обрано `Claude Code` або `Gemini CLI` як сервіс відеоряду — незалежно від `agent_control_enabled`. Дозволяє відкрити чат у будь-який момент, щоб спостерігати за роботою агента в реальному часі.
+
+`draw_agent_chat_window` відображає:
+- **Чат:** повідомлення `user` / `Agent` у різнокольорових бульбашках. Перше повідомлення агента — аргументи запуску (модель, session_id), далі — стримінговий вивід по мірі відповіді CLI.
+- **Спінер** з текстом "Agent is thinking…" показується коли: (а) іде запит через UI (`is_loading = true`), або (б) задача в статусі `Running` і останнє повідомлення від агента (`pipeline_generating`). Оба сигнали об'єднуються: `show_spinner = is_loading || pipeline_generating`.
+- **Поле введення** (Enter = відправити, Shift+Enter = новий рядок) і кнопка «Надіслати» — доступні лише якщо є збережена сесія (`agent_session`).
+- **Кнопка «Продовжити пайплайн»** — показується лише коли `agent_control_enabled = true`, сигналізує condvar → пайплайн відновлюється.
+
 **Контроль агента (`agent_control_enabled`):**
 
 Якщо у секції «Контроль» увімкнено «Контроль агента», після успішного створення `timeline.json` пайплайн не продовжується автоматично. Замість цього:
 
-1. Програма генерує UUID сесії (`uuid_v4`), запускає агента з `--session-id <uuid>`, зберігає `session_id` у `AgentSessionInfo` і першу відповідь агента в `agent_chat`.
-2. Задача переходить у статус `AwaitingAgentControl` (синій у картці).
-3. При кліку по картці відкривається вікно **«Чат з агентом»** (`draw_agent_chat_window`):
-   - Показує историю повідомлень (роль "user" / "Agent", різні кольори).
-   - Поле введення: **Enter** відправляє, **Shift+Enter** — новий рядок.
-   - Кнопка «Надіслати» викликає `call_agent_resume` (`--resume <session_id>`) у фоні, відповідь додається в историю і в `agent_chat.json`.
-   - Кнопка «Продовжити пайплайн» сигналізує condvar → пайплайн відновлюється з актуальним `timeline.json`.
+1. Задача переходить у статус `AwaitingAgentControl` (синій у картці). Клік по назві задачі в цьому статусі також відкриває чат.
+2. Зберігається `AgentSessionInfo` (session_id, service, model) для можливості `--resume` через UI.
+3. Кнопка «Продовжити пайплайн» → condvar notify → пайплайн відновлюється з актуальним `timeline.json`.
 4. Якщо під час чату агент скоригував `timeline.json` — монтаж використає вже нову версію.
 
-Сесія зберігається у `{task_dir}/agent_chat.json` (JSON масив `{role, content}`). При закритті вікна без кнопки «Продовжити» пайплайн продовжує чекати.
+Чат зберігається у `{task_dir}/agent_chat.json` (JSON масив `{role, content}`). При закритті вікна без кнопки «Продовжити» пайплайн продовжує чекати.
 
 **Null-сегменти в `timeline.json` (звичайний і агентний режим):**
 Якщо сегмент має `media: null` (навмисна пауза від агента або порожня ділянка в редакторі монтажу), `run_montage` рендерить його як **чорний екран** відповідної тривалості через FFmpeg inline-фільтр `color=black:s=1920x1080:r=fps:d=duration`. Чорний кліп не потребує вхідного файлу — генерується виключно у filter_complex без зайвого `-i`. Суміжні null-сегменти об'єднуються в один чорний кліп. Індексація FFmpeg input-файлів (`[0:v]`, `[1:v]`, …) враховує лише реальні медіафайли — чорні кліпи пропускаються при підрахунку.

@@ -383,6 +383,19 @@ pub fn draw_queue_panel(
                                         open_folder(&folder_path);
                                     }
 
+                                    let is_agent_mode = job.settings.video_enabled
+                                        && (job.settings.video_llm_service == "Claude Code"
+                                            || job.settings.video_llm_service == "Gemini CLI");
+                                    if is_agent_mode {
+                                        let chat_btn = ui.button(
+                                            egui::RichText::new("💬").size(11.0),
+                                        );
+                                        if chat_btn.on_hover_text(translate(language, "agent_chat_open_btn")).clicked() {
+                                            *selected_agent_chat = Some(job.id);
+                                            retry_clicked = true;
+                                        }
+                                    }
+
                                     if job.settings.montage_control_enabled {
                                         let editor_btn = ui.button(
                                             egui::RichText::new("✂").size(11.0),
@@ -697,8 +710,6 @@ pub fn draw_queue_panel(
                             *active_tab = Tab::Gallery;
                         } else if status == crate::queue::JobStatus::AwaitingAgentControl {
                             *selected_agent_chat = Some(job.id);
-                        } else if status == crate::queue::JobStatus::AwaitingMontageControl {
-                            *open_montage_editor = Some(job.id);
                         } else {
                             *selected_job_logs = Some((job.id, job.name.clone()));
                         }

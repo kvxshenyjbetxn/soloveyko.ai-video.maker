@@ -1,4 +1,5 @@
-use std::process::Command;
+use std::io::{BufReader, Read};
+use std::process::{Command, Stdio};
 use std::sync::{Condvar, Mutex, OnceLock};
 
 /// Лімітер одночасних запитів до Claude Code (семафор)
@@ -66,14 +67,14 @@ impl<'a> Drop for ClaudePermit<'a> {
     }
 }
 
-/// Викликає Claude CLI з новою сесією (--session-id) та інструментами для запису файлів.
-/// Повертає текст відповіді. Використовується для першого запуску агента при контролі агента.
-pub fn call_claude_code_new_session(
+/// Читає stdout по chunks в реальному часі та викликає `on_chunk` для кожного.
+pub fn call_claude_code_new_session_streaming(
     model: &str,
     user_content: &str,
     session_id: &str,
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
+    on_chunk: impl Fn(&str),
 ) -> Result<String, String> {
     let _permit = ClaudeLimiter::get().acquire();
     let log = |msg: &str| {
@@ -91,7 +92,9 @@ pub fn call_claude_code_new_session(
         .arg("-p").arg(user_content)
         .arg("--allowedTools").arg("Bash,Write,Read")
         .arg("--permission-mode").arg("bypassPermissions")
-        .arg("--session-id").arg(session_id);
+        .arg("--session-id").arg(session_id)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -99,23 +102,45 @@ pub fn call_claude_code_new_session(
 
     log(&format!("Running: claude --model {} -p \"[prompt]\" --allowedTools Bash,Write,Read --permission-mode bypassPermissions --session-id {}", model, session_id));
 
-    let output = cmd.output().map_err(|e| {
+    let mut child = cmd.spawn().map_err(|e| {
         format!("Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.", e)
     })?;
 
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // Stderr читаємо в окремому потоці щоб не було deadlock
+    let stderr_handle = {
+        let stderr = child.stderr.take().unwrap();
+        std::thread::spawn(move || {
+            let mut s = String::new();
+            let _ = BufReader::new(stderr).read_to_string(&mut s);
+            s
+        })
+    };
+
+    let mut stdout = child.stdout.take().unwrap();
+    let mut full_output = String::new();
+    let mut buf = [0u8; 512];
+
+    loop {
+        let n = stdout.read(&mut buf).map_err(|e| format!("Read error: {}", e))?;
+        if n == 0 { break; }
+        let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
+        full_output.push_str(&chunk);
+        on_chunk(&chunk);
+    }
+
+    let exit_status = child.wait().map_err(|e| format!("Wait error: {}", e))?;
+    let stderr = stderr_handle.join().unwrap_or_default();
+
+    if exit_status.success() {
         log("Claude CLI agent session completed successfully.");
-        Ok(stdout)
+        Ok(full_output.trim().to_string())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let err_msg = format!(
             "Claude CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            output.status.code(), stderr, stdout
+            exit_status.code(), stderr.trim(), full_output.trim()
         );
         log(&err_msg);
-        Err(format!("Claude CLI error: {}", stderr))
+        Err(format!("Claude CLI error: {}", stderr.trim()))
     }
 }
 

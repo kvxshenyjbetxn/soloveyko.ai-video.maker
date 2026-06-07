@@ -1357,44 +1357,53 @@ fn run_agent_timeline(
     crate::logger::log_job(job_id, job_name,
         &format!("Agent ({}): generating timeline.json...", settings.video_llm_service));
 
-    // Якщо контроль агента увімкнено — використовуємо сесію для можливості продовження чату
+    let session_id = uuid_v4();
+    crate::logger::log_job(job_id, job_name, &format!("Agent session: {}", session_id));
+
+    // Початкове повідомлення з аргументами запуску — chunks додаватимуться після нього
+    let initial_text = format!(
+        "Running: {} --model {} --session-id {}\n\n",
+        settings.video_llm_service,
+        settings.video_llm_model,
+        session_id,
+    );
+    agent_chat.lock().unwrap().push(crate::queue::AgentChatMessage {
+        role: "agent".to_string(),
+        content: initial_text,
+    });
+    ctx.request_repaint();
+
+    let agent_chat_for_chunk = Arc::clone(&agent_chat);
+    let ctx_for_chunk = ctx.clone();
+
+    let response = call_agent_new_session_streaming(
+        &settings.video_llm_service,
+        &settings.video_llm_model,
+        &agent_prompt,
+        &session_id,
+        Some((job_id, job_name.to_string())),
+        Some(&settings.save_path),
+        move |chunk| {
+            let mut chat = agent_chat_for_chunk.lock().unwrap();
+            if let Some(last) = chat.last_mut() {
+                last.content.push_str(chunk);
+            }
+            ctx_for_chunk.request_repaint();
+        },
+    ).map_err(|e| format!("Agent error: {}", e))?;
+
+    save_agent_chat_to_file(save_dir, &agent_chat.lock().unwrap());
+
+    // Сесію зберігаємо тільки якщо увімкнено контроль — для можливості продовження чату
     if settings.agent_control_enabled {
-        let session_id = uuid_v4();
-        crate::logger::log_job(job_id, job_name, &format!("Agent control enabled, session: {}", session_id));
-
-        let response = call_agent_new_session(
-            &settings.video_llm_service,
-            &settings.video_llm_model,
-            &agent_prompt,
-            &session_id,
-            Some((job_id, job_name.to_string())),
-            Some(&settings.save_path),
-        ).map_err(|e| format!("Agent error: {}", e))?;
-
-        // Зберігаємо сесію та початкову историю чату
         *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
             session_id: session_id.clone(),
             service: settings.video_llm_service.clone(),
             model: settings.video_llm_model.clone(),
         });
-        agent_chat.lock().unwrap().push(crate::queue::AgentChatMessage {
-            role: "agent".to_string(),
-            content: response,
-        });
-        save_agent_chat_to_file(save_dir, &agent_chat.lock().unwrap());
-    } else {
-        crate::core::llm::call_llm(
-            &settings.video_llm_service,
-            &settings.openrouter_key,
-            &settings.video_llm_model,
-            &agent_prompt,
-            "",
-            0.0,
-            Some((job_id, job_name.to_string())),
-            Some(&settings.save_path),
-            true,
-        ).map_err(|e| format!("Agent error: {}", e))?;
     }
+
+    let _ = response;
 
     if !timeline_path.exists() {
         return Err("Agent did not create timeline.json".to_string());
@@ -1445,19 +1454,20 @@ fn uuid_v4() -> String {
     )
 }
 
-/// Викликає агента з новою сесією (--session-id) залежно від сервісу.
-pub fn call_agent_new_session(
+/// Streaming-версія: on_chunk викликається по мірі отримання chunks від агента.
+pub fn call_agent_new_session_streaming(
     service: &str,
     model: &str,
     prompt: &str,
     session_id: &str,
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
+    on_chunk: impl Fn(&str) + Send,
 ) -> Result<String, String> {
     if service == "Claude Code" {
-        crate::api::claude::call_claude_code_new_session(model, prompt, session_id, job_info, working_dir)
+        crate::api::claude::call_claude_code_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else if service == "Gemini CLI" {
-        crate::api::gemini::call_gemini_new_session(model, prompt, session_id, job_info, working_dir)
+        crate::api::gemini::call_gemini_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }

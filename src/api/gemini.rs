@@ -1,4 +1,5 @@
-use std::process::Command;
+use std::io::{BufReader, Read};
+use std::process::{Command, Stdio};
 use std::sync::{Condvar, Mutex, OnceLock};
 
 /// Лімітер одночасних запитів до Gemini CLI (семафор)
@@ -66,13 +67,15 @@ impl<'a> Drop for GeminiPermit<'a> {
     }
 }
 
-/// Викликає Gemini CLI з новою сесією (--session-id) для агентного контролю.
-pub fn call_gemini_new_session(
+/// Чекає завершення процесу, парсить JSON та викликає `on_chunk` один раз з результатом.
+/// Gemini з --output-format json видає весь output тільки в кінці, тому справжній streaming неможливий.
+pub fn call_gemini_new_session_streaming(
     model: &str,
     user_content: &str,
     session_id: &str,
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
+    on_chunk: impl Fn(&str),
 ) -> Result<String, String> {
     let _permit = GeminiLimiter::get().acquire();
     let log = |msg: &str| {
@@ -91,7 +94,9 @@ pub fn call_gemini_new_session(
         .arg("--prompt").arg(user_content)
         .arg("--yolo")
         .arg("--skip-trust")
-        .arg("--session-id").arg(session_id);
+        .arg("--session-id").arg(session_id)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -99,25 +104,43 @@ pub fn call_gemini_new_session(
 
     log(&format!("Running: gemini --model {} --prompt \"[prompt]\" --yolo --session-id {}", model, session_id));
 
-    let output = cmd.output().map_err(|e| {
-        format!("Failed to launch gemini CLI: {}", e)
-    })?;
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
 
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let response = parse_gemini_json_response(&stdout)
+    let stderr_handle = {
+        let stderr = child.stderr.take().unwrap();
+        std::thread::spawn(move || {
+            let mut s = String::new();
+            let _ = BufReader::new(stderr).read_to_string(&mut s);
+            s
+        })
+    };
+
+    let mut stdout = child.stdout.take().unwrap();
+    let mut full_output = String::new();
+    let mut buf = [0u8; 512];
+
+    loop {
+        let n = stdout.read(&mut buf).map_err(|e| format!("Read error: {}", e))?;
+        if n == 0 { break; }
+        full_output.push_str(&String::from_utf8_lossy(&buf[..n]));
+    }
+
+    let exit_status = child.wait().map_err(|e| format!("Wait error: {}", e))?;
+    let stderr = stderr_handle.join().unwrap_or_default();
+
+    if exit_status.success() {
+        let response = parse_gemini_json_response(&full_output)
             .ok_or_else(|| "Gemini CLI: failed to parse JSON response".to_string())?;
         log("Gemini CLI agent session completed successfully.");
+        on_chunk(&response);
         Ok(response)
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let err_msg = format!(
             "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            output.status.code(), stderr, stdout
+            exit_status.code(), stderr.trim(), full_output.trim()
         );
         log(&err_msg);
-        Err(format!("Gemini CLI error: {}", stderr))
+        Err(format!("Gemini CLI error: {}", stderr.trim()))
     }
 }
 

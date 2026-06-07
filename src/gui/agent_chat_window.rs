@@ -24,6 +24,7 @@ pub fn draw_agent_chat_window(
     };
 
     let job_name = jobs[job_idx].name.clone();
+    let job_status = jobs[job_idx].status.lock().unwrap().clone();
     let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
     let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
     let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
@@ -70,6 +71,12 @@ pub fn draw_agent_chat_window(
                 // Область прокрутки з повідомленнями чату
                 let chat_snapshot = agent_chat_arc.lock().unwrap().clone();
 
+                let is_loading = *agent_chat_loading.lock().unwrap();
+                // Спінер також коли задача Running і останнє повідомлення агента ще коротке
+                let pipeline_generating = job_status == crate::queue::JobStatus::Running
+                    && chat_snapshot.last().map(|m| m.role == "agent").unwrap_or(false);
+                let show_spinner = is_loading || pipeline_generating;
+
                 egui::ScrollArea::vertical()
                     .max_height(340.0)
                     .stick_to_bottom(true)
@@ -107,13 +114,38 @@ pub fn draw_agent_chat_window(
                                 });
                             ui.add_space(4.0);
                         }
-                        if chat_snapshot.is_empty() {
+                        if chat_snapshot.is_empty() && !show_spinner {
                             ui.label(
                                 egui::RichText::new("— история чату порожня —")
                                     .weak()
                                     .size(11.0)
                                     .italics(),
                             );
+                        }
+                        if show_spinner {
+                            egui::Frame::none()
+                                .fill(ui.visuals().widgets.noninteractive.bg_fill)
+                                .inner_margin(egui::Margin::same(8.0))
+                                .rounding(egui::Rounding::same(6.0))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new("Agent")
+                                            .strong()
+                                            .size(11.0)
+                                            .color(egui::Color32::from_rgb(46, 204, 113)),
+                                    );
+                                    ui.add_space(2.0);
+                                    ui.horizontal(|ui| {
+                                        ui.add(egui::Spinner::new().size(14.0));
+                                        ui.add_space(4.0);
+                                        ui.label(
+                                            egui::RichText::new(translate(language, "agent_chat_loading"))
+                                                .size(12.0)
+                                                .weak(),
+                                        );
+                                    });
+                                });
+                            ui.add_space(4.0);
                         }
                     });
 
@@ -130,7 +162,6 @@ pub fn draw_agent_chat_window(
                     ui.add_space(4.0);
                 }
 
-                let is_loading = *agent_chat_loading.lock().unwrap();
                 let has_session = agent_session_arc.lock().unwrap().is_some();
 
                 // Поле введення повідомлення (Enter = надіслати, Shift+Enter = новий рядок)
@@ -169,12 +200,14 @@ pub fn draw_agent_chat_window(
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add(
-                            egui::Button::new(
-                                egui::RichText::new(translate(language, "agent_chat_continue_btn")).strong()
-                            )
-                        ).clicked() {
-                            trigger_continue = true;
+                        if job_settings.agent_control_enabled {
+                            if ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new(translate(language, "agent_chat_continue_btn")).strong()
+                                )
+                            ).clicked() {
+                                trigger_continue = true;
+                            }
                         }
                     });
                 });
