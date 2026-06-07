@@ -118,6 +118,7 @@ pub fn draw_video_section(
     video_llm_model_openrouter: &mut String,
     video_llm_model_claude: &mut String,
     video_llm_model_gemini: &mut String,
+    video_llm_model_codex: &mut String,
     video_llm_temperature: &mut f32,
     video_agent_prompt: &mut String,
     video_llm_model_search: &mut String,
@@ -133,9 +134,7 @@ pub fn draw_video_section(
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
-        // Якщо обрано Claude Code або Gemini CLI, то режим нарізання тексту не показуємо,
-        // а примусово встановлюємо його у "full" (без нарізання).
-        let is_cli_service = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI";
+        let is_cli_service = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI";
         if is_cli_service {
             *text_split_mode = "full".to_string();
         } else {
@@ -173,6 +172,8 @@ pub fn draw_video_section(
                     translate(language, "translation_service_claude_code")
                 } else if video_llm_service == "Gemini CLI" {
                     translate(language, "translation_service_gemini_cli")
+                } else if video_llm_service == "Codex CLI" {
+                    translate(language, "translation_service_codex_cli")
                 } else if video_llm_service == "OpenRouter" {
                     translate(language, "translation_service_openrouter")
                 } else {
@@ -184,6 +185,7 @@ pub fn draw_video_section(
                 ui.selectable_value(video_llm_service, "OpenRouter".to_string(), translate(language, "translation_service_openrouter"));
                 ui.selectable_value(video_llm_service, "Claude Code".to_string(), translate(language, "translation_service_claude_code"));
                 ui.selectable_value(video_llm_service, "Gemini CLI".to_string(), translate(language, "translation_service_gemini_cli"));
+                ui.selectable_value(video_llm_service, "Codex CLI".to_string(), translate(language, "translation_service_codex_cli"));
             });
 
         // При зміні сервісу — відновлюємо відповідну збережену модель
@@ -194,6 +196,8 @@ pub fn draw_video_section(
                 *video_llm_model_claude = video_llm_model.clone();
             } else if previous_llm_service == "Gemini CLI" {
                 *video_llm_model_gemini = video_llm_model.clone();
+            } else if previous_llm_service == "Codex CLI" {
+                *video_llm_model_codex = video_llm_model.clone();
             }
             if video_llm_service == "OpenRouter" {
                 *video_llm_model = video_llm_model_openrouter.clone();
@@ -201,6 +205,8 @@ pub fn draw_video_section(
                 *video_llm_model = if video_llm_model_claude.is_empty() { "sonnet".to_string() } else { video_llm_model_claude.clone() };
             } else if video_llm_service == "Gemini CLI" {
                 *video_llm_model = if video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { video_llm_model_gemini.clone() };
+            } else if video_llm_service == "Codex CLI" {
+                *video_llm_model = if video_llm_model_codex.is_empty() { "gpt-5.4-mini".to_string() } else { video_llm_model_codex.clone() };
             }
         }
 
@@ -270,8 +276,8 @@ pub fn draw_video_section(
                 .size(11.0)
         );
 
-        // Поле інструкції агенту — лише при Claude Code або Gemini CLI
-        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI";
+        // Поле інструкції агенту — лише при Claude Code або Gemini CLI або Codex CLI
+        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI";
         if is_agent_mode {
             ui.add_space(8.0);
             ui.label(egui::RichText::new(translate(language, "video_agent_prompt_label")).strong());
@@ -402,6 +408,16 @@ pub fn draw_video_section(
                         ui.selectable_value(video_llm_model, "gemini-2.5-flash-lite".to_string(), "gemini-2.5-flash-lite");
                     });
                 *video_llm_model_gemini = video_llm_model.clone();
+            } else if video_llm_service == "Codex CLI" {
+                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.add_space(4.0);
+                egui::ComboBox::from_id_salt("video_llm_codex_model")
+                    .selected_text(if video_llm_model.is_empty() { "gpt-5.4-mini" } else { video_llm_model.as_str() })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(video_llm_model, "gpt-5.5".to_string(), "gpt-5.5");
+                        ui.selectable_value(video_llm_model, "gpt-5.4-mini".to_string(), "gpt-5.4-mini");
+                    });
+                *video_llm_model_codex = video_llm_model.clone();
             } else {
                 // OpenRouter — дропдаун з пошуком
                 ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());

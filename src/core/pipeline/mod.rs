@@ -1071,7 +1071,8 @@ fn run_video_branch(
 
     // В агентному режимі сегменти беруться з timeline.json, LLM для промтів не викликається
     let is_agent_mode = settings.video_llm_service == "Claude Code"
-        || settings.video_llm_service == "Gemini CLI";
+        || settings.video_llm_service == "Gemini CLI"
+        || settings.video_llm_service == "Codex CLI";
 
     // Визначаємо текст: перекладений якщо є, інакше оригінал
     let source_text = if settings.translation_enabled {
@@ -1402,12 +1403,25 @@ fn run_agent_timeline(
     crate::logger::log_job(job_id, job_name, &format!("Agent session: {}", session_id));
 
     // Початкове повідомлення з аргументами запуску — chunks додаватимуться після нього
-    let initial_text = format!(
-        "Running: {} --model {} --session-id {}\n\n",
-        settings.video_llm_service,
-        settings.video_llm_model,
-        session_id,
-    );
+    let initial_text = if settings.video_llm_service == "Codex CLI" {
+        format!(
+            "Running: codex exec --model {}\n\n",
+            settings.video_llm_model
+        )
+    } else if settings.video_llm_service == "Claude Code" {
+        format!(
+            "Running: claude --model {} --session-id {}\n\n",
+            settings.video_llm_model,
+            session_id
+        )
+    } else {
+        format!(
+            "Running: {} --model {} --session-id {}\n\n",
+            settings.video_llm_service,
+            settings.video_llm_model,
+            session_id
+        )
+    };
     agent_chat.lock().unwrap().push(crate::queue::AgentChatMessage {
         role: "agent".to_string(),
         content: initial_text,
@@ -1417,7 +1431,7 @@ fn run_agent_timeline(
     let agent_chat_for_chunk = Arc::clone(&agent_chat);
     let ctx_for_chunk = ctx.clone();
 
-    let response = call_agent_new_session_streaming(
+    let (response, actual_session_id) = call_agent_new_session_streaming(
         &settings.video_llm_service,
         &settings.video_llm_model,
         &agent_prompt,
@@ -1438,10 +1452,22 @@ fn run_agent_timeline(
     // Сесію зберігаємо тільки якщо увімкнено контроль — для можливості продовження чату
     if settings.agent_control_enabled {
         *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
-            session_id: session_id.clone(),
+            session_id: actual_session_id.clone(),
             service: settings.video_llm_service.clone(),
             model: settings.video_llm_model.clone(),
         });
+
+        // Оновимо початковий текст у чаті, щоб показати реальний session id для Codex CLI
+        if settings.video_llm_service == "Codex CLI" {
+            let mut chat = agent_chat.lock().unwrap();
+            if let Some(first) = chat.first_mut() {
+                first.content = format!(
+                    "Running: codex exec --model {} [Session: {}]\n\n",
+                    settings.video_llm_model,
+                    actual_session_id
+                );
+            }
+        }
     }
 
     let _ = response;
@@ -1504,11 +1530,13 @@ pub fn call_agent_new_session_streaming(
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
     on_chunk: impl Fn(&str) + Send,
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     if service == "Claude Code" {
         crate::api::claude::call_claude_code_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else if service == "Gemini CLI" {
         crate::api::gemini::call_gemini_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
+    } else if service == "Codex CLI" {
+        crate::api::codex::call_codex_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
@@ -1527,6 +1555,8 @@ pub fn call_agent_resume(
         crate::api::claude::call_claude_code_resume(model, message, session_id, job_info, working_dir)
     } else if service == "Gemini CLI" {
         crate::api::gemini::call_gemini_resume(model, message, session_id, job_info, working_dir)
+    } else if service == "Codex CLI" {
+        crate::api::codex::call_codex_resume(model, message, session_id, job_info, working_dir)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
@@ -1692,12 +1722,14 @@ pub fn run_pipeline(
             }
         }
 
-        // При агентному режимі (Claude Code / Gemini CLI) гілки виконуються послідовно:
+        // При агентному режимі (Claude Code / Gemini CLI / Codex CLI) гілки виконуються послідовно:
         // AV → Агент → Медіа. В звичайному режимі — паралельно.
         let run_av = settings.voiceover_enabled;
         let run_video = settings.video_enabled;
         let is_agent_mode = run_video &&
-            (settings.video_llm_service == "Claude Code" || settings.video_llm_service == "Gemini CLI");
+            (settings.video_llm_service == "Claude Code"
+                || settings.video_llm_service == "Gemini CLI"
+                || settings.video_llm_service == "Codex CLI");
 
         if is_agent_mode {
             // === Агентний режим: послідовно ===

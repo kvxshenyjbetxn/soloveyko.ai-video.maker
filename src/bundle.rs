@@ -462,6 +462,15 @@ pub fn new_cli_command(name: &str) -> std::process::Command {
     #[cfg(target_os = "windows")]
     {
         let mut cmd = std::process::Command::new("cmd");
+        if name == "codex" {
+            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+                let codex_candidate = format!("{}\\Programs\\OpenAI\\Codex\\bin\\codex.exe", local_app_data);
+                if std::path::Path::new(&codex_candidate).exists() {
+                    cmd.args(&["/C", &codex_candidate]);
+                    return cmd;
+                }
+            }
+        }
         cmd.args(&["/C", name]);
         cmd
     }

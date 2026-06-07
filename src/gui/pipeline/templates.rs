@@ -29,6 +29,7 @@ pub fn draw_templates_section(
     translation_model_openrouter: &mut String,
     translation_model_claude: &mut String,
     translation_model_gemini: &mut String,
+    translation_model_codex: &mut String,
     video_service: &mut String,
     video_media_type: &mut String,
     text_split_mode: &mut String,
@@ -40,6 +41,7 @@ pub fn draw_templates_section(
     video_llm_model_openrouter: &mut String,
     video_llm_model_claude: &mut String,
     video_llm_model_gemini: &mut String,
+    video_llm_model_codex: &mut String,
     video_llm_temperature: &mut f32,
     translation_temperature: &mut f32,
     translation_service: &mut String,
@@ -133,6 +135,7 @@ pub fn draw_templates_section(
                             *translation_model_openrouter = template.translation_model_openrouter;
                             *translation_model_claude = if template.translation_model_claude.is_empty() { "sonnet".to_string() } else { template.translation_model_claude };
                             *translation_model_gemini = if template.translation_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { template.translation_model_gemini };
+                            *translation_model_codex = if template.translation_model_codex.is_empty() { "o3-mini".to_string() } else { template.translation_model_codex };
 
                             if template.translation_service == "OpenRouter" && translation_model_openrouter.is_empty() {
                                 *translation_model_openrouter = template.translation_model.clone();
@@ -142,6 +145,9 @@ pub fn draw_templates_section(
                             }
                             if template.translation_service == "Gemini CLI" && translation_model_gemini.is_empty() {
                                 *translation_model_gemini = template.translation_model.clone();
+                            }
+                            if template.translation_service == "Codex CLI" && translation_model_codex.is_empty() {
+                                *translation_model_codex = template.translation_model.clone();
                             }
 
                             *video_service = template.video_service;
@@ -154,11 +160,13 @@ pub fn draw_templates_section(
                             *video_llm_model_openrouter = template.video_llm_model_openrouter.clone();
                             *video_llm_model_claude = if template.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { template.video_llm_model_claude.clone() };
                             *video_llm_model_gemini = if template.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { template.video_llm_model_gemini.clone() };
+                            *video_llm_model_codex = if template.video_llm_model_codex.is_empty() { "o3-mini".to_string() } else { template.video_llm_model_codex.clone() };
                             *video_llm_temperature = template.video_llm_temperature;
                             *video_llm_model = match template.video_llm_service.as_str() {
                                 "OpenRouter" => template.video_llm_model_openrouter.clone(),
                                 "Claude Code" => video_llm_model_claude.clone(),
                                 "Gemini CLI" => video_llm_model_gemini.clone(),
+                                "Codex CLI" => video_llm_model_codex.clone(),
                                 _ => template.video_llm_model.clone(),
                             };
                             *translation_temperature = template.translation_temperature;

@@ -149,6 +149,8 @@ pub fn call_llm(
         crate::api::claude::call_claude_code(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
     } else if service == "Gemini CLI" {
         crate::api::gemini::call_gemini_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+    } else if service == "Codex CLI" {
+        crate::api::codex::call_codex(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
     } else {
         call_openrouter(key, model, user_content, temperature, job_info)
     }

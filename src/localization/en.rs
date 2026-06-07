@@ -148,6 +148,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "translation_service_openrouter" => "OpenRouter",
         "translation_service_claude_code" => "Claude Code",
         "translation_service_gemini_cli" => "Gemini CLI",
+        "translation_service_codex_cli" => "Codex CLI",
         "tab_logs" => "Log",
         "logs_clear" => "🗑 Clear log",
         "logs_copy" => "📋 Copy",
@@ -160,6 +161,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "settings_openrouter_threads" => "Max OpenRouter threads",
         "settings_claude_threads" => "Max Claude Code threads",
         "settings_gemini_threads" => "Max Gemini CLI threads",
+        "settings_codex_threads" => "Max Codex CLI threads",
         "settings_googler_image_threads" => "Max Googler image threads",
         "settings_googler_video_threads" => "Max Googler video threads",
         "googler_key_hint" => "Enter Googler API key...",
@@ -245,6 +247,7 @@ pub fn translate_en(key: &str) -> &'static str {
 
         "welcome_gemini_desc" => "Google Gemini CLI — use your Gemini subscription for prompt generation",
         "welcome_claude_desc" => "Claude Code CLI — use your Claude subscription for text tasks",
+        "welcome_codex_desc" => "Codex CLI — use local models and agents for workflow automation",
         "welcome_dont_show" => "Don't show on next launch",
         "welcome_close_btn" => "Got it",
         "welcome_checking" => "checking...",

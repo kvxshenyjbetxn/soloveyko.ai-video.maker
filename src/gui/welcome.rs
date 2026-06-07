@@ -26,6 +26,7 @@ pub type FfmpegDownload = BinaryDownload;
 pub struct ToolChecks {
     pub gemini: Arc<Mutex<ToolStatus>>,
     pub claude: Arc<Mutex<ToolStatus>>,
+    pub codex: Arc<Mutex<ToolStatus>>,
     pub ffmpeg: Arc<Mutex<ToolStatus>>,
     pub ffmpeg_download: Arc<Mutex<BinaryDownload>>,
     pub whisper: Arc<Mutex<ToolStatus>>,
@@ -41,6 +42,7 @@ impl ToolChecks {
         Self {
             gemini: Arc::new(Mutex::new(ToolStatus::Checking)),
             claude: Arc::new(Mutex::new(ToolStatus::Checking)),
+            codex: Arc::new(Mutex::new(ToolStatus::Checking)),
             ffmpeg: Arc::new(Mutex::new(ToolStatus::Checking)),
             ffmpeg_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
             whisper: Arc::new(Mutex::new(ToolStatus::Checking)),
@@ -55,6 +57,7 @@ impl ToolChecks {
     pub fn restart(&self, ctx: egui::Context) {
         *self.gemini.lock().unwrap() = ToolStatus::Checking;
         *self.claude.lock().unwrap() = ToolStatus::Checking;
+        *self.codex.lock().unwrap() = ToolStatus::Checking;
         *self.ffmpeg.lock().unwrap() = ToolStatus::Checking;
         *self.ffmpeg_download.lock().unwrap() = BinaryDownload::Idle;
         *self.whisper.lock().unwrap() = ToolStatus::Checking;
@@ -72,6 +75,7 @@ impl ToolChecks {
     pub fn start(&self, ctx: egui::Context) {
         Self::check("gemini", "--version", Arc::clone(&self.gemini), ctx.clone());
         Self::check("claude", "--version", Arc::clone(&self.claude), ctx.clone());
+        Self::check("codex", "--version", Arc::clone(&self.codex), ctx.clone());
         Self::check_ffmpeg(
             Arc::clone(&self.ffmpeg),
             Arc::clone(&self.ffmpeg_download),
@@ -303,6 +307,7 @@ pub fn draw_welcome_dialog(
 
             let gemini_status = checks.gemini.lock().unwrap().clone();
             let claude_status = checks.claude.lock().unwrap().clone();
+            let codex_status = checks.codex.lock().unwrap().clone();
             let ffmpeg_status = checks.ffmpeg.lock().unwrap().clone();
             let ffmpeg_download = checks.ffmpeg_download.lock().unwrap().clone();
             let whisper_status = checks.whisper.lock().unwrap().clone();
@@ -313,6 +318,8 @@ pub fn draw_welcome_dialog(
             draw_tool_row(ui, "Gemini CLI", &gemini_status, translate(language, "welcome_gemini_desc"), language);
             ui.add_space(6.0);
             draw_tool_row(ui, "Claude Code", &claude_status, translate(language, "welcome_claude_desc"), language);
+            ui.add_space(6.0);
+            draw_tool_row(ui, "Codex CLI", &codex_status, translate(language, "welcome_codex_desc"), language);
             ui.add_space(6.0);
             draw_download_row(ui, "FFmpeg", &ffmpeg_status, &ffmpeg_download, translate(language, "welcome_ffmpeg_desc"), language);
             ui.add_space(6.0);

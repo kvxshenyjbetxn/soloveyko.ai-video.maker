@@ -75,7 +75,7 @@ pub fn call_claude_code_new_session_streaming(
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
     on_chunk: impl Fn(&str),
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     let _permit = ClaudeLimiter::get().acquire();
     let log = |msg: &str| {
         if let Some((id, ref name)) = job_info {
@@ -133,7 +133,7 @@ pub fn call_claude_code_new_session_streaming(
 
     if exit_status.success() {
         log("Claude CLI agent session completed successfully.");
-        Ok(full_output.trim().to_string())
+        Ok((full_output.trim().to_string(), session_id.to_string()))
     } else {
         let err_msg = format!(
             "Claude CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",

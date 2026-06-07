@@ -76,7 +76,7 @@ pub fn call_gemini_new_session_streaming(
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
     on_chunk: impl Fn(&str),
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     let _permit = GeminiLimiter::get().acquire();
     let log = |msg: &str| {
         if let Some((id, ref name)) = job_info {
@@ -133,7 +133,7 @@ pub fn call_gemini_new_session_streaming(
             .ok_or_else(|| "Gemini CLI: failed to parse JSON response".to_string())?;
         log("Gemini CLI agent session completed successfully.");
         on_chunk(&response);
-        Ok(response)
+        Ok((response, session_id.to_string()))
     } else {
         let err_msg = format!(
             "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",

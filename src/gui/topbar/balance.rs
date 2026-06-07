@@ -175,6 +175,7 @@ pub fn draw_threads_window(
     openrouter_max_threads: &mut usize,
     claude_max_threads: &mut usize,
     gemini_max_threads: &mut usize,
+    codex_max_threads: &mut usize,
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     edge_tts_max_threads: &mut usize,
     googler_image_max_threads: &mut usize,
@@ -256,6 +257,29 @@ pub fn draw_threads_window(
                     if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
                         *gemini_max_threads = val;
                         crate::api::gemini::GeminiLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- Codex CLI ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Codex CLI").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::codex::CodexLimiter::get().active_count(), *codex_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_codex_threads"));
+                    let mut val = *codex_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
+                        *codex_max_threads = val;
+                        crate::api::codex::CodexLimiter::get().set_max_threads(val);
                     }
                 });
             });

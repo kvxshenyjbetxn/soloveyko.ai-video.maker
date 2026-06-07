@@ -27,6 +27,7 @@ pub fn draw_translation_section(
     translation_model_openrouter: &mut String,
     translation_model_claude: &mut String,
     translation_model_gemini: &mut String,
+    translation_model_codex: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -45,6 +46,8 @@ pub fn draw_translation_section(
                     translate(language, "translation_service_claude_code")
                 } else if translation_service == "Gemini CLI" {
                     translate(language, "translation_service_gemini_cli")
+                } else if translation_service == "Codex CLI" {
+                    translate(language, "translation_service_codex_cli")
                 } else {
                     translate(language, "translation_service_openrouter")
                 }
@@ -59,6 +62,9 @@ pub fn draw_translation_section(
                 if ui.selectable_value(translation_service, "Gemini CLI".to_string(), translate(language, "translation_service_gemini_cli")).clicked() {
                     service_changed = true;
                 }
+                if ui.selectable_value(translation_service, "Codex CLI".to_string(), translate(language, "translation_service_codex_cli")).clicked() {
+                    service_changed = true;
+                }
             });
 
         if translation_service != &previous_service {
@@ -69,6 +75,8 @@ pub fn draw_translation_section(
                 *translation_model_claude = translation_model.clone();
             } else if previous_service == "Gemini CLI" {
                 *translation_model_gemini = translation_model.clone();
+            } else if previous_service == "Codex CLI" {
+                *translation_model_codex = translation_model.clone();
             }
 
             // Завантажуємо збережену модель для нового сервісу
@@ -85,6 +93,12 @@ pub fn draw_translation_section(
                     "gemini-2.5-flash".to_string()
                 } else {
                     translation_model_gemini.clone()
+                };
+            } else if translation_service == "Codex CLI" {
+                *translation_model = if translation_model_codex.is_empty() {
+                    "gpt-5.4-mini".to_string()
+                } else {
+                    translation_model_codex.clone()
                 };
             }
             service_changed = true;
@@ -105,6 +119,14 @@ pub fn draw_translation_section(
                 && translation_model != "gemini-2.5-flash-lite"
             {
                 *translation_model = "gemini-2.5-flash".to_string();
+            }
+        }
+        if service_changed && translation_service == "Codex CLI" {
+            // Перевіряємо, чи модель валідна для Codex CLI
+            if translation_model != "gpt-5.5"
+                && translation_model != "gpt-5.4-mini"
+            {
+                *translation_model = "gpt-5.4-mini".to_string();
             }
         }
 
@@ -248,6 +270,17 @@ pub fn draw_translation_section(
                     ui.selectable_value(translation_model, "gemini-3.1-pro-preview".to_string(), "gemini-3.1-pro-preview");
                     ui.selectable_value(translation_model, "gemini-2.5-flash-lite".to_string(), "gemini-2.5-flash-lite");
                 });
+        } else if translation_service == "Codex CLI" {
+            // Вибір моделі для Codex CLI
+            ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+            ui.add_space(4.0);
+
+            egui::ComboBox::from_id_salt("codex_cli_model")
+                .selected_text(if translation_model.is_empty() { "gpt-5.4-mini" } else { translation_model.as_str() })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(translation_model, "gpt-5.5".to_string(), "gpt-5.5");
+                    ui.selectable_value(translation_model, "gpt-5.4-mini".to_string(), "gpt-5.4-mini");
+                });
         } else {
             // Вибір моделі OpenRouter
             ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
@@ -336,7 +369,7 @@ pub fn draw_translation_section(
             }
         }
 
-        if translation_service != "Claude Code" && translation_service != "Gemini CLI" {
+        if translation_service != "Claude Code" && translation_service != "Gemini CLI" && translation_service != "Codex CLI" {
             ui.add_space(8.0);
 
             // Повзунок температури моделі
@@ -362,6 +395,8 @@ pub fn draw_translation_section(
             *translation_model_claude = translation_model.clone();
         } else if translation_service == "Gemini CLI" {
             *translation_model_gemini = translation_model.clone();
+        } else if translation_service == "Codex CLI" {
+            *translation_model_codex = translation_model.clone();
         }
 
         ui.add_space(6.0);

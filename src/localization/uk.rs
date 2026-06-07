@@ -148,6 +148,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "translation_service_openrouter" => "OpenRouter",
         "translation_service_claude_code" => "Claude Code",
         "translation_service_gemini_cli" => "Gemini CLI",
+        "translation_service_codex_cli" => "Codex CLI",
         "tab_logs" => "Лог",
         "logs_clear" => "🗑 Очистити лог",
         "logs_copy" => "📋 Копіювати",
@@ -160,6 +161,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "settings_openrouter_threads" => "Макс. потоків OpenRouter",
         "settings_claude_threads" => "Макс. потоків Claude Code",
         "settings_gemini_threads" => "Макс. потоків Gemini CLI",
+        "settings_codex_threads" => "Макс. потоків Codex CLI",
         "settings_googler_image_threads" => "Макс. потоків зображень Googler",
         "settings_googler_video_threads" => "Макс. потоків відео Googler",
         "googler_key_hint" => "Введіть API ключ Googler...",
@@ -245,6 +247,7 @@ pub fn translate_uk(key: &str) -> &'static str {
 
         "welcome_gemini_desc" => "Google Gemini CLI — для роботи з підпискою Gemini та генерації промтів",
         "welcome_claude_desc" => "Claude Code CLI — для роботи з підпискою Claude та текстових завдань",
+        "welcome_codex_desc" => "Codex CLI — для роботи з моделями та локальних агентних завдань",
         "welcome_dont_show" => "Не показувати при наступному запуску",
         "welcome_close_btn" => "Зрозуміло",
         "welcome_checking" => "перевірка...",
