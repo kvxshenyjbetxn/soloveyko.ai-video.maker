@@ -23,6 +23,8 @@ pub const XFADE_TRANSITIONS: &[&str] = &[
 pub fn draw_editing_section(
     ui: &mut egui::Ui,
     language: Language,
+    capcut_enabled: &mut bool,
+    capcut_draft_path: &mut String,
     montage_service: &mut String,
     montage_fps: &mut u32,
     montage_preset: &mut String,
@@ -38,7 +40,35 @@ pub fn draw_editing_section(
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
-        // Вибір сервісу
+        // Перемикач: CapCut або FFmpeg
+        ui.horizontal(|ui| {
+            crate::gui::pipeline::toggle_switch(ui, capcut_enabled);
+            ui.label(egui::RichText::new(translate(language, "capcut_toggle_label")).strong());
+        });
+
+        if *capcut_enabled {
+            // ─── Режим CapCut ────────────────────────────────────────────────
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(translate(language, "capcut_draft_path_label")).strong());
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                let w = (ui.available_width() - 60.0).max(60.0);
+                ui.add(egui::TextEdit::singleline(capcut_draft_path)
+                    .hint_text(translate(language, "capcut_draft_path_hint"))
+                    .desired_width(w));
+                if ui.button("📁").on_hover_text(translate(language, "capcut_draft_path_hint")).clicked() {
+                    if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                        *capcut_draft_path = folder.to_string_lossy().into_owned();
+                    }
+                }
+            });
+            ui.add_space(6.0);
+            return;
+        }
+
+        ui.add_space(8.0);
+
+        // Вибір сервісу (FFmpeg)
         ui.label(egui::RichText::new(translate(language, "montage_service_label")).strong());
         ui.add_space(4.0);
 

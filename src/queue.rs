@@ -112,6 +112,10 @@ pub struct JobSettings {
     pub montage_enabled: bool,
     #[allow(dead_code)]
     pub montage_service: String,
+    /// Генерувати CapCut-проект замість локального FFmpeg-монтажу.
+    pub capcut_enabled: bool,
+    /// Шлях до кореневого каталогу чернеток CapCut.
+    pub capcut_draft_path: String,
     pub montage_fps: u32,
     pub montage_preset: String,
     pub montage_bitrate: u32,

@@ -78,6 +78,8 @@ pub fn draw_templates_section(
     montage_image_zoom_scale: &mut f32,
     montage_image_shake_enabled: &mut bool,
     montage_image_shake_intensity: &mut f32,
+    capcut_enabled: &mut bool,
+    capcut_draft_path: &mut String,
     overlay_triggers_enabled: &mut bool,
     overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) {
@@ -192,6 +194,8 @@ pub fn draw_templates_section(
                             *montage_image_zoom_scale = template.montage_image_zoom_scale;
                             *montage_image_shake_enabled = template.montage_image_shake_enabled;
                             *montage_image_shake_intensity = template.montage_image_shake_intensity;
+                            *capcut_enabled = template.capcut_enabled;
+                            *capcut_draft_path = template.capcut_draft_path;
                             *overlay_triggers_enabled = template.overlay_triggers_enabled;
                             *overlay_triggers = template.overlay_triggers;
                             *template_status = Some(format!(

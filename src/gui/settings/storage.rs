@@ -37,6 +37,7 @@ fn default_whisper_language() -> String { "auto".to_string() }
 fn default_whisper_model() -> String { "base".to_string() }
 fn default_whisper_max_line_width() -> usize { 42 }
 fn default_montage_service() -> String { "FFmpeg".to_string() }
+fn default_capcut_draft_path() -> String { String::new() }
 fn default_montage_fps() -> u32 { 30 }
 fn default_montage_preset() -> String { "medium".to_string() }
 fn default_montage_bitrate() -> u32 { 8 }
@@ -297,6 +298,12 @@ pub struct AppSettings {
     /// Інтенсивність покачування для зображень (0.1..1.0)
     #[serde(default = "default_montage_image_shake_intensity")]
     pub montage_image_shake_intensity: f32,
+    /// Генерувати CapCut-проект замість локального FFmpeg-монтажу
+    #[serde(default)]
+    pub capcut_enabled: bool,
+    /// Шлях до кореневого каталогу чернеток CapCut
+    #[serde(default = "default_capcut_draft_path")]
+    pub capcut_draft_path: String,
     /// Сервіс ЛЛМ для генерації промтів відеоряду ("None", "OpenRouter", "Claude Code", "Gemini CLI")
     #[serde(default = "default_video_llm_service")]
     pub video_llm_service: String,
@@ -404,6 +411,8 @@ impl Default for AppSettings {
             montage_image_zoom_scale: 1.3,
             montage_image_shake_enabled: false,
             montage_image_shake_intensity: 0.5,
+            capcut_enabled: false,
+            capcut_draft_path: String::new(),
             video_llm_service: "None".to_string(),
             video_llm_model: String::new(),
             video_llm_model_openrouter: String::new(),
@@ -692,6 +701,12 @@ pub struct PipelineTemplate {
     /// Інтенсивність покачування для зображень (0.1..1.0)
     #[serde(default = "default_montage_image_shake_intensity")]
     pub montage_image_shake_intensity: f32,
+    /// Генерувати CapCut-проект замість локального FFmpeg-монтажу
+    #[serde(default)]
+    pub capcut_enabled: bool,
+    /// Шлях до кореневого каталогу чернеток CapCut
+    #[serde(default = "default_capcut_draft_path")]
+    pub capcut_draft_path: String,
     /// Сервіс ЛЛМ для генерації промтів відеоряду
     #[serde(default = "default_video_llm_service")]
     pub video_llm_service: String,
@@ -786,6 +801,8 @@ pub fn save_template(
     montage_image_zoom_scale: f32,
     montage_image_shake_enabled: bool,
     montage_image_shake_intensity: f32,
+    capcut_enabled: bool,
+    capcut_draft_path: &str,
     video_llm_service: &str,
     video_llm_model: &str,
     video_llm_model_openrouter: &str,
@@ -864,6 +881,8 @@ pub fn save_template(
             montage_image_zoom_scale,
             montage_image_shake_enabled,
             montage_image_shake_intensity,
+            capcut_enabled,
+            capcut_draft_path: capcut_draft_path.to_string(),
             video_llm_service: video_llm_service.to_string(),
             video_llm_model: video_llm_model.to_string(),
             video_llm_model_openrouter: video_llm_model_openrouter.to_string(),

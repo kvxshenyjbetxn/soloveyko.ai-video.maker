@@ -1,6 +1,7 @@
 pub mod voiceover;
 pub mod timeline;
 pub mod montage;
+pub mod capcut;
 
 use std::sync::{Arc, Condvar, Mutex};
 use eframe::egui;
@@ -1847,7 +1848,7 @@ pub fn run_pipeline(
             ctx.request_repaint();
         }
 
-        // Етап 5: Монтаж
+        // Етап 5: Монтаж (FFmpeg або CapCut)
         if settings.montage_enabled {
             crate::logger::log_job(job_id, &job_name, "Starting montage stage...");
             *montage_stage.lock().unwrap() = crate::queue::StageStatus::Running;
@@ -1855,47 +1856,72 @@ pub fn run_pipeline(
 
             let audio_dur = *audio_duration.lock().unwrap();
             let save_dir = std::path::Path::new(&settings.save_path);
-            let job_id_log = job_id;
-            let job_name_log = job_name.clone();
 
-            let montage_progress_arc = Arc::clone(&montage_progress);
-            let ctx_montage = ctx.clone();
-
-            match crate::core::pipeline::montage::run_montage(
-                save_dir,
-                &job_name,
-                audio_dur,
-                settings.montage_fps,
-                &settings.montage_preset,
-                settings.montage_bitrate,
-                &settings.montage_transition,
-                settings.montage_transition_duration,
-                settings.subtitles_enabled,
-                settings.overlay_triggers_enabled,
-                &settings.overlay_triggers,
-                settings.montage_image_zoom_enabled,
-                settings.montage_image_zoom_intensity,
-                &settings.montage_image_zoom_mode,
-                settings.montage_image_zoom_scale,
-                settings.montage_image_shake_enabled,
-                settings.montage_image_shake_intensity,
-                |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
-                move |pct| {
-                    *montage_progress_arc.lock().unwrap() = Some(pct);
-                    ctx_montage.request_repaint();
-                },
-            ) {
-                Ok(size) => {
-                    *montage_file_size.lock().unwrap() = Some(size);
-                    crate::logger::log_job(job_id, &job_name, "Montage complete.");
-                    *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+            if settings.capcut_enabled {
+                let job_id_log = job_id;
+                let job_name_log = job_name.clone();
+                let draft_root = std::path::Path::new(&settings.capcut_draft_path);
+                match crate::core::pipeline::capcut::generate_capcut_project(
+                    save_dir,
+                    draft_root,
+                    &job_name,
+                    audio_dur,
+                    |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
+                ) {
+                    Ok(_) => {
+                        crate::logger::log_job(job_id, &job_name, "CapCut project generated.");
+                        *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                    }
+                    Err(e) => {
+                        crate::logger::log_job(job_id, &job_name, &format!("CapCut failed: {}", e));
+                        *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(format!("CapCut: {}", e));
+                        ctx.request_repaint();
+                        return;
+                    }
                 }
-                Err(e) => {
-                    crate::logger::log_job(job_id, &job_name, &format!("Montage failed: {}", e));
-                    *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(format!("Montage: {}", e));
-                    ctx.request_repaint();
-                    return;
+            } else {
+                let job_id_log = job_id;
+                let job_name_log = job_name.clone();
+                let montage_progress_arc = Arc::clone(&montage_progress);
+                let ctx_montage = ctx.clone();
+
+                match crate::core::pipeline::montage::run_montage(
+                    save_dir,
+                    &job_name,
+                    audio_dur,
+                    settings.montage_fps,
+                    &settings.montage_preset,
+                    settings.montage_bitrate,
+                    &settings.montage_transition,
+                    settings.montage_transition_duration,
+                    settings.subtitles_enabled,
+                    settings.overlay_triggers_enabled,
+                    &settings.overlay_triggers,
+                    settings.montage_image_zoom_enabled,
+                    settings.montage_image_zoom_intensity,
+                    &settings.montage_image_zoom_mode,
+                    settings.montage_image_zoom_scale,
+                    settings.montage_image_shake_enabled,
+                    settings.montage_image_shake_intensity,
+                    |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
+                    move |pct| {
+                        *montage_progress_arc.lock().unwrap() = Some(pct);
+                        ctx_montage.request_repaint();
+                    },
+                ) {
+                    Ok(size) => {
+                        *montage_file_size.lock().unwrap() = Some(size);
+                        crate::logger::log_job(job_id, &job_name, "Montage complete.");
+                        *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                    }
+                    Err(e) => {
+                        crate::logger::log_job(job_id, &job_name, &format!("Montage failed: {}", e));
+                        *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(format!("Montage: {}", e));
+                        ctx.request_repaint();
+                        return;
+                    }
                 }
             }
             ctx.request_repaint();
@@ -1957,7 +1983,7 @@ fn run_final_stages(
         ctx.request_repaint();
     }
 
-    // Монтаж
+    // Монтаж (FFmpeg або CapCut)
     if settings.montage_enabled {
         crate::logger::log_job(job_id, job_name, "Starting montage stage...");
         *montage_stage.lock().unwrap() = crate::queue::StageStatus::Running;
@@ -1967,6 +1993,36 @@ fn run_final_stages(
         let save_dir = std::path::Path::new(&settings.save_path);
         let job_id_log = job_id;
         let job_name_log = job_name.to_string();
+
+        if settings.capcut_enabled {
+            if settings.capcut_draft_path.is_empty() {
+                let msg = "CapCut: не вказано папку чернеток CapCut";
+                crate::logger::log_job(job_id, job_name, msg);
+                *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                return Err(msg.to_string());
+            }
+            let draft_root = std::path::Path::new(&settings.capcut_draft_path);
+            match crate::core::pipeline::capcut::generate_capcut_project(
+                save_dir,
+                draft_root,
+                job_name,
+                audio_dur,
+                |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
+            ) {
+                Ok(_) => {
+                    crate::logger::log_job(job_id, job_name, "CapCut project generated.");
+                    *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                }
+                Err(e) => {
+                    let msg = format!("CapCut: {}", e);
+                    crate::logger::log_job(job_id, job_name, &msg);
+                    *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                    return Err(msg);
+                }
+            }
+            return Ok(());
+        }
+
         let montage_progress_arc = Arc::clone(montage_progress);
         let ctx_montage = ctx.clone();
 

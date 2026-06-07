@@ -51,6 +51,8 @@ src/
 │       │   ├── mod.rs           — реекспорт run_montage
 │       │   ├── montage.rs       — run_montage: збірка фінального відео через FFmpeg filter_complex_script
 │       │   └── trigger.rs       — OverlayTrigger структура; find_text_timing: нечіткий пошук фрази у ASS/SRT субтитрах для визначення часу накладки
+│       ├── capcut/
+│       │   └── mod.rs           — generate_capcut_project: генерує повноцінний проект CapCut зі структури timeline.json (draft_content.json, draft_meta_info.json, Timelines/)
 │       └── timeline/
 │           ├── mod.rs           — реекспорт модулів timeline
 │           ├── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
@@ -99,7 +101,7 @@ src/
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт); при виборі Claude Code / Gemini CLI показується додаткове поле video_agent_prompt з кнопками вставки {{srt}} та {{path}}
 │   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI/Whisper AMD, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper/Whisper AMD, ключ AssemblyAI)
-│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами, ефект зуму та покачування для зображень)
+│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами, ефект зуму та покачування для зображень); toggle «Генерувати CapCut проект» + поле шляху до папки чернеток CapCut
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
 │       ├── general.rs           — вкладка "Основні" (тема, акцент, мова, відкрити папку)
@@ -314,7 +316,7 @@ pub struct ClipDragState {
 
 ### Черга задач (`src/queue.rs`)
 
-- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`, `montage_image_zoom_enabled`, `montage_image_zoom_mode` (`"alternate"` / `"oscillate"`), `montage_image_zoom_scale` (1.1..2.0), `montage_image_shake_enabled`, `montage_image_shake_intensity`.
+- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`, `montage_image_zoom_enabled`, `montage_image_zoom_mode` (`"alternate"` / `"oscillate"`), `montage_image_zoom_scale` (1.1..2.0), `montage_image_shake_enabled`, `montage_image_shake_intensity`, `capcut_enabled`, `capcut_draft_path`.
 - **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) / AwaitingAgentControl (пауза для чату з агентом) / AwaitingMontageControl (пауза перед монтажем для редактора) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку. `AwaitingAgentControl` відображається синім кольором у картці задачі. `AwaitingMontageControl` відображається зеленим.
 - **`media_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль зображень» на момент додавання задачі в чергу. Якщо `false` — пайплайн не зупиняється після відеоряду.
 - **`resume_from_stage: Option<RetryStage>`** у `JobSettings` — якщо `Some(stage)`, кнопка «▶ Запустити» викликає `retry_from_stage(stage, ...)` замість `run_pipeline`. Встановлюється автоматично при відновленні задачі через діалог `ResumePendingData`. `None` — звичайний запуск з початку.
@@ -375,7 +377,7 @@ pub struct ClipDragState {
 
 **`run_subtitles_only`** (`mod.rs`) — хелпер, виокремлений з `run_av_branch`. Диспетчеризує генерацію субтитрів (Whisper/WhisperX/AssemblyAI + karaoke) без озвучки. Використовується і в `run_av_branch`, і в `retry_from_stage(Subtitles)`.
 
-**`run_final_stages`** (`mod.rs`) — хелпер для спільної фінальної частини: `build_timeline` (якщо `video_enabled`) → **пауза контролю монтажу** (якщо `montage_enabled && montage_control_enabled`) → `run_montage` (якщо `montage_enabled`). Використовується у всіх retry-гілках щоб не дублювати логіку. Пауза: встановлює статус `AwaitingMontageControl`, блокується на `Condvar::wait()`, після сигналу повертається в `Running`. Приймає `&status` і `&montage_control_resume` як параметри — однакові Arc що й у `run_pipeline`.
+**`run_final_stages`** (`mod.rs`) — хелпер для спільної фінальної частини: `build_timeline` (якщо `video_enabled`) → **пауза контролю монтажу** (якщо `montage_enabled && montage_control_enabled`) → або `generate_capcut_project` (якщо `capcut_enabled`), або `run_montage` (якщо `montage_enabled`). Ці два шляхи взаємовиключні: якщо CapCut увімкнено, FFmpeg-монтаж пропускається. Пауза контролю монтажу: встановлює статус `AwaitingMontageControl`, блокується на `Condvar::wait()`, після сигналу повертається в `Running`. Приймає `&status` і `&montage_control_resume` як параметри — однакові Arc що й у `run_pipeline`.
 
 **Контроль зображень (Media Control):** якщо `settings.media_control_enabled && settings.video_enabled` і відеогілка завершилась успішно (`Some(Ok(()))`), пайплайн встановлює статус `AwaitingMediaControl` та блокується на `Condvar::wait()`. AV-гілка в цей час продовжує виконуватись у власному потоці. Після сигналу від UI (`*lock = true; cvar.notify_one()`) статус повертається в `Running` і пайплайн продовжує до Timeline → Монтаж. Важливо: налаштування `media_control_enabled` знімається на момент додавання задачі в чергу — зміна перемикача після цього не впливає на вже додані задачі.
 
@@ -628,6 +630,48 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - Якщо результат починається з `data:` — розбирає data URI, визначає розширення файлу з mime-типу (mp4/webm/mov/png/webp/gif/jpg), декодує base64 (через крейт `base64 = "0.22"`) і записує байти у `media/{index:04}.{ext}`. Відео-типи мають пріоритет при виборі розширення.
 - Якщо результат — HTTP URL — завантажує через `ureq::get`, розширення береться з кінця URL, зберігає аналогічно.
 
+#### Експорт CapCut проекту (`core/pipeline/capcut/`)
+
+Альтернатива FFmpeg-монтажу: якщо у секції Монтаж увімкнено «Генерувати CapCut проект», замість збірки відео через FFmpeg програма генерує повноцінну структуру CapCut-чернетки, яку CapCut Desktop одразу відкриває.
+
+**Активація:** toggle `capcut_enabled` + поле `capcut_draft_path` (шлях до папки чернеток CapCut, наприклад `E:\capcut\com.lveditor.draft`). Якщо шлях не вказано — пайплайн завершується помилкою.
+
+**Функція `generate_capcut_project`** (`src/core/pipeline/capcut/mod.rs`):
+- Зчитує `timeline.json` — масив сегментів з полями `start_secs`, `end_secs`, `media`.
+- Конвертує секунди → мікросекунди (`secs_to_us`): `(secs * 1_000_000.0) as i64`.
+- Генерує детерміновані UUID через `gen_uuid(seed, counter)` (SHA-подібне хешування `seed + counter`).
+- Створює папку проекту: `{capcut_draft_path}/{project_name}/`.
+
+**Структура файлів що генеруються:**
+```
+{capcut_draft_path}/{project_name}/
+├── draft_meta_info.json          — метадані проекту для CapCut Desktop
+├── draft_content.json            — таймлінія, матеріали, конфіг полотна
+├── .locked                       — порожній lock-файл (CapCut вимагає)
+└── Timelines/
+    └── project.json              — дублікат draft_content.json (для нових версій CapCut)
+```
+
+**`draft_meta_info.json` — критичні поля:**
+- `draft_fold_path` — шлях до папки проекту з **прямими слешами** (`/`): `"E:/capcut/.../ProjectName"`.
+- `draft_root_path` — шлях до батьківської папки чернеток зі **зворотними слешами** (нативний Windows): `"E:\\capcut\\com.lveditor.draft"`. Різниця форматів не випадкова — CapCut вимагає саме цього.
+- `draft_removable_storage_device` — якщо проект НЕ на диску `C:`, цьому полю присвоюється буква диска + двокрапка (`"E:"`). Відсутність поля або порожній рядок для не-C: диска призводить до помилки CapCut «Неприемлемый адрес».
+- `draft_materials` — масив об'єктів `{type, value}` для типів матеріалів 0–8. CapCut перевіряє присутність всіх типів навіть якщо value = [].
+
+**`draft_content.json` — ключові особливості:**
+- `canvas_config.ratio = "original"` — обов'язково, не `"16:9"`.
+- `platform` block, `config` block, `function_assistant_info`, `last_modified_platform` — CapCut відмовляється відкривати проект без цих блоків.
+- `render_index_track_mode_on: true`, `source: "default"`, `draft_type: "video"`.
+- Кожен кліп у треку — об'єкт з 30+ полями: `id`, `is_main_sequence`, `material_id`, `target_timerange: {duration, start}`, `source_timerange: {duration, start}`, `roughcut_time_range: {duration: 33333, start: 0}` (НЕ `-1`, інакше CapCut крашиться).
+- Матеріали зображень/відео — окремий великий JSON-об'єкт (~100 полів). Будується через `serde_json::Map` (не `json!` макрос — recursion limit).
+
+**Обробка `#![recursion_limit = "256"]` у `main.rs`:** великий JSON сегменту в `json!` макросі перевищує стандартний ліміт рекурсії компілятора Rust. Ліміт підвищено в `src/main.rs` щоб уникнути помилки компіляції.
+
+**Два хелпери для шляхів:**
+- `forward_path(p: &Path) -> String` — замінює `\` на `/` (для `draft_fold_path`).
+- `native_path(p: &Path) -> String` — зберігає нативні роздільники ОС (для `draft_root_path`).
+- `drive_letter(p: &Path) -> Option<String>` — витягує букву диска з Windows-шляху.
+
 **Визначення тривалості аудіо** (`core/pipeline/mod.rs`) — після збереження файлу `run_pipeline` зчитує його та визначає тривалість чистим Rust без залежностей:
 - **MP3** (`get_mp3_duration_secs`): знаходить перший валідний MPEG1 Layer3 фрейм, пропускаючи ID3v2 тег. Якщо є Xing/Info VBR заголовок з полем `total_frames` — рахує точно. Якщо CBR — оцінює з розміру файлу та бітрейту.
 - **WAV** (`get_wav_duration_secs`): парсить RIFF-чанки, знаходить `fmt ` (бере `byte_rate`) та `data` (бере розмір даних). `duration = data_size / byte_rate`. Враховує вирівнювання чанків до парного байту.
@@ -692,7 +736,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 Три JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
 - `task_history.json` — `Vec<TaskHistoryEntry>`: список задач що були додані в чергу (максимум 100 записів, старіші обрізаються). Кожен запис містить `{id, name, created_at: i64 (Unix timestamp), template_name: Option<String>, text: String, settings: PipelineTemplate}`. При завантаженні шаблону записується у `template_name`. Текст сценарію зберігається у `text` щоб відновлювати поле редактора разом з налаштуваннями.
 - `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`, `overlay_triggers_enabled`, `overlay_triggers`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`), налаштування медіа та монтажу, а також `capcut_enabled` та `capcut_draft_path`. При завантаженні шаблону всі поля відновлюються повністю.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -931,6 +975,14 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Чітка обводка текстових полів у темних темах:** Для кращої видимості та естетичного сприйняття на темному та AMOLED фонах, у функцію `apply_theme` (`src/theme.rs`) додано примусове налаштування `widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_gray(100))` для неактивних елементів керування. Це забезпечує тонку стильну обводку навколо всіх полів введення замість зливання з фоном.
 
 - **Вирівнювання при переносі логу через `LayoutJob`**: Щоб уникнути зсувів та порожнеч при переносі довгих рядків логів на другу строчку, мітка часу та текст повідомлення об'єднуються в єдиний `egui::text::LayoutJob`. Рядок рендериться як один віджет `egui::Label` і переноситься цілісно під лівий край (під мітку часу), що забезпечує ідеальний вигляд терміналу.
+
+- **CapCut `draft_root_path` vs `draft_fold_path` — різні формати слешів.** `draft_fold_path` — повний шлях до папки проекту з прямими слешами (`forward_path`): CapCut Desktop при читанні цього поля очікує POSIX-формат навіть на Windows. `draft_root_path` — шлях до батьківської папки чернеток з нативними зворотними слешами Windows (`native_path`). Якщо обидва вказати з однаковим форматом — CapCut видає «Неприемлемый адрес».
+
+- **CapCut `draft_removable_storage_device` — обов'язково для не-C: дисків.** CapCut Desktop перевіряє диск проекту. Якщо диск відрізняється від `C:`, поле `draft_removable_storage_device` у `draft_meta_info.json` має містити `"E:"` (або відповідну букву + двокрапку). Відсутнє або порожнє поле для знімного/другого диску → «Неприемлемый адрес».
+
+- **CapCut `roughcut_time_range.start` — НЕ `-1`.** CapCut внутрішньо крашиться при `start: -1` у `roughcut_time_range` кожного сегменту. Правильне значення — `{duration: 33333, start: 0}`.
+
+- **`json!` macro recursion limit для CapCut.** Великий JSON-об'єкт матеріалу (~100 полів) перевищує стандартний ліміт рекурсії компілятора при використанні `json!` макросу. Вирішено двома способами: (1) `serde_json::Map` для найбільшого об'єкту (відеоматеріал) — обходить ліміт повністю; (2) `#![recursion_limit = "256"]` у `main.rs` — для решти великих `json!` об'єктів.
 
 ---
 

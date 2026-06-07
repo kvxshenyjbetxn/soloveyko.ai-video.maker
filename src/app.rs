@@ -315,6 +315,10 @@ pub struct VideoMakerApp {
     pub subtitle_font: String,
     /// Список шрифтів, завантажених із системи (заповнюється при старті).
     pub available_subtitle_fonts: Vec<String>,
+    /// Генерувати CapCut-проект замість локального FFmpeg-монтажу.
+    pub capcut_enabled: bool,
+    /// Шлях до кореневого каталогу чернеток CapCut.
+    pub capcut_draft_path: String,
     /// Сервіс монтажу ("FFmpeg").
     pub montage_service: String,
     /// FPS для монтажу.
@@ -522,6 +526,8 @@ impl Default for VideoMakerApp {
             subtitle_karaoke_scale: 120,
             subtitle_font: "Arial".to_string(),
             available_subtitle_fonts: Vec::new(),
+            capcut_enabled: false,
+            capcut_draft_path: String::new(),
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
             montage_preset: "medium".to_string(),
@@ -859,6 +865,8 @@ impl VideoMakerApp {
             subtitle_karaoke_scale: saved.subtitle_karaoke_scale,
             subtitle_font: saved.subtitle_font.clone(),
             available_subtitle_fonts: crate::gui::subtitle_fonts::load_subtitle_fonts(&cc.egui_ctx),
+            capcut_enabled: saved.capcut_enabled,
+            capcut_draft_path: saved.capcut_draft_path.clone(),
             montage_service: saved.montage_service.clone(),
             montage_fps: saved.montage_fps,
             montage_preset: saved.montage_preset.clone(),
@@ -949,6 +957,8 @@ impl VideoMakerApp {
             subtitle_karaoke_bold: self.subtitle_karaoke_bold,
             subtitle_karaoke_scale: self.subtitle_karaoke_scale,
             subtitle_font: self.subtitle_font.clone(),
+            capcut_enabled: self.capcut_enabled,
+            capcut_draft_path: self.capcut_draft_path.clone(),
             montage_service: self.montage_service.clone(),
             montage_fps: self.montage_fps,
             montage_preset: self.montage_preset.clone(),
@@ -1040,6 +1050,8 @@ impl VideoMakerApp {
         self.subtitle_karaoke_bold = t.subtitle_karaoke_bold;
         self.subtitle_karaoke_scale = t.subtitle_karaoke_scale;
         self.subtitle_font = t.subtitle_font;
+        self.capcut_enabled = t.capcut_enabled;
+        self.capcut_draft_path = t.capcut_draft_path;
         self.montage_service = t.montage_service;
         self.montage_fps = t.montage_fps;
         self.montage_preset = t.montage_preset;
@@ -1315,6 +1327,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.subtitle_karaoke_scale,
                         &mut self.subtitle_font,
                         &self.available_subtitle_fonts,
+                        &mut self.capcut_enabled,
+                        &mut self.capcut_draft_path,
                         &mut self.montage_service,
                         &mut self.montage_fps,
                         &mut self.montage_preset,
@@ -1922,6 +1936,8 @@ impl eframe::App for VideoMakerApp {
                 || (self.montage_image_zoom_scale - self.last_saved_settings.montage_image_zoom_scale).abs() > 0.001
                 || self.montage_image_shake_enabled != self.last_saved_settings.montage_image_shake_enabled
                 || (self.montage_image_shake_intensity - self.last_saved_settings.montage_image_shake_intensity).abs() > 0.001
+                || self.capcut_enabled != self.last_saved_settings.capcut_enabled
+                || self.capcut_draft_path != self.last_saved_settings.capcut_draft_path
                 || self.overlay_triggers_enabled != self.last_saved_settings.overlay_triggers_enabled
                 || self.overlay_triggers != self.last_saved_settings.overlay_triggers
             {
@@ -1997,6 +2013,8 @@ impl eframe::App for VideoMakerApp {
                     subtitle_karaoke_bold: self.subtitle_karaoke_bold,
                     subtitle_karaoke_scale: self.subtitle_karaoke_scale,
                     subtitle_font: self.subtitle_font.clone(),
+                    capcut_enabled: self.capcut_enabled,
+                    capcut_draft_path: self.capcut_draft_path.clone(),
                     montage_service: self.montage_service.clone(),
                     montage_fps: self.montage_fps,
                     montage_preset: self.montage_preset.clone(),
