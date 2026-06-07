@@ -183,7 +183,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "video_prompt_label" => "Промт для відеоряду",
         "video_prompt_hint" => "Введіть інструкцію для генерації зображень...",
         "video_agent_prompt_label" => "Інструкція агенту (timeline)",
-        "video_agent_prompt_hint" => "{{srt}} — вміст subtitle.srt, {{path}} — шлях до timeline.json",
+        "video_agent_prompt_hint" => "{{srt}} — шлях до subtitle.srt (агент читає сам), {{path}} — шлях до timeline.json",
         "video_insert_placeholder" => "{{text}}",
         "video_placeholder_hint" => "{{text}} — місце куди підставиться текст абзацу.",
         "balance_window_title" => "Баланси",

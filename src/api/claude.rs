@@ -87,11 +87,15 @@ pub fn call_claude_code_new_session_streaming(
 
     log(&format!("Starting Claude CLI agent session. Model: {}, session: {}", model, session_id));
 
-    let mut cmd = crate::bundle::new_cli_command("claude");
+    // ВАЖЛИВО: НЕ замінювати на new_cli_command("claude")!
+    // cmd /C ламає передачу аргументів з великим/складним промтом на Windows —
+    // агент не отримує --dangerously-skip-permissions і питає дозволи замість запису файлу.
+    // Claude і Gemini CLI запускаються напряму, без cmd /C. Codex — окремо, не чіпати.
+    let mut cmd = std::process::Command::new("claude");
     cmd.arg("--model").arg(model)
         .arg("-p").arg(user_content)
         .arg("--allowedTools").arg("Bash,Write,Read")
-        .arg("--permission-mode").arg("bypassPermissions")
+        .arg("--dangerously-skip-permissions")
         .arg("--session-id").arg(session_id)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -164,11 +168,12 @@ pub fn call_claude_code_resume(
 
     log(&format!("Resuming Claude CLI session: {}", session_id));
 
-    let mut cmd = crate::bundle::new_cli_command("claude");
+    // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_claude_code_new_session_streaming.
+    let mut cmd = std::process::Command::new("claude");
     cmd.arg("--model").arg(model)
         .arg("-p").arg(message)
         .arg("--allowedTools").arg("Bash,Write,Read")
-        .arg("--permission-mode").arg("bypassPermissions")
+        .arg("--dangerously-skip-permissions")
         .arg("--resume").arg(session_id);
 
     if let Some(dir) = working_dir {
@@ -217,7 +222,8 @@ pub fn call_claude_code(
 
     log(&format!("Starting Claude CLI translation. Model: {}", model));
 
-    let mut cmd = crate::bundle::new_cli_command("claude");
+    // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_claude_code_new_session_streaming.
+    let mut cmd = std::process::Command::new("claude");
 
     // Запускаємо: claude --model <model> -p "<prompt>" [--allowedTools Bash,Write,Read]
     cmd.arg("--model")
@@ -227,7 +233,7 @@ pub fn call_claude_code(
 
     if allow_tools {
         cmd.arg("--allowedTools").arg("Bash,Write,Read")
-            .arg("--permission-mode").arg("bypassPermissions");
+            .arg("--dangerously-skip-permissions");
     }
 
     if let Some(dir) = working_dir {

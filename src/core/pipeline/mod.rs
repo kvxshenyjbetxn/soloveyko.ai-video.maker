@@ -1388,12 +1388,15 @@ fn run_agent_timeline(
     let save_dir = std::path::Path::new(&settings.save_path);
     let srt_path = save_dir.join("subtitle.srt");
 
-    let srt_content = std::fs::read_to_string(&srt_path)
-        .map_err(|e| format!("subtitle.srt not found (run subtitles stage first): {}", e))?;
+    if !srt_path.exists() {
+        return Err("subtitle.srt not found (run subtitles stage first)".to_string());
+    }
 
     let timeline_path = save_dir.join("timeline.json");
+    // Передаємо шлях до SRT файлу — агент читає його сам через Read/Bash.
+    // Це усуває дублювання SRT-контенту в кожному turn агентної сесії.
     let agent_prompt = settings.video_agent_prompt
-        .replace("{{srt}}", &srt_content)
+        .replace("{{srt}}", &srt_path.to_string_lossy())
         .replace("{{path}}", &timeline_path.to_string_lossy());
 
     crate::logger::log_job(job_id, job_name,

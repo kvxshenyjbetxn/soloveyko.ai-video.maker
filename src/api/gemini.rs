@@ -88,7 +88,9 @@ pub fn call_gemini_new_session_streaming(
 
     log(&format!("Starting Gemini CLI agent session. Model: {}, session: {}", model, session_id));
 
-    let mut cmd = crate::bundle::new_cli_command("gemini");
+    // ВАЖЛИВО: НЕ замінювати на new_cli_command("gemini")!
+    // Див. коментар у claude.rs — та сама причина: cmd /C ламає аргументи на Windows.
+    let mut cmd = std::process::Command::new("gemini");
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(user_content)
@@ -163,7 +165,8 @@ pub fn call_gemini_resume(
 
     log(&format!("Resuming Gemini CLI session: {}", session_id));
 
-    let mut cmd = crate::bundle::new_cli_command("gemini");
+    // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_gemini_new_session_streaming.
+    let mut cmd = std::process::Command::new("gemini");
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(message)
@@ -219,7 +222,8 @@ pub fn call_gemini_cli(
 
     log(&format!("Starting Gemini CLI translation. Model: {}", model));
 
-    let mut cmd = crate::bundle::new_cli_command("gemini");
+    // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_gemini_new_session_streaming.
+    let mut cmd = std::process::Command::new("gemini");
 
     // Запускаємо: gemini --model <model> --output-format json --prompt "<prompt>" --yolo --skip-trust
     // JSON-формат гарантує чисту відповідь без технічного сміття у полі "response"

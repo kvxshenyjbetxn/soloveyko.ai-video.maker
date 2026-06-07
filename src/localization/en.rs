@@ -183,7 +183,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "video_prompt_label" => "Video Prompt",
         "video_prompt_hint" => "Enter instructions for image generation...",
         "video_agent_prompt_label" => "Agent instruction (timeline)",
-        "video_agent_prompt_hint" => "{{srt}} — subtitle.srt content, {{path}} — path to timeline.json",
+        "video_agent_prompt_hint" => "{{srt}} — path to subtitle.srt (agent reads it), {{path}} — path to timeline.json",
         "video_insert_placeholder" => "{{text}}",
         "video_placeholder_hint" => "{{text}} - place where the paragraph text will be inserted.",
         "balance_window_title" => "Balances",
