@@ -154,7 +154,7 @@ pub fn generate_capcut_project(
     log_fn(&format!("CapCut: завантажено {} сегментів із timeline.json", tl.segments.len()));
 
     // ─── 2. Знаходимо аудіофайл ─────────────────────────────────────────────
-    let mut voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
+    let voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
         .iter()
         .map(|n| save_dir.join(n))
         .find(|p| p.exists());
@@ -232,7 +232,8 @@ pub fn generate_capcut_project(
     // На macOS CapCut не може читати файли поза ~/Movies/, тому копіюємо всі
     // медіафайли та аудіо прямо в project_dir/resources/ де CapCut має доступ.
     #[cfg(target_os = "macos")]
-    {
+    let voice_path = {
+        let mut vp = voice_path;
         let res_dir = project_dir.join("resources");
         std::fs::create_dir_all(&res_dir)
             .map_err(|e| format!("Не вдалося створити resources/: {}", e))?;
@@ -246,17 +247,18 @@ pub fn generate_capcut_project(
                 m.path = dst;
             }
         }
-        if let Some(ref vp) = voice_path.clone() {
-            if vp.exists() {
-                let fname = vp.file_name().unwrap_or_default().to_os_string();
+        if let Some(ref p) = vp.clone() {
+            if p.exists() {
+                let fname = p.file_name().unwrap_or_default().to_os_string();
                 let dst = res_dir.join(&fname);
-                std::fs::copy(vp, &dst)
+                std::fs::copy(p, &dst)
                     .map_err(|e| format!("Копіювання voice: {}", e))?;
-                voice_path = Some(dst);
+                vp = Some(dst);
             }
         }
         log_fn("CapCut: медіафайли скопійовано в папку проекту (macOS sandbox)");
-    }
+        vp
+    };
 
     // ─── 5. Тривалість аудіо ────────────────────────────────────────────────
     let audio_dur_secs = audio_duration_hint
