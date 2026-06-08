@@ -24,12 +24,12 @@ fn clean_windows_path(path: &Path) -> PathBuf {
 /// Отримує тривалість медіафайлу через ffprobe
 pub fn probe_duration(path: &Path) -> Option<f32> {
     let clean_path = clean_windows_path(path);
-    let out = std::process::Command::new(crate::bundle::ffprobe_path())
-        .args(["-v", "error", "-show_entries", "format=duration",
-               "-of", "default=noprint_wrappers=1:nokey=1"])
-        .arg(&clean_path)
-        .output()
-        .ok()?;
+    let mut ffprobe_cmd = std::process::Command::new(crate::bundle::ffprobe_path());
+    ffprobe_cmd.args(["-v", "error", "-show_entries", "format=duration",
+           "-of", "default=noprint_wrappers=1:nokey=1"])
+        .arg(&clean_path);
+    crate::bundle::set_no_window(&mut ffprobe_cmd);
+    let out = ffprobe_cmd.output().ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
     s.trim().parse::<f32>().ok()
 }

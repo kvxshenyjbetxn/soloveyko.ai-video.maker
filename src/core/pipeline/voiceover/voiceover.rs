@@ -330,8 +330,8 @@ fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(),
         .map_err(|e| format!("Failed to create concat_list.txt: {}", e))?;
 
     let ffmpeg_cmd = crate::bundle::ffmpeg_path();
-    let output = std::process::Command::new(&ffmpeg_cmd)
-        .current_dir(parent_dir)
+    let mut ffmpeg_proc = std::process::Command::new(&ffmpeg_cmd);
+    ffmpeg_proc.current_dir(parent_dir)
         .args(&[
             "-y",
             "-hide_banner",
@@ -346,8 +346,9 @@ fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(),
             "-c",
             "copy",
             output_path.file_name().unwrap().to_str().unwrap(),
-        ])
-        .output();
+        ]);
+    crate::bundle::set_no_window(&mut ffmpeg_proc);
+    let output = ffmpeg_proc.output();
 
     let _ = std::fs::remove_file(concat_list_path);
 

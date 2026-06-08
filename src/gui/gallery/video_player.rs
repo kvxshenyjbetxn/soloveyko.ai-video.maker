@@ -102,16 +102,17 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
         let scale_filter = format!("fps={},scale={}:{}", FPS, out_w, out_h);
         let frame_bytes = (out_w * out_h * 4) as usize;
 
-        let child = std::process::Command::new(crate::bundle::ffmpeg_path())
-            .arg("-i").arg(&path)
+        let mut ffmpeg_cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
+        ffmpeg_cmd.arg("-i").arg(&path)
             .arg("-vf").arg(&scale_filter)
             .arg("-f").arg("rawvideo")
             .arg("-pix_fmt").arg("rgba")
             .arg("-loglevel").arg("error")
             .arg("-")
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn();
+            .stderr(std::process::Stdio::null());
+        crate::bundle::set_no_window(&mut ffmpeg_cmd);
+        let child = ffmpeg_cmd.spawn();
 
         let mut child = match child {
             Ok(c) => c,
@@ -155,13 +156,13 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
 
 /// Повертає (width, height) для масштабування відео до `target_w` (парна висота).
 fn get_video_dimensions(path: &Path, target_w: u32) -> Option<(u32, u32)> {
-    let output = std::process::Command::new(crate::bundle::ffprobe_path())
-        .args(["-v", "quiet", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height",
-               "-of", "csv=p=0"])
-        .arg(path)
-        .output()
-        .ok()?;
+    let mut ffprobe_cmd = std::process::Command::new(crate::bundle::ffprobe_path());
+    ffprobe_cmd.args(["-v", "quiet", "-select_streams", "v:0",
+           "-show_entries", "stream=width,height",
+           "-of", "csv=p=0"])
+        .arg(path);
+    crate::bundle::set_no_window(&mut ffprobe_cmd);
+    let output = ffprobe_cmd.output().ok()?;
 
     let s = String::from_utf8_lossy(&output.stdout);
     let parts: Vec<&str> = s.trim().split(',').collect();
@@ -185,8 +186,8 @@ fn extract_single_frame_pipe(
     let (out_w, out_h) = get_video_dimensions(path, width).unwrap_or((width, width * 9 / 16));
     let frame_bytes = (out_w * out_h * 4) as usize;
 
-    let mut child = std::process::Command::new(crate::bundle::ffmpeg_path())
-        .arg("-i").arg(path)
+    let mut ffmpeg_frame_cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
+    ffmpeg_frame_cmd.arg("-i").arg(path)
         .arg("-vf").arg(format!("scale={}:{}", out_w, out_h))
         .arg("-frames:v").arg("1")
         .arg("-f").arg("rawvideo")
@@ -194,9 +195,9 @@ fn extract_single_frame_pipe(
         .arg("-loglevel").arg("error")
         .arg("-")
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(std::process::Stdio::null());
+    crate::bundle::set_no_window(&mut ffmpeg_frame_cmd);
+    let mut child = ffmpeg_frame_cmd.spawn().ok()?;
 
     let mut buf = vec![0u8; frame_bytes];
     if let Some(mut stdout) = child.stdout.take() {
@@ -250,6 +251,7 @@ fn extract_frames_file(
     }
 
     cmd.arg(&out_pattern);
+    crate::bundle::set_no_window(&mut cmd);
 
     let status = cmd.status().ok()?;
     if !status.success() {

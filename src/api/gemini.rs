@@ -99,6 +99,7 @@ pub fn call_gemini_new_session_streaming(
         .arg("--session-id").arg(session_id)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -173,6 +174,7 @@ pub fn call_gemini_resume(
         .arg("--yolo")
         .arg("--skip-trust")
         .arg("--resume").arg(session_id);
+    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -235,6 +237,7 @@ pub fn call_gemini_cli(
         .arg(user_content)
         .arg("--yolo")
         .arg("--skip-trust");
+    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);

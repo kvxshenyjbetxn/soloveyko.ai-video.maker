@@ -42,9 +42,10 @@ fn is_newer(remote: &str, local: &str) -> bool {
 pub fn open_url(url: &str) {
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("cmd")
-            .args(["/c", "start", "", url])
-            .spawn();
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/c", "start", "", url]);
+        crate::bundle::set_no_window(&mut cmd);
+        let _ = cmd.spawn();
     }
     #[cfg(target_os = "macos")]
     {

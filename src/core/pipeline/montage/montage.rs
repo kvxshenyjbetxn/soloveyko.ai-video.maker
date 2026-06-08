@@ -423,13 +423,14 @@ pub fn run_montage(
             } else if is_video {
                 // Намагаємося отримати тривалість через ffprobe
                 let ffprobe = crate::bundle::ffprobe_path();
-                let out = std::process::Command::new(&ffprobe)
-                    .args([
-                        "-v", "error", "-show_entries", "format=duration",
-                        "-of", "default=noprint_wrappers=1:nokey=1",
-                        &tr.path,
-                    ])
-                    .output()
+                let mut ffprobe_proc = std::process::Command::new(&ffprobe);
+                ffprobe_proc.args([
+                    "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    &tr.path,
+                ]);
+                crate::bundle::set_no_window(&mut ffprobe_proc);
+                let out = ffprobe_proc.output()
                     .ok()
                     .and_then(|o| String::from_utf8(o.stdout).ok())
                     .and_then(|s| s.trim().parse::<f64>().ok())
@@ -697,12 +698,13 @@ pub fn run_montage(
     use std::io::{BufRead, BufReader, Read};
     use std::process::Stdio;
 
-    let mut child = std::process::Command::new(&ffmpeg)
-        .args(&args)
+    let mut ffmpeg_proc = std::process::Command::new(&ffmpeg);
+    ffmpeg_proc.args(&args)
         .current_dir(save_dir)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    crate::bundle::set_no_window(&mut ffmpeg_proc);
+    let mut child = ffmpeg_proc.spawn()
         .map_err(|e| format!("FFmpeg launch error: {e}"))?;
 
     // Читаємо stderr у окремому потоці, щоб не заблокувати буфер

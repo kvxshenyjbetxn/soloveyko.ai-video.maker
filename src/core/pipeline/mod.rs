@@ -304,7 +304,10 @@ fn run_whisperx(
         &format!("Running: {} {}", whisperx_cmd.display(), args.join(" ")),
     );
 
-    match std::process::Command::new(&whisperx_cmd).args(&args).output() {
+    let mut whisperx_proc = std::process::Command::new(&whisperx_cmd);
+    whisperx_proc.args(&args);
+    crate::bundle::set_no_window(&mut whisperx_proc);
+    match whisperx_proc.output() {
         Ok(out) if out.status.success() => {
             // Зчитуємо subtitle.json і генеруємо subtitle.srt з max_line_width
             match std::fs::read_to_string(&output_json) {
@@ -522,7 +525,10 @@ fn run_whisper_amd(
 
     crate::logger::log_job(job_id, job_name, &format!("Running: {} {}", whisper_amd_cmd.display(), args.join(" ")));
 
-    match std::process::Command::new(&whisper_amd_cmd).args(&args).output() {
+    let mut whisper_amd_proc = std::process::Command::new(&whisper_amd_cmd);
+    whisper_amd_proc.args(&args);
+    crate::bundle::set_no_window(&mut whisper_amd_proc);
+    match whisper_amd_proc.output() {
         Ok(out) if out.status.success() => {
             let srt_path = save_dir.join("subtitle.srt");
 
@@ -629,7 +635,10 @@ fn run_subtitles_only(
 
         crate::logger::log_job(job_id, job_name, &format!("Running: {} {}", whisper_cmd, args.join(" ")));
 
-        match std::process::Command::new(&whisper_cmd).args(&args).output() {
+        let mut whisper_proc = std::process::Command::new(&whisper_cmd);
+        whisper_proc.args(&args);
+        crate::bundle::set_no_window(&mut whisper_proc);
+        match whisper_proc.output() {
             Ok(out) if out.status.success() => {
                 crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt");
                 let srt_path = save_dir.join("subtitle.srt");
@@ -730,13 +739,14 @@ fn run_av_branch(
                     crate::logger::log_job(job_id, &job_name, "Converting audio to WAV via FFmpeg...");
 
                     let ffmpeg_cmd = crate::bundle::ffmpeg_path();
-                    let result = std::process::Command::new(&ffmpeg_cmd)
-                        .args(&[
-                            "-y", "-hide_banner", "-loglevel", "error",
-                            "-i", mp3_path.to_str().unwrap_or("voice.mp3"),
-                            wav_path.to_str().unwrap_or("voice.wav"),
-                        ])
-                        .output();
+                    let mut ffmpeg_proc = std::process::Command::new(&ffmpeg_cmd);
+                    ffmpeg_proc.args(&[
+                        "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", mp3_path.to_str().unwrap_or("voice.mp3"),
+                        wav_path.to_str().unwrap_or("voice.wav"),
+                    ]);
+                    crate::bundle::set_no_window(&mut ffmpeg_proc);
+                    let result = ffmpeg_proc.output();
 
                     match result {
                         Ok(out) if out.status.success() => {
@@ -2611,15 +2621,15 @@ pub fn upscale_video_if_needed(
 
     // Виконуємо ffprobe для зчитування FPS та розмірів відео
     let ffprobe_cmd = crate::bundle::ffprobe_path();
-    let ffprobe_out = std::process::Command::new(&ffprobe_cmd)
-        .args([
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,duration",
-            "-of", "csv=p=0",
-        ])
-        .arg(&temp_path)
-        .output();
+    let mut ffprobe_proc = std::process::Command::new(&ffprobe_cmd);
+    ffprobe_proc.args([
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,duration",
+        "-of", "csv=p=0",
+    ]).arg(&temp_path);
+    crate::bundle::set_no_window(&mut ffprobe_proc);
+    let ffprobe_out = ffprobe_proc.output();
 
     let mut width = 1280;
     let mut height = 720;
@@ -2738,9 +2748,10 @@ pub fn upscale_video_if_needed(
     args.extend_from_slice(&["-map", "0:v:0", "-map", "0:a?", "-c:a", "aac", "-b:a", "192k"]);
     args.push(video_path.to_str().unwrap());
 
-    let child = std::process::Command::new(&ffmpeg_cmd)
-        .args(&args)
-        .output();
+    let mut ffmpeg_upscale_proc = std::process::Command::new(&ffmpeg_cmd);
+    ffmpeg_upscale_proc.args(&args);
+    crate::bundle::set_no_window(&mut ffmpeg_upscale_proc);
+    let child = ffmpeg_upscale_proc.output();
 
     let restore_original = || {
         if temp_path.exists() {

@@ -84,30 +84,32 @@ impl MediaItem {
                 std::fs::create_dir_all(&dir).ok();
                 let out_pattern = dir.join("%06d.jpg");
                 let Some(out_str) = out_pattern.to_str() else { return };
-                let status = std::process::Command::new(crate::bundle::ffmpeg_path())
-                    .args([
-                        "-y", "-v", "error", "-threads", "1",
-                        "-i", &path_str,
-                        "-vf", &format!("scale=640:-2,fps={}", PREVIEW_FPS),
-                        "-q:v", "5",
-                        out_str,
-                    ])
-                    .status();
+                let mut ffmpeg_preview = std::process::Command::new(crate::bundle::ffmpeg_path());
+                ffmpeg_preview.args([
+                    "-y", "-v", "error", "-threads", "1",
+                    "-i", &path_str,
+                    "-vf", &format!("scale=640:-2,fps={}", PREVIEW_FPS),
+                    "-q:v", "5",
+                    out_str,
+                ]);
+                crate::bundle::set_no_window(&mut ffmpeg_preview);
+                let status = ffmpeg_preview.status();
                 if matches!(status, Ok(s) if s.success()) {
                     std::fs::write(dir.join(".complete"), b"1").ok();
                     flag.store(true, Ordering::Relaxed);
                 } else {
                     // Fallback: витягуємо тільки перший кадр без фільтрів
                     let first_frame = dir.join("000001.jpg");
-                    let _ = std::process::Command::new(crate::bundle::ffmpeg_path())
-                        .args([
-                            "-y", "-v", "error", "-threads", "1",
-                            "-i", &path_str,
-                            "-vframes", "1",
-                            "-q:v", "5",
-                            first_frame.to_str().unwrap_or(""),
-                        ])
-                        .status();
+                    let mut ffmpeg_fallback = std::process::Command::new(crate::bundle::ffmpeg_path());
+                    ffmpeg_fallback.args([
+                        "-y", "-v", "error", "-threads", "1",
+                        "-i", &path_str,
+                        "-vframes", "1",
+                        "-q:v", "5",
+                        first_frame.to_str().unwrap_or(""),
+                    ]);
+                    crate::bundle::set_no_window(&mut ffmpeg_fallback);
+                    let _ = ffmpeg_fallback.status();
                     flag.store(true, Ordering::Relaxed);
                 }
             });

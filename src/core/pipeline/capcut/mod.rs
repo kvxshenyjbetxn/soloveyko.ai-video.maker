@@ -56,10 +56,11 @@ fn image_dims(path: &Path) -> (u32, u32) {
 /// Зчитує розміри та тривалість відео/аудіо через ffprobe.
 fn probe_media(path: &Path) -> (u32, u32, f64) {
     let ffprobe = crate::bundle::ffprobe_path();
-    let out = std::process::Command::new(&ffprobe)
-        .args(["-v", "quiet", "-print_format", "json", "-show_streams", "-show_format"])
-        .arg(path)
-        .output();
+    let mut ffprobe_proc = std::process::Command::new(&ffprobe);
+    ffprobe_proc.args(["-v", "quiet", "-print_format", "json", "-show_streams", "-show_format"])
+        .arg(path);
+    crate::bundle::set_no_window(&mut ffprobe_proc);
+    let out = ffprobe_proc.output();
 
     if let Ok(output) = out {
         if let Ok(text) = std::str::from_utf8(&output.stdout) {

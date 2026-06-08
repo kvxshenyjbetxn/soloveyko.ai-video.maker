@@ -25,7 +25,7 @@
 src/
 ├── main.rs                      — точка входу, конфіг вікна, запуск eframe; містить `pub const APP_VERSION: &str` — єдине місце де оновлюється версія програми (заголовок вікна + перевірка оновлень)
 ├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() — тільки виклики gui-субмодулів, без inline UI-логіки
-├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/; бандлований ffmpeg/ffprobe завжди пріоритетніший за системний
+├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/; `set_no_window()` приховує консолі дочірніх процесів на Windows; бандлований ffmpeg/ffprobe завжди пріоритетніший за системний
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
 ├── theme.rs                     — теми (Dark/Light/Amoled), застосування кольору акценту
 ├── logger.rs                    — структурований логер з підтримкою прив'язки логів до задач (OnceLock + Mutex)
@@ -717,6 +717,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`bin_dir()`** — повертає `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/` (той самий `config_dir`, що й для `settings.json`).
 - **`ffmpeg_path()` / `ffprobe_path()`** — завжди повертають бандлований бінарник у `bin_dir()` якщо він є, інакше просто `"ffmpeg"` / `"ffprobe"` як запасний варіант. Системний PATH більше не перевіряється — бо системний FFmpeg може не мати `libass`, потрібного для burn-in субтитрів (`ass=filename=...` фільтр).
 - **`whisper_path()`** — пріоритет: бандлований → системний. whisper.cpp і openai-whisper мають різний CLI, тому краще зафіксувати конкретний бандлований бінарник.
+- **`set_no_window(cmd: &mut Command)`** — приховує консольне вікно дочірнього процесу на Windows. Застосовується до **всіх** `Command::new()` викликів у коді (ffmpeg, ffprobe, whisper, whisper-amd, whisperx, claude, gemini, codex, cmd /c start). На macOS та Linux — no-op. Без цього прапора `CREATE_NO_WINDOW (0x08000000)` кожен spawn консольного інструменту з GUI-застосунку відкриває коротке чорне вікно терміналу.
 - Решта коду просто викликає `Command::new(ffmpeg_path())` і не знає звідки бінарник.
 - **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
 - **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник (той самий механізм що й ffmpeg). На Windows: завантажує `whisper.win.zip`, розпаковує через крейт `zip`, шукає `main.exe` у будь-якій підпапці архіву та зберігає як `whisper.exe`. Перевіряє наявність файлу перед завантаженням — повторного скачування не відбувається.
@@ -864,6 +865,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Перевірка оновлень при старті.** `check_for_updates` spawns фоновий потік що звертається до `api.github.com/repos/kvxshenyjbetxn/repo.releases/releases/latest`. Порівнює `tag_name` релізу з `APP_VERSION` як semver-кортеж `(major, minor, patch)`. При новій версії заповнює `update_info: Arc<Mutex<Option<UpdateInfo>>>` і викликає `ctx.request_repaint()`. В `update()` — перший кадр де `update_info.is_some()` автоматично відкриває `update_dialog_open = true`. Кнопка «Пізніше» очищає `update_info = None` — без цього діалог відкривався б знову на наступному кадрі. Посилання для завантаження: на Windows шукається asset з `.exe` у назві, на macOS — без `.exe`.
 
 - **`windows_subsystem = "windows"`** у `main.rs` — приховує консоль у release-білді на Windows. У debug-режимі консоль є.
+
+- **Дочірні процеси на Windows теж потребують `CREATE_NO_WINDOW`.** `windows_subsystem = "windows"` ховає лише консоль самого GUI-процесу, але не консолі дочірніх процесів. Кожен `Command::new("ffmpeg")`, `Command::new("claude")` тощо в GUI-застосунку відкриває коротке чорне вікно терміналу при spawn. Щоб приховати ці вікна — треба встановити прапор `CREATE_NO_WINDOW (0x08000000)` через `CommandExt::creation_flags()` з `std::os::windows::process`. У проекті цей прапор додається через `bundle::set_no_window(&mut cmd)` — виклик є no-op на macOS/Linux, тому не потребує `#[cfg]` огортання.
 
 - **egui перемальовує весь фрейм щоразу** — тому будь-яка зміна стану одразу видна.
 

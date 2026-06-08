@@ -415,6 +415,18 @@ fn download_file(
     Ok(())
 }
 
+/// Приховує консольне вікно дочірнього процесу на Windows.
+/// На macOS та Linux — no-op.
+pub fn set_no_window(cmd: &mut std::process::Command) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = cmd;
+}
+
 /// Шукає бінарник у типових місцях macOS (PATH з терміналу недоступний у .app).
 #[cfg(target_os = "macos")]
 pub fn find_binary_macos(name: &str) -> String {
@@ -467,11 +479,13 @@ pub fn new_cli_command(name: &str) -> std::process::Command {
                 let codex_candidate = format!("{}\\Programs\\OpenAI\\Codex\\bin\\codex.exe", local_app_data);
                 if std::path::Path::new(&codex_candidate).exists() {
                     cmd.args(&["/C", &codex_candidate]);
+                    set_no_window(&mut cmd);
                     return cmd;
                 }
             }
         }
         cmd.args(&["/C", name]);
+        set_no_window(&mut cmd);
         cmd
     }
 

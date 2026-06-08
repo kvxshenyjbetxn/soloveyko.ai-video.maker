@@ -14,7 +14,7 @@ mod logger;
 use app::VideoMakerApp;
 use eframe::egui;
 
-pub const APP_VERSION: &str = "4.1.2";
+pub const APP_VERSION: &str = "4.1.3";
 
 fn main() -> eframe::Result {
     // Конфігуруємо параметри вікна нашого додатку

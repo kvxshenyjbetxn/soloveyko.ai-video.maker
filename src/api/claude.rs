@@ -101,6 +101,7 @@ pub fn call_claude_code_new_session_streaming(
         .arg("--session-id").arg(session_id)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -327,6 +328,7 @@ pub fn call_claude_code_resume(
         .arg("--output-format").arg("stream-json")
         .arg("--verbose")
         .arg("--resume").arg(session_id);
+    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -406,6 +408,7 @@ pub fn call_claude_code(
         cmd.arg("--allowedTools").arg("Bash,Write,Read")
             .arg("--dangerously-skip-permissions");
     }
+    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
