@@ -1225,7 +1225,9 @@ fn run_video_branch(
     } else {
         // Без ЛЛМ — в агентному режимі text йде напряму, інакше підстановка в video_prompt
         for (i, segment) in segments.iter().enumerate() {
-            prompts[i] = if is_agent_mode {
+            prompts[i] = if is_agent_mode && settings.video_style_enabled && !settings.video_style_prompt.is_empty() {
+                settings.video_style_prompt.replace("{{text}}", segment)
+            } else if is_agent_mode {
                 segment.clone()
             } else if settings.video_prompt.contains("{{text}}") {
                 settings.video_prompt.replace("{{text}}", segment)

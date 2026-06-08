@@ -231,6 +231,12 @@ pub struct AppSettings {
     /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
     #[serde(default)]
     pub video_agent_prompt: String,
+    /// Чи увімкнено поле стилю для генерації медіа
+    #[serde(default)]
+    pub video_style_enabled: bool,
+    /// Промт стилю для генерації медіа (з плейсхолдером {{text}})
+    #[serde(default)]
+    pub video_style_prompt: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -422,6 +428,8 @@ impl Default for AppSettings {
             voiceover_convert_to_wav: false,
             video_prompt: String::new(),
             video_agent_prompt: String::new(),
+            video_style_enabled: false,
+            video_style_prompt: String::new(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
             video_media_type: "image".to_string(),
@@ -666,6 +674,12 @@ pub struct PipelineTemplate {
     /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
     #[serde(default)]
     pub video_agent_prompt: String,
+    /// Чи увімкнено поле стилю для генерації медіа
+    #[serde(default)]
+    pub video_style_enabled: bool,
+    /// Промт стилю для генерації медіа (з плейсхолдером {{text}})
+    #[serde(default)]
+    pub video_style_prompt: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -842,6 +856,8 @@ pub fn save_template(
     voiceover_convert_to_wav: bool,
     video_prompt: &str,
     video_agent_prompt: &str,
+    video_style_enabled: bool,
+    video_style_prompt: &str,
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     video_media_type: &str,
@@ -930,6 +946,8 @@ pub fn save_template(
             voiceover_convert_to_wav,
             video_prompt: video_prompt.to_string(),
             video_agent_prompt: video_agent_prompt.to_string(),
+            video_style_enabled,
+            video_style_prompt: video_style_prompt.to_string(),
             googler_image_priority,
             googler_video_priority,
             video_media_type: video_media_type.to_string(),

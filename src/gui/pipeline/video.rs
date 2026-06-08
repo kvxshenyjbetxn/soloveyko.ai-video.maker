@@ -122,6 +122,8 @@ pub fn draw_video_section(
     video_llm_model_agy: &mut String,
     video_llm_temperature: &mut f32,
     video_agent_prompt: &mut String,
+    video_style_enabled: &mut bool,
+    video_style_prompt: &mut String,
     video_llm_model_search: &mut String,
     openrouter_models: &Arc<Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
@@ -411,6 +413,135 @@ pub fn draw_video_section(
                     });
                 if !still_open {
                     ui.data_mut(|d| d.insert_persisted(agent_expand_id, false));
+                }
+            }
+
+            // Toggle "Вказати стиль" + поле промту стилю
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(translate(language, "video_style_label")).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    super::toggle_switch(ui, video_style_enabled);
+                });
+            });
+
+            if *video_style_enabled {
+                ui.add_space(4.0);
+
+                let style_expand_id = ui.make_persistent_id("video_style_prompt_expand");
+                let mut style_expand_open: bool = ui.data_mut(|d| d.get_persisted(style_expand_id).unwrap_or(false));
+
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(translate(language, "video_style_prompt_label")).strong());
+                    if ui.small_button("⛶")
+                        .on_hover_text(translate(language, "prompt_expand_hint"))
+                        .clicked()
+                    {
+                        style_expand_open = !style_expand_open;
+                        ui.data_mut(|d| d.insert_persisted(style_expand_id, style_expand_open));
+                    }
+                });
+                ui.add_space(4.0);
+
+                let style_avail_width = ui.available_width();
+                let style_te_resp = egui::ScrollArea::vertical()
+                    .max_height(60.0)
+                    .id_salt("video_style_prompt_scroll")
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(video_style_prompt)
+                                .desired_width(style_avail_width)
+                                .hint_text(translate(language, "video_style_prompt_hint")),
+                        )
+                    })
+                    .inner;
+
+                ui.add_space(4.0);
+
+                // Кнопка вставки {{text}}
+                if ui.button(translate(language, "video_style_insert_placeholder")).clicked() {
+                    let te_id = style_te_resp.id;
+                    if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), te_id) {
+                        let to_insert = "{{text}}";
+                        if let Some(cursor_range) = state.cursor.char_range() {
+                            let cursor_idx = cursor_range.primary.index;
+                            let byte_idx = video_style_prompt
+                                .char_indices()
+                                .map(|(b, _)| b)
+                                .nth(cursor_idx)
+                                .unwrap_or(video_style_prompt.len());
+                            video_style_prompt.insert_str(byte_idx, to_insert);
+                            let new_char_idx = cursor_idx + to_insert.chars().count();
+                            let new_cursor = egui::text::CCursor::new(new_char_idx);
+                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                            state.store(ui.ctx(), te_id);
+                        } else {
+                            video_style_prompt.push_str(to_insert);
+                        }
+                    } else {
+                        video_style_prompt.push_str("{{text}}");
+                    }
+                    style_te_resp.request_focus();
+                }
+
+                ui.add_space(2.0);
+                ui.label(
+                    egui::RichText::new(translate(language, "video_style_prompt_hint"))
+                        .weak()
+                        .size(11.0)
+                );
+
+                // Розгорнуте вікно редагування промту стилю
+                if style_expand_open {
+                    let mut still_open = true;
+                    egui::Window::new(translate(language, "video_style_prompt_label"))
+                        .id(egui::Id::new("video_style_prompt_window"))
+                        .open(&mut still_open)
+                        .resizable(true)
+                        .collapsible(false)
+                        .constrain(true)
+                        .default_size([600.0, 400.0])
+                        .show(ui.ctx(), |ui| {
+                            let win_te_resp = egui::ScrollArea::vertical()
+                                .max_height(ui.ctx().screen_rect().height() * 0.7)
+                                .id_salt("win_video_style_prompt_scroll")
+                                .show(ui, |ui| {
+                                    ui.add(
+                                        egui::TextEdit::multiline(video_style_prompt)
+                                            .desired_width(f32::INFINITY)
+                                            .hint_text(translate(language, "video_style_prompt_hint")),
+                                    )
+                                })
+                                .inner;
+                            let win_te_id = win_te_resp.id;
+                            ui.add_space(4.0);
+                            if ui.button(translate(language, "video_style_insert_placeholder")).clicked() {
+                                let to_insert = "{{text}}";
+                                if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), win_te_id) {
+                                    if let Some(cursor_range) = state.cursor.char_range() {
+                                        let cursor_idx = cursor_range.primary.index;
+                                        let byte_idx = video_style_prompt
+                                            .char_indices()
+                                            .map(|(b, _)| b)
+                                            .nth(cursor_idx)
+                                            .unwrap_or(video_style_prompt.len());
+                                        video_style_prompt.insert_str(byte_idx, to_insert);
+                                        let new_char_idx = cursor_idx + to_insert.chars().count();
+                                        let new_cursor = egui::text::CCursor::new(new_char_idx);
+                                        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                                        state.store(ui.ctx(), win_te_id);
+                                    } else {
+                                        video_style_prompt.push_str(to_insert);
+                                    }
+                                } else {
+                                    video_style_prompt.push_str(to_insert);
+                                }
+                                ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
+                            }
+                        });
+                    if !still_open {
+                        ui.data_mut(|d| d.insert_persisted(style_expand_id, false));
+                    }
                 }
             }
         }

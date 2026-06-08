@@ -167,6 +167,10 @@ pub struct VideoMakerApp {
     pub googler_video_upscale_quality: String,
     /// Системна інструкція агенту для створення timeline.json.
     pub video_agent_prompt: String,
+    /// Чи увімкнено поле стилю для генерації медіа в агентному режимі.
+    pub video_style_enabled: bool,
+    /// Промт стилю для генерації медіа ({{text}} підставляється з timeline.json).
+    pub video_style_prompt: String,
 
     /// Сервіс ЛЛМ для генерації промтів відеоряду.
     pub video_llm_service: String,
@@ -479,6 +483,8 @@ impl Default for VideoMakerApp {
             googler_video_upscale_resolution: default_settings.googler_video_upscale_resolution.clone(),
             googler_video_upscale_quality: default_settings.googler_video_upscale_quality.clone(),
             video_agent_prompt: String::new(),
+            video_style_enabled: false,
+            video_style_prompt: String::new(),
             video_llm_service: "None".to_string(),
             video_llm_model: String::new(),
             video_llm_model_openrouter: String::new(),
@@ -700,6 +706,8 @@ impl VideoMakerApp {
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
         let video_agent_prompt = saved.video_agent_prompt.clone();
+        let video_style_enabled = saved.video_style_enabled;
+        let video_style_prompt = saved.video_style_prompt.clone();
         let video_llm_service = saved.video_llm_service.clone();
         let mut video_llm_model_openrouter = saved.video_llm_model_openrouter.clone();
         let video_llm_model_claude = saved.video_llm_model_claude.clone();
@@ -861,6 +869,8 @@ impl VideoMakerApp {
             googler_video_upscale_resolution,
             googler_video_upscale_quality,
             video_agent_prompt,
+            video_style_enabled,
+            video_style_prompt,
             video_llm_service,
 
             video_llm_model,
@@ -1035,6 +1045,8 @@ impl VideoMakerApp {
             googler_video_upscale_resolution: self.googler_video_upscale_resolution.clone(),
             googler_video_upscale_quality: self.googler_video_upscale_quality.clone(),
             video_agent_prompt: self.video_agent_prompt.clone(),
+            video_style_enabled: self.video_style_enabled,
+            video_style_prompt: self.video_style_prompt.clone(),
             googler_image_priority: self.googler_image_priority.clone(),
 
             googler_video_priority: self.googler_video_priority.clone(),
@@ -1118,6 +1130,8 @@ impl VideoMakerApp {
         self.googler_video_upscale_resolution = if t.googler_video_upscale_resolution.is_empty() { "1080p".to_string() } else { t.googler_video_upscale_resolution.clone() };
         self.googler_video_upscale_quality = if t.googler_video_upscale_quality.is_empty() { "balanced".to_string() } else { t.googler_video_upscale_quality.clone() };
         self.video_agent_prompt = t.video_agent_prompt;
+        self.video_style_enabled = t.video_style_enabled;
+        self.video_style_prompt = t.video_style_prompt;
         self.video_llm_service = t.video_llm_service.clone();
 
         self.video_llm_model_openrouter = t.video_llm_model_openrouter.clone();
@@ -1422,6 +1436,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.text_split_char_limit,
                         &mut self.video_prompt,
                         &mut self.video_agent_prompt,
+                        &mut self.video_style_enabled,
+                        &mut self.video_style_prompt,
                         &mut self.video_llm_service,
                         &mut self.video_llm_model,
                         &mut self.video_llm_model_openrouter,
@@ -2060,6 +2076,8 @@ impl eframe::App for VideoMakerApp {
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
                 || self.video_agent_prompt != self.last_saved_settings.video_agent_prompt
+                || self.video_style_enabled != self.last_saved_settings.video_style_enabled
+                || self.video_style_prompt != self.last_saved_settings.video_style_prompt
                 || self.video_llm_service != self.last_saved_settings.video_llm_service
                 || self.video_llm_model != self.last_saved_settings.video_llm_model
                 || self.video_llm_model_openrouter != self.last_saved_settings.video_llm_model_openrouter
@@ -2160,6 +2178,8 @@ impl eframe::App for VideoMakerApp {
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
                     video_agent_prompt: self.video_agent_prompt.clone(),
+                    video_style_enabled: self.video_style_enabled,
+                    video_style_prompt: self.video_style_prompt.clone(),
                     video_llm_service: self.video_llm_service.clone(),
                     video_llm_model: self.video_llm_model.clone(),
                     video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),

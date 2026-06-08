@@ -81,6 +81,8 @@ pub struct JobSettings {
     pub video_prompt: String,
     /// Системна інструкція агенту для створення timeline.json (Claude Code / Gemini CLI)
     pub video_agent_prompt: String,
+    pub video_style_enabled: bool,
+    pub video_style_prompt: String,
     pub video_llm_service: String,
     pub video_llm_model: String,
     pub video_llm_temperature: f32,

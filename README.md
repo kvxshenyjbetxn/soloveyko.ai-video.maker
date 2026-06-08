@@ -46,7 +46,7 @@ src/
 │   ├── mod.rs                   — реекспорт модулів core
 │   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini/Codex/AGY); allow_tools: bool = true передається тільки з run_agent_timeline щоб дозволити Claude запис файлів; call_openrouter: HTTP запит до OpenRouter Chat completions API з авто-ретраями при порожній відповіді (до 5 спроб); ChatMessageContent.content: Option<String> (null-safe)
 │   └── pipeline/
-│       ├── mod.rs               — run_pipeline: головний потік задачі; в звичайному режимі запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, в агентному режимі — послідовно (AV → run_agent_timeline → Відеоряд → assign_media_to_timeline) потім Монтаж; call_agent_new_session / call_agent_resume — публічні хелпери для виклику агента з сесією
+│       ├── mod.rs               — run_pipeline: головний потік задачі; в звичайному режимі запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, в агентному режимі — послідовно (AV → run_agent_timeline → Відеоряд → assign_media_to_timeline) потім Монтаж; call_agent_new_session / call_agent_resume — публічні хелпери для виклику агента з сесією; в агентному режимі промт для Googler формується так: якщо video_style_enabled && !video_style_prompt.is_empty() → video_style_prompt з підставленим {{text}} зі сегменту, інакше → text напряму
 │       ├── voiceover/
 │       │   ├── mod.rs           — реекспорт run_voiceover_sync
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
@@ -103,7 +103,7 @@ src/
 │   │   ├── translation.rs       — секція перекладу (промт, вибір моделі OpenRouter, температура)
 │   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
-│   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт); при виборі Claude Code, Gemini CLI або Codex CLI поле video_prompt повністю ховається і замість нього показується video_agent_prompt з кнопками вставки {{srt}} та {{path}}
+│   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт); при виборі Claude Code, Gemini CLI, Codex CLI або AGY CLI поле video_prompt ховається і показується video_agent_prompt з кнопками {{srt}} та {{path}}; toggle «Вказати стиль» розкриває поле video_style_prompt — якщо увімкнено, {{text}} замінюється текстом з поля text у timeline.json і цей складений промт передається у Googler замість голого тексту; якщо вимкнено — text йде напряму (поведінка до введення цього поля)
 │   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI/Whisper AMD, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper/Whisper AMD, ключ AssemblyAI)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами, ефект зуму та покачування для зображень); toggle «Генерувати CapCut проект» + поле шляху до папки чернеток CapCut
 │   └── settings/
