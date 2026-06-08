@@ -1,6 +1,6 @@
 [package]
 name = "soloveyko-ai-video-maker"
-version = "4.2.0"
+version = "4.2.1"
 edition = "2024"
 
 [dependencies]
@@ -25,7 +25,7 @@ rodio = { version = "0.19", default-features = false, features = ["wav", "mp3"] 
 [package.metadata.bundle]
 name = "Soloveyko AI Video Maker"
 identifier = "ai.soloveyko.videomaker"
-version = "4.2.0"
+version = "4.2.1"
 copyright = "Copyright © 2026 Soloveyko.ai. All rights reserved."
 short_description = "Soloveyko.AI-Video.Maker Application"
 long_description = "An amazing cross-platform desktop video maker using Rust and egui."
