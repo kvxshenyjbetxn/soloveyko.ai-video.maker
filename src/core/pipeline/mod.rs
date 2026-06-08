@@ -1408,7 +1408,7 @@ fn run_agent_timeline(
     // Початкове повідомлення з аргументами запуску — chunks додаватимуться після нього
     let initial_text = if settings.video_llm_service == "Codex CLI" {
         format!(
-            "Running: codex exec --model {}\n\n",
+            "Running: codex exec --model {} --json\n\n",
             settings.video_llm_model
         )
     } else if settings.video_llm_service == "Claude Code" {
@@ -1460,14 +1460,18 @@ fn run_agent_timeline(
             model: settings.video_llm_model.clone(),
         });
 
-        // Оновимо початковий текст у чаті, щоб показати реальний session id для Codex CLI
+        // Оновлюємо лише перший рядок (заголовок) — хвіст зі стрімінгом зберігаємо
         if settings.video_llm_service == "Codex CLI" {
             let mut chat = agent_chat.lock().unwrap();
             if let Some(first) = chat.first_mut() {
+                let tail = first.content.find('\n')
+                    .map(|p| first.content[p..].to_string())
+                    .unwrap_or_default();
                 first.content = format!(
-                    "Running: codex exec --model {} [Session: {}]\n\n",
+                    "Running: codex exec --model {} --json [Thread: {}]{}",
                     settings.video_llm_model,
-                    actual_session_id
+                    actual_session_id,
+                    tail
                 );
             }
         }

@@ -95,24 +95,129 @@ pub fn extract_codex_response(output: &str) -> String {
     }
 }
 
-/// Знаходить session id у виводі Codex.
-pub fn find_session_id(output: &str) -> Option<String> {
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("session id:") {
-            if let Some(id) = trimmed.split(':').nth(1) {
-                return Some(id.trim().to_string());
+/// Парсить одну NDJSON-подію від Codex CLI --json та повертає людиночитаний текст.
+///
+/// Підтримувані типи подій:
+/// - "item.completed" / "item.started" type "agent_message"     → текст відповіді
+/// - "item.completed" type "file_change" (status completed)     → [->] назва_файлу (kind)
+/// - "item.started"   type "command_execution"                  → [Bash] $ команда (одразу при старті)
+/// - "item.completed" type "command_execution" (є вивід)        → [->] перший рядок виводу
+/// - "turn.completed"                                           → [STATS] з токенами
+fn format_codex_json_event(
+    line: &str,
+    final_result: &mut String,
+    acc_in: &mut u64,
+    acc_out: &mut u64,
+) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let event_type = v.get("type")?.as_str()?;
+
+    match event_type {
+        "item.started" => {
+            let item = v.get("item")?;
+            match item.get("type").and_then(|t| t.as_str())? {
+                "command_execution" => {
+                    // Показуємо команду одразу при старті — до завершення виконання
+                    let cmd = item.get("command").and_then(|c| c.as_str()).unwrap_or("");
+                    if cmd.is_empty() { return None; }
+                    // Відрізаємо шлях до оболонки ("pwsh.exe" -Command 'xxx' → xxx)
+                    let display = extract_shell_command(cmd);
+                    Some(format!("[Bash] $ {}\n", display))
+                }
+                _ => None,
             }
         }
+        "item.completed" => {
+            let item = v.get("item")?;
+            match item.get("type").and_then(|t| t.as_str())? {
+                "agent_message" => {
+                    if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                        let trimmed = text.trim();
+                        if !trimmed.is_empty() {
+                            *final_result = trimmed.to_string();
+                            return Some(format!("{}\n", trimmed));
+                        }
+                    }
+                    None
+                }
+                "file_change" => {
+                    if item.get("status").and_then(|s| s.as_str()) != Some("completed") {
+                        return None;
+                    }
+                    let changes = item.get("changes")?.as_array()?;
+                    let mut parts = Vec::new();
+                    for change in changes {
+                        let path = change.get("path").and_then(|p| p.as_str()).unwrap_or("");
+                        let kind = change.get("kind").and_then(|k| k.as_str()).unwrap_or("modify");
+                        let filename = std::path::Path::new(path)
+                            .file_name()
+                            .and_then(|f| f.to_str())
+                            .unwrap_or(path);
+                        parts.push(format!("[->] {} ({})", filename, kind));
+                    }
+                    if parts.is_empty() { None } else { Some(format!("{}\n", parts.join("\n"))) }
+                }
+                "command_execution" => {
+                    // Показуємо перший рядок виводу як результат команди
+                    let output = item.get("aggregated_output")
+                        .or_else(|| item.get("output"))
+                        .and_then(|o| o.as_str())
+                        .unwrap_or("");
+                    let first = output.trim().lines().next().unwrap_or("").trim();
+                    if first.is_empty() { return None; }
+                    let preview = if first.len() > 150 { format!("{}...", &first[..150]) } else { first.to_string() };
+                    Some(format!("[->] {}\n", preview))
+                }
+                _ => None,
+            }
+        }
+        "turn.completed" => {
+            if let Some(usage) = v.get("usage") {
+                let in_tok  = usage.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0);
+                let out_tok = usage.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0);
+                *acc_in  += in_tok;
+                *acc_out += out_tok;
+                Some(format!("\n[STATS]{:.1}|{}|{}|{:.6}|{}\n", 0.0_f64, acc_in, acc_out, 0.0_f64, 1u64))
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
-    None
 }
 
-/// Читає stdout по chunks в реальному часі та викликає `on_chunk` для кожного.
+/// Відрізає префікс оболонки з команди Codex.
+/// Windows: "pwsh.exe" -Command 'Get-Content file' → "Get-Content file"
+/// macOS:   /bin/bash -c 'cat file'                → "cat file"
+/// Якщо формат не розпізнано — повертає оригінал.
+fn extract_shell_command(cmd: &str) -> &str {
+    // PowerShell (Windows): -Command 'xxx' або -Command "xxx"
+    for prefix in ["-Command '", "-Command \""] {
+        if let Some(pos) = cmd.find(prefix) {
+            let start = pos + prefix.len();
+            let quote = prefix.chars().last().unwrap();
+            let end = cmd[start..].rfind(quote).map(|p| start + p).unwrap_or(cmd.len());
+            if end > start { return &cmd[start..end]; }
+        }
+    }
+    // bash/zsh (macOS/Linux): -c 'xxx' або -c "xxx"
+    for prefix in [" -c '", " -c \""] {
+        if let Some(pos) = cmd.find(prefix) {
+            let start = pos + prefix.len();
+            let quote = prefix.chars().last().unwrap();
+            let end = cmd[start..].rfind(quote).map(|p| start + p).unwrap_or(cmd.len());
+            if end > start { return &cmd[start..end]; }
+        }
+    }
+    cmd
+}
+
+/// Читає stdout по рядках (NDJSON --json), парсить події та викликає `on_chunk` з відформатованим текстом.
+/// thread_id береться з події thread.started і повертається як actual_session_id.
 pub fn call_codex_new_session_streaming(
     model: &str,
     user_content: &str,
-    session_id: &str,
+    _session_id: &str,
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
     on_chunk: impl Fn(&str),
@@ -132,7 +237,8 @@ pub fn call_codex_new_session_streaming(
     cmd.arg("exec")
         .arg("--model").arg(model)
         .arg("--dangerously-bypass-approvals-and-sandbox")
-        .arg("-") // Читаємо промпт зі stdin
+        .arg("--json")
+        .arg("-")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -141,19 +247,17 @@ pub fn call_codex_new_session_streaming(
         cmd.current_dir(dir);
     }
 
-    log(&format!("Running: codex exec --model {} --dangerously-bypass-approvals-and-sandbox -", model));
+    log(&format!("Running: codex exec --model {} --json --dangerously-bypass-approvals-and-sandbox -", model));
 
     let mut child = cmd.spawn().map_err(|e| {
         format!("Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.", e)
     })?;
 
-    // Записуємо промпт у stdin та закриваємо його для передачі EOF
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
         let _ = stdin.write_all(user_content.as_bytes());
     }
 
-    // Stderr читаємо в окремому потоці щоб не було deadlock
     let stderr_handle = {
         let stderr = child.stderr.take().unwrap();
         std::thread::spawn(move || {
@@ -164,60 +268,48 @@ pub fn call_codex_new_session_streaming(
     };
 
     let mut stdout = child.stdout.take().unwrap();
-    let mut full_output = String::new();
+    let mut line_buf = String::new();
+    let mut final_result = String::new();
+    let mut actual_session_id = String::new();
+    let mut acc_in: u64 = 0;
+    let mut acc_out: u64 = 0;
     let mut buf = [0u8; 512];
-    let mut sent_len = 0;
-    let mut actual_session_id = session_id.to_string();
 
     loop {
         let n = stdout.read(&mut buf).map_err(|e| format!("Read error: {}", e))?;
         if n == 0 { break; }
         let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
-        full_output.push_str(&chunk);
+        line_buf.push_str(&chunk);
 
-        // Шукаємо session id, якщо ще не знайшли
-        if actual_session_id == session_id {
-            if let Some(id) = find_session_id(&full_output) {
-                actual_session_id = id;
-                log(&format!("Detected real Codex session ID: {}", actual_session_id));
+        while let Some(pos) = line_buf.find('\n') {
+            let line = line_buf[..pos].to_string();
+            line_buf = line_buf[pos + 1..].to_string();
+            let trimmed = line.trim();
+            if trimmed.is_empty() { continue; }
+
+            // Витягуємо thread_id з першої події
+            if actual_session_id.is_empty() {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                    if v.get("type").and_then(|t| t.as_str()) == Some("thread.started") {
+                        if let Some(id) = v.get("thread_id").and_then(|id| id.as_str()) {
+                            actual_session_id = id.to_string();
+                            log(&format!("Codex thread_id: {}", actual_session_id));
+                        }
+                    }
+                }
+            }
+
+            if let Some(text) = format_codex_json_event(trimmed, &mut final_result, &mut acc_in, &mut acc_out) {
+                on_chunk(&text);
             }
         }
+    }
 
-        // Обчислюємо корисний текст для стрімінгу
-        let mut start_pos = None;
-        if full_output.starts_with("codex\n") {
-            start_pos = Some(6);
-        } else if full_output.starts_with("codex\r\n") {
-            start_pos = Some(7);
-        } else if let Some(pos) = full_output.find("\ncodex\n") {
-            start_pos = Some(pos + 7);
-        } else if let Some(pos) = full_output.find("\ncodex\r\n") {
-            start_pos = Some(pos + 8);
-        } else if let Some(pos) = full_output.find("\r\ncodex\r\n") {
-            start_pos = Some(pos + 9);
-        }
-
-        if let Some(sp) = start_pos {
-            let sub = &full_output[sp..];
-            let mut end_pos = None;
-            if let Some(pos) = sub.find("\ntokens used\n") {
-                end_pos = Some(pos);
-            } else if let Some(pos) = sub.find("\ntokens used\r\n") {
-                end_pos = Some(pos);
-            } else if let Some(pos) = sub.find("\r\ntokens used\r\n") {
-                end_pos = Some(pos);
-            }
-
-            let useful_text = match end_pos {
-                Some(ep) => &sub[..ep],
-                None => sub,
-            };
-
-            if useful_text.len() > sent_len {
-                let to_send = &useful_text[sent_len..];
-                on_chunk(to_send);
-                sent_len = useful_text.len();
-            }
+    // Обробляємо залишок буфера
+    let remaining = line_buf.trim().to_string();
+    if !remaining.is_empty() {
+        if let Some(text) = format_codex_json_event(&remaining, &mut final_result, &mut acc_in, &mut acc_out) {
+            on_chunk(&text);
         }
     }
 
@@ -226,12 +318,11 @@ pub fn call_codex_new_session_streaming(
 
     if exit_status.success() {
         log("Codex CLI agent session completed successfully.");
-        let final_response = extract_codex_response(&full_output);
-        Ok((final_response, actual_session_id))
+        Ok((final_result.trim().to_string(), actual_session_id))
     } else {
         let err_msg = format!(
-            "Codex CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            exit_status.code(), stderr.trim(), full_output.trim()
+            "Codex CLI error (exit code: {:?}).\n--- STDERR ---\n{}",
+            exit_status.code(), stderr.trim()
         );
         log(&err_msg);
         Err(format!("Codex CLI error: {}", stderr.trim()))
@@ -264,7 +355,8 @@ pub fn call_codex_resume(
         .arg(session_id)
         .arg("--model").arg(model)
         .arg("--dangerously-bypass-approvals-and-sandbox")
-        .arg("-") // Читаємо повідомлення зі stdin
+        .arg("--json")
+        .arg("-")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -277,7 +369,6 @@ pub fn call_codex_resume(
         format!("Failed to launch codex CLI resume: {}", e)
     })?;
 
-    // Записуємо повідомлення у stdin та закриваємо його для передачі EOF
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
         let _ = stdin.write_all(message.as_bytes());
@@ -288,20 +379,45 @@ pub fn call_codex_resume(
     })?;
 
     if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout);
         log("Codex CLI resume completed.");
-        let clean_response = extract_codex_response(&stdout);
-        Ok(clean_response)
+        let response = parse_codex_json_response(&stdout)
+            .unwrap_or_else(|| stdout.trim().to_string());
+        Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let err_msg = format!(
+        log(&format!(
             "Codex CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
             output.status.code(), stderr, stdout
-        );
-        log(&err_msg);
+        ));
         Err(format!("Codex CLI error: {}", stderr))
     }
+}
+
+/// Витягує фінальну відповідь агента з NDJSON-виводу Codex CLI --json.
+/// Шукає останній item.completed type agent_message.
+fn parse_codex_json_response(output: &str) -> Option<String> {
+    let mut last_text = None;
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() { continue; }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if v.get("type").and_then(|t| t.as_str()) == Some("item.completed") {
+                if let Some(item) = v.get("item") {
+                    if item.get("type").and_then(|t| t.as_str()) == Some("agent_message") {
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            let trimmed_text = text.trim();
+                            if !trimmed_text.is_empty() {
+                                last_text = Some(trimmed_text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    last_text
 }
 
 /// Викликає Codex CLI для виконання перекладу сценарію або іншого тексту та повертає результат.
