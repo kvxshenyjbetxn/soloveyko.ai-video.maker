@@ -382,7 +382,7 @@ pub struct ClipDragState {
 **`retry_from_stage`** (`mod.rs`) — публічна функція повторного запуску з довільного етапу. Приймає `RetryStage` і всі ті самі Arcs що й `run_pipeline`. Скидає статуси цього та всіх наступних етапів (і пов'язані Arc-поля типу `audio_duration`, `montage_progress` тощо), потім залежно від stage:
 - **Translation** — очищує `translated_text`/`total_cost` (скидає вартість до `None`), скидає всі 5 stage-статусів, викликає `run_pipeline` (повний перезапуск).
 - **Voiceover** — спавнить потік: `run_av_branch` → `run_final_stages`.
-- **Video** — спавнить потік: `run_video_branch` → media-control пауза (якщо увімкнено) → `run_final_stages`.
+- **Video** — спавнить потік: у агентному режимі (`Claude Code` / `Gemini CLI` / `Codex CLI`) спочатку викликає `run_agent_timeline` для створення `timeline.json`, потім `run_video_branch`, потім `assign_media_to_timeline` (патч шляхів медіа в `timeline.json`) → media-control пауза (якщо увімкнено) → `run_final_stages`. У звичайному режимі — одразу `run_video_branch` → пауза → `run_final_stages`.
 - **Subtitles** — спавнить потік: `run_subtitles_only` → `run_final_stages`.
 - **Montage** — спавнить потік: `run_final_stages` (лише timeline + montage).
 
@@ -390,7 +390,7 @@ pub struct ClipDragState {
 
 **`run_subtitles_only`** (`mod.rs`) — хелпер, виокремлений з `run_av_branch`. Диспетчеризує генерацію субтитрів (Whisper/WhisperX/AssemblyAI + karaoke) без озвучки. Використовується і в `run_av_branch`, і в `retry_from_stage(Subtitles)`.
 
-**`run_final_stages`** (`mod.rs`) — хелпер для спільної фінальної частини: `build_timeline` (якщо `video_enabled`) → **пауза контролю монтажу** (якщо `montage_enabled && montage_control_enabled`) → або `generate_capcut_project` (якщо `capcut_enabled`), або `run_montage` (якщо `montage_enabled`). Ці два шляхи взаємовиключні: якщо CapCut увімкнено, FFmpeg-монтаж пропускається. Пауза контролю монтажу: встановлює статус `AwaitingMontageControl`, блокується на `Condvar::wait()`, після сигналу повертається в `Running`. Приймає `&status` і `&montage_control_resume` як параметри — однакові Arc що й у `run_pipeline`.
+**`run_final_stages`** (`mod.rs`) — хелпер для спільної фінальної частини: `build_timeline` (якщо `video_enabled` **і не агентний режим** — в агентному `timeline.json` вже створений агентом і перезаписувати не можна) → **пауза контролю монтажу** (якщо `montage_enabled && montage_control_enabled`) → або `generate_capcut_project` (якщо `capcut_enabled`), або `run_montage` (якщо `montage_enabled`). Ці два шляхи взаємовиключні: якщо CapCut увімкнено, FFmpeg-монтаж пропускається. Пауза контролю монтажу: встановлює статус `AwaitingMontageControl`, блокується на `Condvar::wait()`, після сигналу повертається в `Running`. Приймає `&status` і `&montage_control_resume` як параметри — однакові Arc що й у `run_pipeline`.
 
 **Контроль зображень (Media Control):** якщо `settings.media_control_enabled && settings.video_enabled` і відеогілка завершилась успішно (`Some(Ok(()))`), пайплайн встановлює статус `AwaitingMediaControl` та блокується на `Condvar::wait()`. AV-гілка в цей час продовжує виконуватись у власному потоці. Після сигналу від UI (`*lock = true; cvar.notify_one()`) статус повертається в `Running` і пайплайн продовжує до Timeline → Монтаж. Важливо: налаштування `media_control_enabled` знімається на момент додавання задачі в чергу — зміна перемикача після цього не впливає на вже додані задачі.
 
