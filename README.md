@@ -23,7 +23,7 @@
 
 ```
 src/
-├── main.rs                      — точка входу, конфіг вікна, запуск eframe
+├── main.rs                      — точка входу, конфіг вікна, запуск eframe; містить `pub const APP_VERSION: &str` — єдине місце де оновлюється версія програми (заголовок вікна + перевірка оновлень)
 ├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() — тільки виклики gui-субмодулів, без inline UI-логіки
 ├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/; бандлований ffmpeg/ffprobe завжди пріоритетніший за системний
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
@@ -39,7 +39,8 @@ src/
 │   ├── gemini.rs                — call_gemini_new_session_streaming (--session-id, spawn()+BufReader, on_chunk викликається один раз з parsed JSON у кінці) + call_gemini_resume (--resume) + call_gemini_cli (звичайний виклик, --yolo) + GeminiLimiter (семафор); запуск напряму Command::new("gemini") без cmd /C
 │   ├── codex.rs                 — call_codex_new_session_streaming (--json флаг, NDJSON стрімінг через BufReader, format_codex_json_event: парсить thread.started → thread_id, item.started command_execution → [Bash] $cmd, item.completed agent_message → текст, item.completed command_execution → [->] перший рядок виводу, item.completed file_change → [->] filename (kind), turn.completed → [STATS]; extract_shell_command — крос-платформне відсікання -Command/-c префіксів) + call_codex_resume (--json + parse_codex_json_response: останнє item.completed agent_message) + call_codex (звичайний виклик без --json, лише для перекладу) + CodexLimiter (семафор); запуск напряму Command::new("codex") без cmd /C
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
-│   └── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
+│   ├── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
+│   └── updater.rs               — check_for_updates (фонова перевірка GitHub releases на нові релізи, порівнює tag_name з APP_VERSION), open_url (крос-платформне відкриття URL: cmd+start на Windows, open на macOS)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
 │   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); allow_tools: bool = true передається тільки з run_agent_timeline щоб дозволити Claude запис файлів; call_openrouter: HTTP запит до OpenRouter Chat completions API з авто-ретраями при порожній відповіді (до 5 спроб); ChatMessageContent.content: Option<String> (null-safe)
@@ -89,6 +90,7 @@ src/
 │   │   ├── regen.rs             — draw_media_regen_window: вікно кастомної перегенерації медіафайлу
 │   │   ├── tab.rs               — draw_gallery_tab: основна вкладка галереї медіафайлів
 │   │   └── video_player.rs      — VideoPlayer, streaming витягування кадрів, hover-анімація, thumbnail першого кадру
+│   ├── update_dialog.rs         — draw_update_dialog: модальне вікно сповіщення про нову версію (по центру екрана, показує версію + скролюваний changelog, кнопки «Завантажити» і «Пізніше»)
 │   ├── subtitle_fonts.rs        — SUBTITLE_FONTS константа (37 шрифтів з fallback-іменами), load_subtitle_fonts(): завантажує системні шрифти у egui FontDefinitions при старті
 │   ├── pipeline/
 │   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue + build_job_settings
@@ -856,6 +858,10 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`MediaItem.id` — новий UUID кожної сесії.** `MediaItem::new` викликає `uuid_str()` при кожному створенні. UUID з `timeline.json` (`media_id` кліпу) застарівають після перезапуску програми. `MontageEditorState::load()` синхронізує `clip.media_id` з `pool_item.id` через path-lookup після побудови пулу. Без цього ID-lookup у `find_media_for_clip` завжди провалювався б при роботі зі збереженими таймлайнами. Нові кліпи, додані drag-drop у поточній сесії, мають актуальний `media_id` з самого початку.
 
 - **`has_active` у `draw_queue_panel` — включає всі «waiting» статуси.** Кнопка «🗑 Очистити» блокується якщо `has_active == true`. Перевірка охоплює: `Running | AwaitingControl | AwaitingMediaControl | AwaitingAgentControl | AwaitingMontageControl`. Якщо не включити `AwaitingMontageControl`, можна очистити чергу поки пайплайн заблокований на Condvar — condvar більше ніхто не розблокує і задача зависне в фоновому потоці.
+
+- **`APP_VERSION` — єдине місце версії програми.** Константа `pub const APP_VERSION: &str` у `main.rs` використовується і для заголовку вікна (`format!("...v{}", APP_VERSION)`), і в `api/updater.rs` для порівняння з тегом GitHub-релізу. При виході нової версії достатньо змінити лише цей рядок.
+
+- **Перевірка оновлень при старті.** `check_for_updates` spawns фоновий потік що звертається до `api.github.com/repos/kvxshenyjbetxn/repo.releases/releases/latest`. Порівнює `tag_name` релізу з `APP_VERSION` як semver-кортеж `(major, minor, patch)`. При новій версії заповнює `update_info: Arc<Mutex<Option<UpdateInfo>>>` і викликає `ctx.request_repaint()`. В `update()` — перший кадр де `update_info.is_some()` автоматично відкриває `update_dialog_open = true`. Кнопка «Пізніше» очищає `update_info = None` — без цього діалог відкривався б знову на наступному кадрі. Посилання для завантаження: на Windows шукається asset з `.exe` у назві, на macOS — без `.exe`.
 
 - **`windows_subsystem = "windows"`** у `main.rs` — приховує консоль у release-білді на Windows. У debug-режимі консоль є.
 

@@ -384,6 +384,11 @@ pub fn translate_en(key: &str) -> &'static str {
         "task_history_stage_vid"      => "Vid",
         "task_history_stage_s"        => "Sub",
         "task_history_stage_m"        => "Mon",
+        "update_title"         => "Update Available",
+        "update_new_version"   => "New version:",
+        "update_changelog"     => "Changelog:",
+        "update_download_btn"  => "Download",
+        "update_later_btn"     => "Later",
         _ => "",
     }
 }

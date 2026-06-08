@@ -384,6 +384,11 @@ pub fn translate_ru(key: &str) -> &'static str {
         "task_history_stage_vid"      => "Видео",
         "task_history_stage_s"        => "Суб",
         "task_history_stage_m"        => "Монт",
+        "update_title"         => "Доступно обновление",
+        "update_new_version"   => "Новая версия:",
+        "update_changelog"     => "Список изменений:",
+        "update_download_btn"  => "Скачать",
+        "update_later_btn"     => "Позже",
         _ => "",
     }
 }

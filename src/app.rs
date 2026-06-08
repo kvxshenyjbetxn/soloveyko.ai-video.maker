@@ -388,6 +388,10 @@ pub struct VideoMakerApp {
     pub editor_stats: crate::gui::editor::EditorStats,
     /// Список задач з историчними налаштуваннями пайплайну.
     pub task_history: Vec<crate::gui::settings::storage::TaskHistoryEntry>,
+    /// Результат фонової перевірки оновлень. None = ще не завершено або оновлень немає.
+    pub update_info: std::sync::Arc<std::sync::Mutex<Option<crate::api::updater::UpdateInfo>>>,
+    /// Чи відкрите вікно сповіщення про оновлення.
+    pub update_dialog_open: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -578,6 +582,8 @@ impl Default for VideoMakerApp {
             gallery_prompt_popup: None,
             editor_stats: crate::gui::editor::EditorStats::default(),
             task_history: Vec::new(),
+            update_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            update_dialog_open: false,
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -942,11 +948,19 @@ impl VideoMakerApp {
             gallery_prompt_popup: None,
             editor_stats: crate::gui::editor::EditorStats::default(),
             task_history: crate::gui::settings::storage::load_task_history(),
+            update_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            update_dialog_open: false,
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
         crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
+
+        // Фонова перевірка оновлень при старті
+        crate::api::updater::check_for_updates(
+            std::sync::Arc::clone(&app.update_info),
+            cc.egui_ctx.clone(),
+        );
 
         app
     }
@@ -1205,6 +1219,22 @@ impl eframe::App for VideoMakerApp {
                 crate::gui::settings::storage::save_settings(&new_settings);
                 self.last_saved_settings = new_settings;
             }
+        }
+
+        // Перевіряємо результат фонової перевірки оновлень і відкриваємо діалог
+        {
+            let has_update = self.update_info.lock().unwrap().is_some();
+            if has_update && !self.update_dialog_open {
+                self.update_dialog_open = true;
+            }
+        }
+        if self.update_dialog_open {
+            crate::gui::update_dialog::draw_update_dialog(
+                ctx,
+                self.language,
+                &self.update_info,
+                &mut self.update_dialog_open,
+            );
         }
 
         // Верхня панель для навігації між вкладками

@@ -384,6 +384,11 @@ pub fn translate_uk(key: &str) -> &'static str {
         "task_history_stage_vid"      => "Відео",
         "task_history_stage_s"        => "Суб",
         "task_history_stage_m"        => "Монт",
+        "update_title"         => "Доступне оновлення",
+        "update_new_version"   => "Нова версія:",
+        "update_changelog"     => "Список змін:",
+        "update_download_btn"  => "Завантажити",
+        "update_later_btn"     => "Пізніше",
         _ => "",
     }
 }

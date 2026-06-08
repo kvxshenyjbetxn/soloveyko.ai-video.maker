@@ -7,3 +7,4 @@ pub mod codex;
 pub mod edgetts;
 pub mod ffmpeg;
 pub mod assemblyai;
+pub mod updater;

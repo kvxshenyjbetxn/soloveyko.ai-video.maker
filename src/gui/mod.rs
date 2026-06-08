@@ -9,4 +9,5 @@ pub mod settings;
 pub mod subtitle_fonts;
 pub mod task_history;
 pub mod topbar;
+pub mod update_dialog;
 pub mod welcome;
