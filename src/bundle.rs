@@ -503,3 +503,28 @@ pub fn new_cli_command(name: &str) -> std::process::Command {
     }
 }
 
+/// Створює std::process::Command для CLI-інструменту (claude, gemini тощо)
+/// БЕЗ використання cmd /C на Windows, щоб уникнути проблем із передачею довгих аргументів,
+/// але з пошуком бінарника та встановленням розширеного PATH на macOS.
+pub fn new_direct_cli_command(name: &str) -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new(name);
+        set_no_window(&mut cmd);
+        cmd
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let candidate = find_binary_macos(name);
+        let mut cmd = std::process::Command::new(&candidate);
+        cmd.env("PATH", macos_extended_path());
+        cmd
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        std::process::Command::new(name)
+    }
+}
+

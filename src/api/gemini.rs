@@ -90,7 +90,7 @@ pub fn call_gemini_new_session_streaming(
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command("gemini")!
     // Див. коментар у claude.rs — та сама причина: cmd /C ламає аргументи на Windows.
-    let mut cmd = std::process::Command::new("gemini");
+    let mut cmd = crate::bundle::new_direct_cli_command("gemini");
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(user_content)
@@ -99,7 +99,6 @@ pub fn call_gemini_new_session_streaming(
         .arg("--session-id").arg(session_id)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -167,14 +166,13 @@ pub fn call_gemini_resume(
     log(&format!("Resuming Gemini CLI session: {}", session_id));
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_gemini_new_session_streaming.
-    let mut cmd = std::process::Command::new("gemini");
+    let mut cmd = crate::bundle::new_direct_cli_command("gemini");
     cmd.arg("--model").arg(model)
         .arg("--output-format").arg("json")
         .arg("--prompt").arg(message)
         .arg("--yolo")
         .arg("--skip-trust")
         .arg("--resume").arg(session_id);
-    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -225,7 +223,7 @@ pub fn call_gemini_cli(
     log(&format!("Starting Gemini CLI translation. Model: {}", model));
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_gemini_new_session_streaming.
-    let mut cmd = std::process::Command::new("gemini");
+    let mut cmd = crate::bundle::new_direct_cli_command("gemini");
 
     // Запускаємо: gemini --model <model> --output-format json --prompt "<prompt>" --yolo --skip-trust
     // JSON-формат гарантує чисту відповідь без технічного сміття у полі "response"
@@ -237,7 +235,6 @@ pub fn call_gemini_cli(
         .arg(user_content)
         .arg("--yolo")
         .arg("--skip-trust");
-    crate::bundle::set_no_window(&mut cmd);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
