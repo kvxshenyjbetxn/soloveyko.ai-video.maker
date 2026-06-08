@@ -210,11 +210,13 @@ pub fn draw_video_section(
             }
         }
 
-        ui.add_space(8.0);
+        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI";
 
-        // Промт для генерації зображень
+        // Промт для генерації зображень — прихований в агентному режимі
         let expand_id = ui.make_persistent_id("video_prompt_expand");
         let mut expand_open: bool = ui.data_mut(|d| d.get_persisted(expand_id).unwrap_or(false));
+
+        if !is_agent_mode {
 
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(translate(language, "video_prompt_label")).strong());
@@ -276,8 +278,9 @@ pub fn draw_video_section(
                 .size(11.0)
         );
 
+        } // !is_agent_mode
+
         // Поле інструкції агенту — лише при Claude Code або Gemini CLI або Codex CLI
-        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI";
         if is_agent_mode {
             ui.add_space(8.0);
             ui.label(egui::RichText::new(translate(language, "video_agent_prompt_label")).strong());

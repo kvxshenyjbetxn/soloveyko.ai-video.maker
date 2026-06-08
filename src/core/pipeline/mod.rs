@@ -1222,9 +1222,11 @@ fn run_video_branch(
             }
         }
     } else {
-        // Без ЛЛМ — миттєва підстановка
+        // Без ЛЛМ — в агентному режимі text йде напряму, інакше підстановка в video_prompt
         for (i, segment) in segments.iter().enumerate() {
-            prompts[i] = if settings.video_prompt.contains("{{text}}") {
+            prompts[i] = if is_agent_mode {
+                segment.clone()
+            } else if settings.video_prompt.contains("{{text}}") {
                 settings.video_prompt.replace("{{text}}", segment)
             } else if settings.video_prompt.is_empty() {
                 segment.clone()
