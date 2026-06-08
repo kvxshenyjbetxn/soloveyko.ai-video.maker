@@ -2233,7 +2233,7 @@ pub fn retry_from_stage(
             );
         }
 
-        // Повтор озвучки → субтитри → монтаж (відеоряд не чіпаємо)
+        // Повтор озвучки → субтитри → (агент + відеоряд якщо агентний режим і медіа немає) → монтаж
         Voiceover => {
             *voiceover_stage.lock().unwrap() = SPending;
             *subtitles_stage.lock().unwrap() = SPending;
@@ -2258,6 +2258,57 @@ pub fn retry_from_stage(
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
                     return;
+                }
+
+                // В агентному режимі після AV гілки запускаємо агента та відеогілку
+                // (якщо відеоряд ще не був виконаний раніше — тобто немає збережених медіафайлів)
+                let is_agent_mode = settings.video_enabled &&
+                    (settings.video_llm_service == "Claude Code"
+                        || settings.video_llm_service == "Gemini CLI"
+                        || settings.video_llm_service == "Codex CLI"
+                        || settings.video_llm_service == "AGY CLI");
+                let video_already_done = *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
+
+                if is_agent_mode && !video_already_done {
+                    crate::logger::log_job(job_id, &job_name, "Agent mode: creating timeline.json...");
+                    *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+                    ctx.request_repaint();
+
+                    if let Err(e) = run_agent_timeline(
+                        job_id, &job_name, &settings,
+                        Arc::clone(&status),
+                        Arc::clone(&agent_chat),
+                        Arc::clone(&agent_session),
+                        Arc::clone(&agent_control_resume),
+                        &ctx,
+                    ) {
+                        crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
+                        *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        ctx.request_repaint();
+                        return;
+                    }
+
+                    let video_result = run_video_branch(
+                        job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
+                        Arc::clone(&video_stage), Arc::clone(&prompts_progress),
+                        Arc::clone(&media_progress), Arc::clone(&total_cost), ctx.clone(),
+                    );
+
+                    if let Ok(()) = &video_result {
+                        let save_dir = std::path::Path::new(&settings.save_path);
+                        if let Err(e) = assign_media_to_timeline(save_dir) {
+                            crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
+                        } else {
+                            crate::logger::log_job(job_id, &job_name, "Timeline patched with media paths.");
+                        }
+                    }
+
+                    if let Err(e) = video_result {
+                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        ctx.request_repaint();
+                        return;
+                    }
                 }
 
                 if let Err(e) = run_final_stages(
@@ -2370,7 +2421,7 @@ pub fn retry_from_stage(
             });
         }
 
-        // Повтор лише субтитрів → монтаж
+        // Повтор лише субтитрів → (агент + відеоряд якщо агентний режим) → монтаж
         Subtitles => {
             *subtitles_stage.lock().unwrap() = SPending;
             *montage_stage.lock().unwrap() = SPending;
@@ -2386,6 +2437,57 @@ pub fn retry_from_stage(
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
                     return;
+                }
+
+                // В агентному режимі після субтитрів запускаємо агента та відеогілку
+                // (якщо відеоряд ще не був виконаний раніше)
+                let is_agent_mode = settings.video_enabled &&
+                    (settings.video_llm_service == "Claude Code"
+                        || settings.video_llm_service == "Gemini CLI"
+                        || settings.video_llm_service == "Codex CLI"
+                        || settings.video_llm_service == "AGY CLI");
+                let video_already_done = *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
+
+                if is_agent_mode && !video_already_done {
+                    crate::logger::log_job(job_id, &job_name, "Agent mode: creating timeline.json...");
+                    *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+                    ctx.request_repaint();
+
+                    if let Err(e) = run_agent_timeline(
+                        job_id, &job_name, &settings,
+                        Arc::clone(&status),
+                        Arc::clone(&agent_chat),
+                        Arc::clone(&agent_session),
+                        Arc::clone(&agent_control_resume),
+                        &ctx,
+                    ) {
+                        crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
+                        *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        ctx.request_repaint();
+                        return;
+                    }
+
+                    let video_result = run_video_branch(
+                        job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
+                        Arc::clone(&video_stage), Arc::clone(&prompts_progress),
+                        Arc::clone(&media_progress), Arc::clone(&total_cost), ctx.clone(),
+                    );
+
+                    if let Ok(()) = &video_result {
+                        let save_dir = std::path::Path::new(&settings.save_path);
+                        if let Err(e) = assign_media_to_timeline(save_dir) {
+                            crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
+                        } else {
+                            crate::logger::log_job(job_id, &job_name, "Timeline patched with media paths.");
+                        }
+                    }
+
+                    if let Err(e) = video_result {
+                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        ctx.request_repaint();
+                        return;
+                    }
                 }
 
                 if let Err(e) = run_final_stages(

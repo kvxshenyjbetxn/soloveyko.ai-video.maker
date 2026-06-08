@@ -382,9 +382,9 @@ pub struct ClipDragState {
 
 **`retry_from_stage`** (`mod.rs`) — публічна функція повторного запуску з довільного етапу. Приймає `RetryStage` і всі ті самі Arcs що й `run_pipeline`. Скидає статуси цього та всіх наступних етапів (і пов'язані Arc-поля типу `audio_duration`, `montage_progress` тощо), потім залежно від stage:
 - **Translation** — очищує `translated_text`/`total_cost` (скидає вартість до `None`), скидає всі 5 stage-статусів, викликає `run_pipeline` (повний перезапуск).
-- **Voiceover** — спавнить потік: `run_av_branch` → `run_final_stages`.
+- **Voiceover** — спавнить потік: `run_av_branch` → якщо агентний режим і `video_stage != Done` — `run_agent_timeline` → `run_video_branch` → `assign_media_to_timeline` → `run_final_stages`. Якщо відеоряд вже є (збережені медіафайли) — `video_stage == Done`, агент не запускається, відразу `run_final_stages`.
 - **Video** — спавнить потік: у агентному режимі (`Claude Code` / `Gemini CLI` / `Codex CLI` / `AGY CLI`) спочатку викликає `run_agent_timeline` для створення `timeline.json`, потім `run_video_branch`, потім `assign_media_to_timeline` (патч шляхів медіа в `timeline.json`) → media-control пауза (якщо увімкнено) → `run_final_stages`. У звичайному режимі — одразу `run_video_branch` → пауза → `run_final_stages`.
-- **Subtitles** — спавнить потік: `run_subtitles_only` → `run_final_stages`.
+- **Subtitles** — спавнить потік: `run_subtitles_only` → якщо агентний режим і `video_stage != Done` — `run_agent_timeline` → `run_video_branch` → `assign_media_to_timeline` → `run_final_stages`. Якщо відеоряд вже є (збережені медіафайли) — `video_stage == Done`, агент не запускається, відразу `run_final_stages`. **Важливий нюанс:** при відновленні задачі з наявним лише аудіо (тільки `voice.mp3/wav`, без `subtitle.srt`) — `resume_stage()` повертає `Subtitles`, і саме в цій гілці після субтитрів запускається агент і генерація медіа.
 - **Montage** — спавнить потік: `run_final_stages` (лише timeline + montage).
 
 Після успіху будь-якого retry-потоку задача переходить у `Done`. Якщо помилка — у `Failed`.
