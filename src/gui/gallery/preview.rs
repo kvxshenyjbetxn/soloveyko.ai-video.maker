@@ -12,6 +12,24 @@ pub fn load_image_texture(ctx: &egui::Context, path: &std::path::Path) -> Option
     Some(ctx.load_texture(name, color_image, egui::TextureOptions::LINEAR))
 }
 
+/// Запускає асинхронне завантаження зображення з диску у фоновому потоці.
+pub fn start_image_loading(
+    path: std::path::PathBuf,
+    ctx: egui::Context,
+    loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
+) {
+    std::thread::spawn(move || {
+        loading.lock().unwrap().insert(path.clone());
+        ctx.request_repaint();
+
+        let tex = load_image_texture(&ctx, &path);
+        result.lock().unwrap().push((path.clone(), tex));
+        loading.lock().unwrap().remove(&path);
+        ctx.request_repaint();
+    });
+}
+
 /// Повноекранний перегляд зображення поверх інтерфейсу.
 /// Повертає (keep_open, regen_kind): keep_open=false → закрити;
 /// regen_kind: Some(false)=ті ж налаштування, Some(true)=кастомні.

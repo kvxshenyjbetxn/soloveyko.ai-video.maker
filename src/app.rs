@@ -87,8 +87,12 @@ pub struct VideoMakerApp {
     pub montage_editor_open_job: Option<u64>,
     /// Стан редактора монтажу (завантажений timeline, аудіо тощо).
     pub montage_editor_state: Option<crate::gui::montage_editor::MontageEditorState>,
-    /// Кеш текстур для галереї медіафайлів. None означає помилку завантаження.
+    /// Кеш текстур для галереї медіафайлів. None означає що ще завантажується або помилка.
     pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    /// Набір шляхів зображень, які зараз завантажуються у фоні.
+    pub gallery_image_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    /// Результат фонового завантаження зображень галереї.
+    pub gallery_image_result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
     /// Зображення, яке зараз відкрите у повноекранному перегляді.
     pub gallery_preview: Option<std::path::PathBuf>,
     /// Набір шляхів зображень, які зараз анімуються у фоні (image-to-video).
@@ -444,6 +448,8 @@ impl Default for VideoMakerApp {
             montage_editor_open_job: None,
             montage_editor_state: None,
             gallery_textures: std::collections::HashMap::new(),
+            gallery_image_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            gallery_image_result: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
@@ -830,6 +836,8 @@ impl VideoMakerApp {
             montage_editor_open_job: None,
             montage_editor_state: None,
             gallery_textures: std::collections::HashMap::new(),
+            gallery_image_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            gallery_image_result: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
@@ -994,6 +1002,9 @@ impl VideoMakerApp {
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
         crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
+
+        // Прогрів tiktoken encoder у фоновому потоці, щоб уникнути freeze при першому відкритті редактора
+        std::thread::spawn(|| { crate::gui::editor::count_tokens(""); });
 
         // Фонова перевірка оновлень при старті
         crate::api::updater::check_for_updates(
@@ -1619,9 +1630,11 @@ impl eframe::App for VideoMakerApp {
         let mut animate_all = false;
         let mut hover_extract_request: Option<std::path::PathBuf> = None;
         let mut thumb_requests: Vec<std::path::PathBuf> = Vec::new();
+        let mut image_load_requests: Vec<std::path::PathBuf> = Vec::new();
         let mut prompt_view_request: Option<std::path::PathBuf> = None;
         let hover_loading_snapshot = self.video_hover_loading.lock().unwrap().clone();
         let thumb_loading_snapshot = self.video_thumb_loading.lock().unwrap().clone();
+        let image_loading_snapshot = self.gallery_image_loading.lock().unwrap().clone();
         egui::CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
@@ -1647,6 +1660,8 @@ impl eframe::App for VideoMakerApp {
                             &thumb_loading_snapshot,
                             &mut thumb_requests,
                             &mut prompt_view_request,
+                            &mut image_load_requests,
+                            &image_loading_snapshot,
                         );
                         if switch_to_main {
                             self.active_tab = Tab::Main;
@@ -1740,6 +1755,26 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&self.video_thumb_loading),
                     std::sync::Arc::clone(&self.video_thumb_result),
                 );
+            }
+        }
+
+        // Запуск асинхронного завантаження зображень галереї
+        for path in image_load_requests {
+            crate::gui::gallery::preview::start_image_loading(
+                path,
+                ctx.clone(),
+                std::sync::Arc::clone(&self.gallery_image_loading),
+                std::sync::Arc::clone(&self.gallery_image_result),
+            );
+        }
+
+        // Дренування готових зображень у кеш текстур
+        {
+            let mut lock = self.gallery_image_result.lock().unwrap();
+            if !lock.is_empty() {
+                for (path, tex) in lock.drain(..) {
+                    self.gallery_textures.insert(path, tex);
+                }
             }
         }
 

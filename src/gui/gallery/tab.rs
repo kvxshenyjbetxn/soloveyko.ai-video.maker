@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::localization::translate;
-use super::{RegenAction, icons::{draw_refresh_icon, draw_menu_icon, draw_play_triangle, draw_eye_icon}, preview::load_image_texture};
+use super::{RegenAction, icons::{draw_refresh_icon, draw_menu_icon, draw_play_triangle, draw_eye_icon}};
 
 /// Малює вкладку галереї медіафайлів із деревом задач.
 pub fn draw_gallery_tab(
@@ -22,6 +22,8 @@ pub fn draw_gallery_tab(
     video_thumb_loading: &std::collections::HashSet<std::path::PathBuf>,
     thumb_requests: &mut Vec<std::path::PathBuf>,
     prompt_view_request: &mut Option<std::path::PathBuf>,
+    image_load_requests: &mut Vec<std::path::PathBuf>,
+    image_loading: &std::collections::HashSet<std::path::PathBuf>,
 ) -> bool {
     let awaiting: Vec<_> = jobs.iter()
         .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl)
@@ -83,7 +85,6 @@ pub fn draw_gallery_tab(
         return false;
     }
 
-    let ctx = ui.ctx().clone();
     let anim_set = anim_loading.lock().unwrap().clone();
 
     egui::ScrollArea::vertical()
@@ -183,8 +184,11 @@ pub fn draw_gallery_tab(
                                 resp
                             } else {
                                 if !gallery_textures.contains_key(file_path) {
-                                    let tex = load_image_texture(&ctx, file_path);
-                                    gallery_textures.insert(file_path.clone(), tex);
+                                    if !image_loading.contains(file_path) {
+                                        image_load_requests.push(file_path.clone());
+                                        // Резервуємо місце щоб уникнути повторних запитів
+                                        gallery_textures.insert(file_path.clone(), None);
+                                    }
                                 }
                                 if let Some(Some(tex)) = gallery_textures.get(file_path) {
                                     let img_size = tex.size_vec2();
