@@ -222,14 +222,20 @@ pub fn draw_translation_section(
                 .open(&mut still_open)
                 .resizable(true)
                 .collapsible(false)
+                .constrain(true)
                 .default_size([600.0, 400.0])
                 .show(ui.ctx(), |ui| {
-                    let te_height = (ui.available_height() - 36.0).max(100.0);
-                    let win_te_resp = ui.add_sized(
-                        [ui.available_width(), te_height],
-                        egui::TextEdit::multiline(translation_prompt)
-                            .hint_text(translate(language, "translation_prompt_hint")),
-                    );
+                    let win_te_resp = egui::ScrollArea::vertical()
+                        .max_height(ui.ctx().screen_rect().height() * 0.7)
+                        .id_salt("win_translation_prompt_scroll")
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(translation_prompt)
+                                    .desired_width(f32::INFINITY)
+                                    .hint_text(translate(language, "translation_prompt_hint")),
+                            )
+                        })
+                        .inner;
                     let win_te_id = win_te_resp.id;
                     ui.add_space(4.0);
                     if ui.button(translate(language, "translation_insert_placeholder")).clicked() {

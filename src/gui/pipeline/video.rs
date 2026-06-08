@@ -291,8 +291,22 @@ pub fn draw_video_section(
         // Поле інструкції агенту — лише при Claude Code або Gemini CLI або Codex CLI
         if is_agent_mode {
             ui.add_space(8.0);
-            ui.label(egui::RichText::new(translate(language, "video_agent_prompt_label")).strong());
+
+            let agent_expand_id = ui.make_persistent_id("video_agent_prompt_expand");
+            let mut agent_expand_open: bool = ui.data_mut(|d| d.get_persisted(agent_expand_id).unwrap_or(false));
+
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(translate(language, "video_agent_prompt_label")).strong());
+                if ui.small_button("⛶")
+                    .on_hover_text(translate(language, "prompt_expand_hint"))
+                    .clicked()
+                {
+                    agent_expand_open = !agent_expand_open;
+                    ui.data_mut(|d| d.insert_persisted(agent_expand_id, agent_expand_open));
+                }
+            });
             ui.add_space(4.0);
+
             let agent_available_width = ui.available_width();
             let agent_te_resp = egui::ScrollArea::vertical()
                 .max_height(60.0)
@@ -343,6 +357,62 @@ pub fn draw_video_section(
                     .weak()
                     .size(11.0)
             );
+
+            // Розгорнуте вікно редагування промту агента
+            if agent_expand_open {
+                let mut still_open = true;
+                egui::Window::new(translate(language, "video_agent_prompt_label"))
+                    .id(egui::Id::new("video_agent_prompt_window"))
+                    .open(&mut still_open)
+                    .resizable(true)
+                    .collapsible(false)
+                    .constrain(true)
+                    .default_size([600.0, 400.0])
+                    .show(ui.ctx(), |ui| {
+                        let win_te_resp = egui::ScrollArea::vertical()
+                            .max_height(ui.ctx().screen_rect().height() * 0.7)
+                            .id_salt("win_video_agent_prompt_scroll")
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(video_agent_prompt)
+                                        .desired_width(f32::INFINITY)
+                                        .hint_text(translate(language, "video_agent_prompt_hint")),
+                                )
+                            })
+                            .inner;
+                        let win_te_id = win_te_resp.id;
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            for to_insert in &["{{srt}}", "{{path}}"] {
+                                if ui.button(*to_insert).clicked() {
+                                    if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), win_te_id) {
+                                        if let Some(cursor_range) = state.cursor.char_range() {
+                                            let cursor_idx = cursor_range.primary.index;
+                                            let byte_idx = video_agent_prompt
+                                                .char_indices()
+                                                .map(|(b, _)| b)
+                                                .nth(cursor_idx)
+                                                .unwrap_or(video_agent_prompt.len());
+                                            video_agent_prompt.insert_str(byte_idx, to_insert);
+                                            let new_char_idx = cursor_idx + to_insert.chars().count();
+                                            let new_cursor = egui::text::CCursor::new(new_char_idx);
+                                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                                            state.store(ui.ctx(), win_te_id);
+                                        } else {
+                                            video_agent_prompt.push_str(to_insert);
+                                        }
+                                    } else {
+                                        video_agent_prompt.push_str(to_insert);
+                                    }
+                                    ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
+                                }
+                            }
+                        });
+                    });
+                if !still_open {
+                    ui.data_mut(|d| d.insert_persisted(agent_expand_id, false));
+                }
+            }
         }
 
         // Розгорнуте вікно редагування промту
@@ -352,14 +422,20 @@ pub fn draw_video_section(
                 .open(&mut still_open)
                 .resizable(true)
                 .collapsible(false)
+                .constrain(true)
                 .default_size([600.0, 400.0])
                 .show(ui.ctx(), |ui| {
-                    let te_height = (ui.available_height() - 36.0).max(100.0);
-                    let win_te_resp = ui.add_sized(
-                        [ui.available_width(), te_height],
-                        egui::TextEdit::multiline(video_prompt)
-                            .hint_text(translate(language, "video_prompt_hint")),
-                    );
+                    let win_te_resp = egui::ScrollArea::vertical()
+                        .max_height(ui.ctx().screen_rect().height() * 0.7)
+                        .id_salt("win_video_prompt_scroll")
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(video_prompt)
+                                    .desired_width(f32::INFINITY)
+                                    .hint_text(translate(language, "video_prompt_hint")),
+                            )
+                        })
+                        .inner;
                     let win_te_id = win_te_resp.id;
                     ui.add_space(4.0);
                     if ui.button(translate(language, "video_insert_placeholder")).clicked() {
