@@ -23,7 +23,7 @@
 
 ```
 src/
-├── main.rs                      — точка входу, конфіг вікна, запуск eframe; містить `pub const APP_VERSION: &str` — єдине місце де оновлюється версія програми (заголовок вікна + перевірка оновлень)
+├── main.rs                      — точка входу, конфіг вікна, запуск eframe; `APP_VERSION = env!("CARGO_PKG_VERSION")` — версія береться з Cargo.toml при компіляції
 ├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() — тільки виклики gui-субмодулів, без inline UI-логіки
 ├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/; `set_no_window()` приховує консолі дочірніх процесів на Windows; бандлований ffmpeg/ffprobe завжди пріоритетніший за системний
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
@@ -860,7 +860,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **`has_active` у `draw_queue_panel` — включає всі «waiting» статуси.** Кнопка «🗑 Очистити» блокується якщо `has_active == true`. Перевірка охоплює: `Running | AwaitingControl | AwaitingMediaControl | AwaitingAgentControl | AwaitingMontageControl`. Якщо не включити `AwaitingMontageControl`, можна очистити чергу поки пайплайн заблокований на Condvar — condvar більше ніхто не розблокує і задача зависне в фоновому потоці.
 
-- **`APP_VERSION` — єдине місце версії програми.** Константа `pub const APP_VERSION: &str` у `main.rs` використовується і для заголовку вікна (`format!("...v{}", APP_VERSION)`), і в `api/updater.rs` для порівняння з тегом GitHub-релізу. При виході нової версії достатньо змінити лише цей рядок.
+- **`APP_VERSION` — версія береться з `Cargo.toml`.** `pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION")` у `main.rs` — compile-time макрос, читає `version` з `[package]` Cargo.toml. Використовується і для заголовку вікна, і в `api/updater.rs` для порівняння з тегом GitHub-релізу. Щоб змінити версію — достатньо оновити `version` у `Cargo.toml`; `main.rs`, заголовок вікна та перевірка оновлень підхоплять нове значення при наступній компіляції.
 
 - **Перевірка оновлень при старті.** `check_for_updates` spawns фоновий потік що звертається до `api.github.com/repos/kvxshenyjbetxn/repo.releases/releases/latest`. Порівнює `tag_name` релізу з `APP_VERSION` як semver-кортеж `(major, minor, patch)`. При новій версії заповнює `update_info: Arc<Mutex<Option<UpdateInfo>>>` і викликає `ctx.request_repaint()`. В `update()` — перший кадр де `update_info.is_some()` автоматично відкриває `update_dialog_open = true`. Кнопка «Пізніше» очищає `update_info = None` — без цього діалог відкривався б знову на наступному кадрі. Посилання для завантаження: на Windows шукається asset з `.exe` у назві, на macOS — без `.exe`.
 
