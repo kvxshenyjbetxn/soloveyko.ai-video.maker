@@ -74,7 +74,6 @@ pub fn translate_en(key: &str) -> &'static str {
         "video_media" => "Media",
         "subtitles" => "Subtitles",
         "editing" => "Editing",
-        "script_editor" => "Script Editor",
         "editor_hint" => "Enter or paste the text of your future video script here...",
         "settings_general" => "General",
         "settings_general_title" => "General Settings",

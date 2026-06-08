@@ -74,7 +74,6 @@ pub fn translate_ru(key: &str) -> &'static str {
         "video_media" => "Медиа",
         "subtitles" => "Субтитры",
         "editing" => "Монтаж",
-        "script_editor" => "Редактор сценария",
         "editor_hint" => "Введите или вставьте сюда текст вашего будущего видеосценария...",
         "settings_general" => "Основные",
         "settings_general_title" => "Основные настройки",
