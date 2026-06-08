@@ -1082,7 +1082,8 @@ fn run_video_branch(
     // В агентному режимі сегменти беруться з timeline.json, LLM для промтів не викликається
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
-        || settings.video_llm_service == "Codex CLI";
+        || settings.video_llm_service == "Codex CLI"
+        || settings.video_llm_service == "AGY CLI";
 
     // Визначаємо текст: перекладений якщо є, інакше оригінал
     let source_text = if settings.translation_enabled {
@@ -1556,6 +1557,8 @@ pub fn call_agent_new_session_streaming(
         crate::api::gemini::call_gemini_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else if service == "Codex CLI" {
         crate::api::codex::call_codex_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
+    } else if service == "AGY CLI" {
+        crate::api::agy::call_agy_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
@@ -1576,6 +1579,8 @@ pub fn call_agent_resume(
         crate::api::gemini::call_gemini_resume(model, message, session_id, job_info, working_dir)
     } else if service == "Codex CLI" {
         crate::api::codex::call_codex_resume(model, message, session_id, job_info, working_dir)
+    } else if service == "AGY CLI" {
+        crate::api::agy::call_agy_resume(model, message, session_id, job_info, working_dir)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
@@ -1748,7 +1753,8 @@ pub fn run_pipeline(
         let is_agent_mode = run_video &&
             (settings.video_llm_service == "Claude Code"
                 || settings.video_llm_service == "Gemini CLI"
-                || settings.video_llm_service == "Codex CLI");
+                || settings.video_llm_service == "Codex CLI"
+                || settings.video_llm_service == "AGY CLI");
 
         if is_agent_mode {
             // === Агентний режим: послідовно ===

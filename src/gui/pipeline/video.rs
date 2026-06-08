@@ -119,6 +119,7 @@ pub fn draw_video_section(
     video_llm_model_claude: &mut String,
     video_llm_model_gemini: &mut String,
     video_llm_model_codex: &mut String,
+    video_llm_model_agy: &mut String,
     video_llm_temperature: &mut f32,
     video_agent_prompt: &mut String,
     video_llm_model_search: &mut String,
@@ -134,7 +135,7 @@ pub fn draw_video_section(
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
-        let is_cli_service = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI";
+        let is_cli_service = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI" || video_llm_service == "AGY CLI";
         if is_cli_service {
             *text_split_mode = "full".to_string();
         } else {
@@ -174,6 +175,8 @@ pub fn draw_video_section(
                     translate(language, "translation_service_gemini_cli")
                 } else if video_llm_service == "Codex CLI" {
                     translate(language, "translation_service_codex_cli")
+                } else if video_llm_service == "AGY CLI" {
+                    translate(language, "translation_service_agy_cli")
                 } else if video_llm_service == "OpenRouter" {
                     translate(language, "translation_service_openrouter")
                 } else {
@@ -186,6 +189,7 @@ pub fn draw_video_section(
                 ui.selectable_value(video_llm_service, "Claude Code".to_string(), translate(language, "translation_service_claude_code"));
                 ui.selectable_value(video_llm_service, "Gemini CLI".to_string(), translate(language, "translation_service_gemini_cli"));
                 ui.selectable_value(video_llm_service, "Codex CLI".to_string(), translate(language, "translation_service_codex_cli"));
+                ui.selectable_value(video_llm_service, "AGY CLI".to_string(), translate(language, "translation_service_agy_cli"));
             });
 
         // При зміні сервісу — відновлюємо відповідну збережену модель
@@ -198,6 +202,8 @@ pub fn draw_video_section(
                 *video_llm_model_gemini = video_llm_model.clone();
             } else if previous_llm_service == "Codex CLI" {
                 *video_llm_model_codex = video_llm_model.clone();
+            } else if previous_llm_service == "AGY CLI" {
+                *video_llm_model_agy = video_llm_model.clone();
             }
             if video_llm_service == "OpenRouter" {
                 *video_llm_model = video_llm_model_openrouter.clone();
@@ -207,10 +213,12 @@ pub fn draw_video_section(
                 *video_llm_model = if video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { video_llm_model_gemini.clone() };
             } else if video_llm_service == "Codex CLI" {
                 *video_llm_model = if video_llm_model_codex.is_empty() { "gpt-5.4-mini".to_string() } else { video_llm_model_codex.clone() };
+            } else if video_llm_service == "AGY CLI" {
+                *video_llm_model = if video_llm_model_agy.is_empty() { "default".to_string() } else { video_llm_model_agy.clone() };
             }
         }
 
-        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI";
+        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI" || video_llm_service == "AGY CLI";
 
         // Промт для генерації зображень — прихований в агентному режимі
         let expand_id = ui.make_persistent_id("video_prompt_expand");
@@ -388,7 +396,7 @@ pub fn draw_video_section(
             ui.add_space(8.0);
 
             if video_llm_service == "Claude Code" {
-                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.label(egui::RichText::new(translate(language, "model_label")).strong());
                 ui.add_space(4.0);
                 egui::ComboBox::from_id_salt("video_llm_claude_model")
                     .selected_text(if video_llm_model.is_empty() { "sonnet" } else { video_llm_model.as_str() })
@@ -399,7 +407,7 @@ pub fn draw_video_section(
                     });
                 *video_llm_model_claude = video_llm_model.clone();
             } else if video_llm_service == "Gemini CLI" {
-                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.label(egui::RichText::new(translate(language, "model_label")).strong());
                 ui.add_space(4.0);
                 egui::ComboBox::from_id_salt("video_llm_gemini_model")
                     .selected_text(if video_llm_model.is_empty() { "gemini-2.5-flash" } else { video_llm_model.as_str() })
@@ -412,7 +420,7 @@ pub fn draw_video_section(
                     });
                 *video_llm_model_gemini = video_llm_model.clone();
             } else if video_llm_service == "Codex CLI" {
-                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.label(egui::RichText::new(translate(language, "model_label")).strong());
                 ui.add_space(4.0);
                 egui::ComboBox::from_id_salt("video_llm_codex_model")
                     .selected_text(if video_llm_model.is_empty() { "gpt-5.4-mini" } else { video_llm_model.as_str() })
@@ -421,9 +429,19 @@ pub fn draw_video_section(
                         ui.selectable_value(video_llm_model, "gpt-5.4-mini".to_string(), "gpt-5.4-mini");
                     });
                 *video_llm_model_codex = video_llm_model.clone();
+            } else if video_llm_service == "AGY CLI" {
+                ui.label(egui::RichText::new(translate(language, "model_label")).strong());
+                ui.add_space(4.0);
+                egui::ComboBox::from_id_salt("video_llm_agy_model")
+                    .selected_text(if video_llm_model.is_empty() { "gemini-3.5-flash" } else { video_llm_model.as_str() })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(video_llm_model, "gemini-3.5-flash".to_string(), "gemini-3.5-flash");
+                        ui.selectable_value(video_llm_model, "gemini-3.1-pro-preview".to_string(), "gemini-3.1-pro-preview");
+                    });
+                *video_llm_model_agy = video_llm_model.clone();
             } else {
                 // OpenRouter — дропдаун з пошуком
-                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.label(egui::RichText::new(translate(language, "model_label")).strong());
                 ui.add_space(4.0);
 
                 let is_loading = *openrouter_models_loading.lock().unwrap();

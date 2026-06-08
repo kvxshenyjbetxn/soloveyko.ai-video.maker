@@ -16,6 +16,7 @@ pub fn draw_translation_control_window(
     control_regen_model_claude: &mut String,
     control_regen_model_gemini: &mut String,
     control_regen_model_codex: &mut String,
+    control_regen_model_agy: &mut String,
     control_regen_model_search: &mut String,
     control_regen_prompt: &mut String,
     control_regen_temperature: &mut f32,
@@ -243,6 +244,11 @@ pub fn draw_translation_control_window(
         } else {
             control_regen_model_codex.clone()
         };
+        *control_regen_model_agy = if job_settings.translation_service == "AGY CLI" {
+            if job_settings.translation_model.is_empty() { "gemini-3.5-flash".to_string() } else { job_settings.translation_model.clone() }
+        } else {
+            control_regen_model_agy.clone()
+        };
         *control_regen_prompt = job_settings.translation_prompt.clone();
         *control_regen_temperature = job_settings.translation_temperature;
         control_regen_model_search.clear();
@@ -287,6 +293,7 @@ pub fn draw_translation_control_window(
                             control_regen_model_claude,
                             control_regen_model_gemini,
                             control_regen_model_codex,
+                            control_regen_model_agy,
                         );
                     });
                 });

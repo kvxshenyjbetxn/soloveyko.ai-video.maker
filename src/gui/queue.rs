@@ -386,7 +386,8 @@ pub fn draw_queue_panel(
                                     let is_agent_mode = job.settings.video_enabled
                                         && (job.settings.video_llm_service == "Claude Code"
                                             || job.settings.video_llm_service == "Gemini CLI"
-                                            || job.settings.video_llm_service == "Codex CLI");
+                                            || job.settings.video_llm_service == "Codex CLI"
+                                            || job.settings.video_llm_service == "AGY CLI");
                                     if is_agent_mode {
                                         let chat_btn = ui.button(
                                             egui::RichText::new("💬").size(11.0),
