@@ -18,6 +18,8 @@ pub fn draw_media_regen_window(
     media_regen_job_name: &str,
     gallery_textures: &mut std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     media_regen_result: &std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
+    media_regen_paths: &std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    media_regen_results_queue: &std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>,
 ) {
     if !*media_regen_window_open { return; }
 
@@ -124,7 +126,8 @@ pub fn draw_media_regen_window(
                                 ctx.clone(),
                                 std::sync::Arc::clone(media_regen_result),
                                 std::sync::Arc::clone(media_regen_loading),
-                                None,
+                                Some(std::sync::Arc::clone(media_regen_paths)),
+                                Some(std::sync::Arc::clone(media_regen_results_queue)),
                                 base.googler_video_upscale_enabled,
                                 base.googler_video_upscale_resolution.clone(),
                                 base.googler_video_upscale_quality.clone(),

@@ -57,7 +57,16 @@ pub fn start_thumbnail_extraction(
         loading.lock().unwrap().insert(path.clone());
         ctx.request_repaint();
 
-        let tex = extract_single_frame_pipe(&path, &ctx, 160);
+        // Спочатку швидкий pipe-метод; якщо не вдалося (файл ще не готовий, специфічний кодек)
+        // — fallback через файловий метод з невеликою паузою
+        let tex = extract_single_frame_pipe(&path, &ctx, 160).or_else(|| {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            extract_single_frame_pipe(&path, &ctx, 160).or_else(|| {
+                extract_frames_file(&path, &ctx, Some(1), 160, 1.0)
+                    .and_then(|f| f.into_iter().next())
+            })
+        });
+
         result.lock().unwrap().push((path.clone(), tex));
         loading.lock().unwrap().remove(&path);
         ctx.request_repaint();

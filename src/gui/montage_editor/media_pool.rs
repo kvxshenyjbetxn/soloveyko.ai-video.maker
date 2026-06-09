@@ -15,6 +15,7 @@ pub(super) fn draw_media_pool(
     language: Language,
     editor: &mut MontageEditorState,
     anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
+    regen_paths: &HashSet<PathBuf>,
 ) {
     const VALID_EXTS: &[&str] = &["mp4", "mov", "webm", "jpg", "jpeg", "png", "webp", "mp3", "wav"];
 
@@ -139,6 +140,8 @@ pub(super) fn draw_media_pool(
             let media_kind = media.kind.clone();
             let is_selected = editor.selected_media_ids.contains(&media.id);
             let is_animating = anim_loading.lock().unwrap().contains(&media.path);
+            let is_regen = regen_paths.contains(&media.path);
+            let is_busy = is_animating || is_regen;
 
             ui.horizontal(|ui| {
                 let (rect, resp) = ui.allocate_exact_size(Vec2::new(item_w, 26.0), Sense::click_and_drag());
@@ -153,7 +156,7 @@ pub(super) fn draw_media_pool(
                 let is_dragged = editor.dragged_media_id.as_deref() == Some(media_id.as_str());
                 let is_hovered = resp.hovered();
 
-                let bg = if is_animating {
+                let bg = if is_busy {
                     Color32::from_rgba_unmultiplied(200, 140, 0, 35)
                 } else if is_dragged {
                     Color32::from_rgba_unmultiplied(9, 123, 244, 40)
@@ -173,8 +176,8 @@ pub(super) fn draw_media_pool(
                 };
                 ui.painter().rect(rect, 4.0, bg, Stroke::new(1.0, stroke_col));
 
-                // Спінер оживлення поверх елементу
-                if is_animating {
+                // Спінер оживлення/перегенерації поверх елементу
+                if is_busy {
                     ui.painter().rect_filled(rect, 4.0, Color32::from_black_alpha(150));
                     let spin_rect = Rect::from_center_size(rect.center(), Vec2::splat(14.0));
                     ui.put(spin_rect, egui::Spinner::new().size(14.0));
@@ -188,7 +191,7 @@ pub(super) fn draw_media_pool(
                     ClipKind::Image => "🖼",
                     ClipKind::Audio => "🎵",
                 };
-                let status_dot = if is_animating { " 🎬" } else if done { "" } else { " ⏳" };
+                let status_dot = if is_busy { " 🎬" } else if done { "" } else { " ⏳" };
                 let dur_text = format!("{:.1}s", media.duration_secs);
                 let display = if media.name.chars().count() > 16 {
                     format!("{} {}…{} {}", icon, media.name.chars().take(13).collect::<String>(), status_dot, dur_text)

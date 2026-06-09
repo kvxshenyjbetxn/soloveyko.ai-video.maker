@@ -15,6 +15,7 @@ pub(super) fn draw_timeline(
     language: Language,
     editor: &mut MontageEditorState,
     anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
+    regen_paths: &HashSet<PathBuf>,
 ) {
     let track_h = 40.0;
     let ruler_h = 22.0;
@@ -202,7 +203,7 @@ pub(super) fn draw_timeline(
                 );
 
                 let is_anim = clip.path.as_ref()
-                    .map(|p| anim_loading.lock().unwrap().contains(p))
+                    .map(|p| anim_loading.lock().unwrap().contains(p) || regen_paths.contains(p))
                     .unwrap_or(false);
 
                 let is_sel = editor.selected_clip_id.as_deref() == Some(clip.id.as_str());
@@ -313,7 +314,7 @@ pub(super) fn draw_timeline(
                 if let Some(ref path) = clip.path {
                     let clip_path = path.clone();
                     let clip_kind = clip.kind.clone();
-                    let is_animating = anim_loading.lock().unwrap().contains(&clip_path);
+                    let is_animating = anim_loading.lock().unwrap().contains(&clip_path) || regen_paths.contains(&clip_path);
                     clip_resp.context_menu(|ui| {
                         if matches!(clip_kind, ClipKind::Image) {
                             if is_animating {

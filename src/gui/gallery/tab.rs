@@ -9,8 +9,7 @@ pub fn draw_gallery_tab(
     jobs: &[crate::queue::PipelineJob],
     gallery_textures: &mut std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     gallery_preview: &mut Option<std::path::PathBuf>,
-    regen_loading: &std::sync::Arc<std::sync::Mutex<bool>>,
-    regen_target: &Option<std::path::PathBuf>,
+    regen_paths: &std::collections::HashSet<std::path::PathBuf>,
     regen_action: &mut Option<RegenAction>,
     anim_loading: &std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     animate_all: &mut bool,
@@ -121,14 +120,16 @@ pub fn draw_gallery_tab(
                     let spacing = 8.0;
                     ui.spacing_mut().item_spacing = egui::vec2(spacing, spacing);
 
-                    let is_regen_loading = *regen_loading.lock().unwrap();
-
                     ui.horizontal_wrapped(|ui| {
                         for (idx, file_path) in files.iter().enumerate() {
                             let is_video = matches!(
                                 file_path.extension().and_then(|e| e.to_str()),
                                 Some("mp4") | Some("webm") | Some("mov")
                             );
+
+                            // Обчислюємо раніше, щоб не запускати завантаження під час регенерації
+                            let is_animating = anim_set.contains(file_path);
+                            let this_regen = regen_paths.contains(file_path);
 
                             let img_resp = if is_video {
                                 let display = egui::vec2(thumb_size * (16.0 / 9.0), thumb_size);
@@ -137,7 +138,8 @@ pub fn draw_gallery_tab(
                                 let is_hovered = resp.hovered();
                                 let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
 
-                                if !video_thumbnails.contains_key(file_path)
+                                if !this_regen
+                                    && !video_thumbnails.contains_key(file_path)
                                     && !video_thumb_loading.contains(file_path)
                                 {
                                     thumb_requests.push(file_path.clone());
@@ -183,7 +185,8 @@ pub fn draw_gallery_tab(
 
                                 resp
                             } else {
-                                if !gallery_textures.contains_key(file_path) {
+                                // Не завантажуємо під час активної регенерації — уникаємо гонки
+                                if !this_regen && !gallery_textures.contains_key(file_path) {
                                     if !image_loading.contains(file_path) {
                                         image_load_requests.push(file_path.clone());
                                         // Резервуємо місце щоб уникнути повторних запитів
@@ -202,9 +205,6 @@ pub fn draw_gallery_tab(
                                     )
                                 }
                             };
-
-                            let is_animating = anim_set.contains(file_path);
-                            let this_regen = is_regen_loading && regen_target.as_deref() == Some(file_path.as_path());
 
                             if is_animating || this_regen {
                                 ui.painter().rect_filled(img_resp.rect, 0.0, egui::Color32::from_black_alpha(130));

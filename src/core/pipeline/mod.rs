@@ -2665,8 +2665,10 @@ pub fn regenerate_single_media(
     ctx: egui::Context,
     result_slot: Arc<Mutex<Option<Result<(), String>>>>,
     loading: Arc<Mutex<bool>>,
-    // Якщо передано — файл додається в набір "завантажується" (для анімації в редакторі)
+    // Якщо передано — файл додається в набір "завантажується" (для підтримки паралельних регенерацій)
     path_loading_set: Option<Arc<Mutex<std::collections::HashSet<std::path::PathBuf>>>>,
+    // Якщо передано — результат також потрапляє у чергу (для обробки паралельних результатів)
+    results_queue: Option<Arc<Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>>,
     googler_video_upscale_enabled: bool,
     googler_video_upscale_resolution: String,
     googler_video_upscale_quality: String,
@@ -2732,6 +2734,9 @@ pub fn regenerate_single_media(
             },
         };
 
+        if let Some(ref q) = results_queue {
+            q.lock().unwrap().push((file_path.clone(), outcome.clone()));
+        }
         *result_slot.lock().unwrap() = Some(outcome);
         *loading.lock().unwrap() = false;
         if let Some(ref set) = path_loading_set {

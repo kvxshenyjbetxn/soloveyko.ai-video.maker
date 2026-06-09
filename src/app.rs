@@ -95,12 +95,16 @@ pub struct VideoMakerApp {
     pub gallery_preview: Option<std::path::PathBuf>,
     /// Набір шляхів зображень, які зараз анімуються у фоні (image-to-video).
     pub gallery_anim_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
-    /// Прапорець виконання перегенерації медіафайлу у фоні.
+    /// Прапорець виконання перегенерації медіафайлу у фоні (для custom regen window).
     pub media_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
-    /// Результат перегенерації. None = ще не завершено.
+    /// Результат перегенерації для custom regen window. None = ще не завершено.
     pub media_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
-    /// Файл, що зараз перегенеровується.
+    /// Файл, що зараз перегенеровується у custom regen window.
     pub media_regen_target: Option<std::path::PathBuf>,
+    /// Набір шляхів усіх файлів що зараз перегенеровуються (підтримка паралельних).
+    pub media_regen_paths: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    /// Черга результатів перегенерацій для обробки кешу (усі паралельні).
+    pub media_regen_results_queue: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>,
     /// Чи відкрите вікно кастомної перегенерації.
     pub media_regen_window_open: bool,
     /// Базові налаштування задачі (googler_key тощо) для перегенерації.
@@ -423,6 +427,8 @@ impl Default for VideoMakerApp {
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             media_regen_target: None,
+            media_regen_paths: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            media_regen_results_queue: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             media_regen_window_open: false,
             media_regen_base_settings: None,
             media_regen_media_type: "image".to_string(),
@@ -799,6 +805,8 @@ impl VideoMakerApp {
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             media_regen_target: None,
+            media_regen_paths: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            media_regen_results_queue: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             media_regen_window_open: false,
             media_regen_base_settings: None,
             media_regen_media_type: "image".to_string(),
@@ -1578,6 +1586,7 @@ impl eframe::App for VideoMakerApp {
         let hover_loading_snapshot = self.video_hover_loading.lock().unwrap().clone();
         let thumb_loading_snapshot = self.video_thumb_loading.lock().unwrap().clone();
         let image_loading_snapshot = self.gallery_image_loading.lock().unwrap().clone();
+        let regen_paths_snapshot = self.media_regen_paths.lock().unwrap().clone();
         egui::CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
@@ -1609,8 +1618,7 @@ impl eframe::App for VideoMakerApp {
                             ui, self.language, &self.jobs,
                             &mut self.gallery_textures,
                             &mut self.gallery_preview,
-                            &self.media_regen_loading,
-                            &self.media_regen_target,
+                            &regen_paths_snapshot,
                             &mut regen_action,
                             &self.gallery_anim_loading,
                             &mut animate_all,
@@ -1668,7 +1676,6 @@ impl eframe::App for VideoMakerApp {
                 } else {
                     settings.googler_image_priority.clone()
                 };
-                self.media_regen_target = Some(file.clone());
                 self.media_regen_error = None;
                 self.gallery_textures.remove(&file);
                 crate::core::pipeline::regenerate_single_media(
@@ -1682,7 +1689,8 @@ impl eframe::App for VideoMakerApp {
                     ctx.clone(),
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
-                    None,
+                    Some(std::sync::Arc::clone(&self.media_regen_paths)),
+                    Some(std::sync::Arc::clone(&self.media_regen_results_queue)),
                     settings.googler_video_upscale_enabled,
                     settings.googler_video_upscale_resolution.clone(),
                     settings.googler_video_upscale_quality.clone(),
@@ -1697,6 +1705,8 @@ impl eframe::App for VideoMakerApp {
 
         // Очищення текстур для видалених файлів (після анімації .jpg → .mp4)
         self.gallery_textures.retain(|path, _| path.exists());
+        self.video_thumbnails.retain(|path, _| path.exists());
+        self.video_hover_frames.retain(|path, _| path.exists());
 
         // Запуск hover-витягування кадрів, якщо галерея це запитала
         if let Some(path) = hover_extract_request {
@@ -1802,34 +1812,46 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
-        // Обробка результату перегенерації
+        // Дренування черги результатів перегенерацій (підтримка паралельних)
+        {
+            let drained: Vec<_> = self.media_regen_results_queue.lock().unwrap().drain(..).collect();
+            for (path, outcome) in drained {
+                match outcome {
+                    Ok(()) => {
+                        self.gallery_textures.remove(&path);
+                        self.video_thumbnails.remove(&path);
+                        self.video_hover_frames.remove(&path);
+                        self.gallery_image_result.lock().unwrap().retain(|(p, _)| p != &path);
+                        self.gallery_image_loading.lock().unwrap().remove(&path);
+
+                        if let Some(ref mut editor) = self.montage_editor_state {
+                            if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == path) {
+                                let _ = std::fs::remove_dir_all(&m.cache_dir);
+                                editor.frame_cache.clear_for_media_id(&m.id);
+                                let old_id = m.id.clone();
+                                *m = crate::gui::montage_editor::MediaItem::new(path.clone(), &editor.save_path);
+                                m.id = old_id;
+                            }
+                            if editor.pool_preview.as_deref() == Some(path.as_path()) {
+                                // Виставляємо stale замість негайного None — дає GPU-бекенду
+                                // кадр на звільнення старої текстури перед завантаженням нової
+                                editor.preview_stale_path = Some(path.clone());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.media_regen_error = Some(e);
+                    }
+                }
+            }
+        }
+
+        // Обробка стану custom regen window (тільки для відображення помилки та скидання target)
         {
             let result = self.media_regen_result.lock().unwrap().take();
             if let Some(outcome) = result {
                 match outcome {
                     Ok(()) => {
-                        // Скидаємо кеш щоб нове зображення підтягнулось
-                        if let Some(ref path) = self.media_regen_target {
-                            self.gallery_textures.remove(path);
-
-                            // Оновлюємо MediaItem у редакторі монтажу якщо він відкритий
-                            if let Some(ref mut editor) = self.montage_editor_state {
-                                if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == *path) {
-                                    // Видаляємо старий кеш кадрів з диску
-                                    let _ = std::fs::remove_dir_all(&m.cache_dir);
-                                    // Очищаємо FrameCache від старих текстур
-                                    editor.frame_cache.clear_for_media_id(&m.id);
-                                    // Перестворюємо MediaItem — запускає нову екстракцію кадрів
-                                    let old_id = m.id.clone();
-                                    *m = crate::gui::montage_editor::MediaItem::new(path.clone(), &editor.save_path);
-                                    m.id = old_id;
-                                }
-                                // Якщо fullscreen preview відкритий для цього файлу — скидаємо текстуру
-                                if editor.pool_preview.as_deref() == Some(path.as_path()) {
-                                    editor.pool_preview_texture = None;
-                                }
-                            }
-                        }
                         self.media_regen_target = None;
                         self.media_regen_error = None;
                     }
@@ -1858,6 +1880,8 @@ impl eframe::App for VideoMakerApp {
             &self.media_regen_job_name,
             &mut self.gallery_textures,
             &self.media_regen_result,
+            &self.media_regen_paths,
+            &self.media_regen_results_queue,
         );
 
         // Popup-вікно перегляду промту медіафайлу
@@ -1987,6 +2011,7 @@ impl eframe::App for VideoMakerApp {
                                 std::sync::Arc::new(std::sync::Mutex::new(None)),
                                 std::sync::Arc::new(std::sync::Mutex::new(false)),
                                 Some(std::sync::Arc::clone(&self.gallery_anim_loading)),
+                                Some(std::sync::Arc::clone(&self.media_regen_results_queue)),
                                 job.settings.googler_video_upscale_enabled,
                                 job.settings.googler_video_upscale_resolution.clone(),
                                 job.settings.googler_video_upscale_quality.clone(),
@@ -2009,6 +2034,7 @@ impl eframe::App for VideoMakerApp {
             &mut self.montage_editor_state,
             &self.jobs,
             &self.gallery_anim_loading,
+            &regen_paths_snapshot,
         );
 
         // Оживлення зображень з редактора монтажу
@@ -2079,7 +2105,8 @@ impl eframe::App for VideoMakerApp {
                     ctx.clone(),
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
-                    None,
+                    Some(std::sync::Arc::clone(&self.media_regen_paths)),
+                    Some(std::sync::Arc::clone(&self.media_regen_results_queue)),
                     settings.googler_video_upscale_enabled,
                     settings.googler_video_upscale_resolution.clone(),
                     settings.googler_video_upscale_quality.clone(),
@@ -2394,7 +2421,8 @@ impl eframe::App for VideoMakerApp {
                                     ctx.clone(),
                                     std::sync::Arc::clone(&self.media_regen_result),
                                     std::sync::Arc::clone(&self.media_regen_loading),
-                                    None,
+                                    Some(std::sync::Arc::clone(&self.media_regen_paths)),
+                                    Some(std::sync::Arc::clone(&self.media_regen_results_queue)),
                                     settings.googler_video_upscale_enabled,
                                     settings.googler_video_upscale_resolution.clone(),
                                     settings.googler_video_upscale_quality.clone(),

@@ -32,6 +32,7 @@ pub fn draw_montage_editor_window(
     state: &mut Option<MontageEditorState>,
     jobs: &[crate::queue::PipelineJob],
     anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
+    regen_paths: &HashSet<PathBuf>,
 ) -> MontageEditorActions {
     let job_id = match *open_job {
         Some(id) => id,
@@ -254,7 +255,7 @@ pub fn draw_montage_editor_window(
                 .exact_height(editor.timeline_height)
                 .frame(Frame::none().fill(Color32::from_rgb(14, 14, 17)).inner_margin(egui::Margin::symmetric(4.0, 4.0)))
                 .show_inside(ui, |ui| {
-                    timeline::draw_timeline(ui, language, editor, anim_loading);
+                    timeline::draw_timeline(ui, language, editor, anim_loading, regen_paths);
                 });
 
             egui::CentralPanel::default()
@@ -266,7 +267,7 @@ pub fn draw_montage_editor_window(
                         .min_width(160.0)
                         .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
                         .show_inside(ui, |ui| {
-                            media_pool::draw_media_pool(ui, language, editor, anim_loading);
+                            media_pool::draw_media_pool(ui, language, editor, anim_loading, regen_paths);
                         });
 
                     egui::SidePanel::right("editor_inspector")
@@ -309,25 +310,51 @@ pub fn draw_montage_editor_window(
 
     // Fullscreen preview (подвійний клік на медіа в пулі або кліп у таймлінії)
     if let Some(ref preview_path) = editor.pool_preview.clone() {
-        let need_load = editor.pool_preview_texture
-            .as_ref().map(|(p, _)| p != preview_path).unwrap_or(true);
-        if need_load {
-            let tex = load_preview_texture(ctx, preview_path, &editor.media_pool);
-            editor.pool_preview_texture = tex.map(|t| (preview_path.clone(), t));
-        }
-
-        if let Some((_, ref texture)) = editor.pool_preview_texture.clone() {
-            let is_anim = anim_loading.lock().unwrap().contains(preview_path);
-            let (keep_open, regen_kind) = draw_montage_media_preview(ctx, texture, is_anim);
-            if !keep_open {
+        // Стейл-кадр: стара текстура щойно стала застарілою після перегенерації.
+        // Скидаємо її і показуємо спінер один кадр — щоб GPU-бекенд встиг
+        // звільнити старий слот до завантаження нового.
+        if editor.preview_stale_path.as_deref() == Some(preview_path.as_path()) {
+            editor.pool_preview_texture = None;
+            editor.preview_stale_path = None;
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 editor.pool_preview = None;
-                editor.pool_preview_texture = None;
-            }
-            if let Some(is_custom) = regen_kind {
-                editor.pending_regen = Some((preview_path.clone(), is_custom));
+            } else {
+                let screen = ctx.screen_rect();
+                egui::Area::new(egui::Id::new("montage_preview_stale"))
+                    .fixed_pos(egui::Pos2::ZERO)
+                    .order(egui::Order::Tooltip)
+                    .interactable(true)
+                    .show(ctx, |ui| {
+                        ui.allocate_rect(screen, Sense::hover());
+                        ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(215));
+                        ui.put(
+                            egui::Rect::from_center_size(screen.center(), Vec2::splat(40.0)),
+                            egui::Spinner::new().size(40.0),
+                        );
+                    });
+                ctx.request_repaint();
             }
         } else {
-            editor.pool_preview = None;
+            let need_load = editor.pool_preview_texture
+                .as_ref().map(|(p, _)| p != preview_path).unwrap_or(true);
+            if need_load {
+                let tex = load_preview_texture(ctx, preview_path, &editor.media_pool);
+                editor.pool_preview_texture = tex.map(|t| (preview_path.clone(), t));
+            }
+
+            if let Some((_, ref texture)) = editor.pool_preview_texture.clone() {
+                let is_anim = anim_loading.lock().unwrap().contains(preview_path) || regen_paths.contains(preview_path);
+                let (keep_open, regen_kind) = draw_montage_media_preview(ctx, texture, is_anim);
+                if !keep_open {
+                    editor.pool_preview = None;
+                    editor.pool_preview_texture = None;
+                }
+                if let Some(is_custom) = regen_kind {
+                    editor.pending_regen = Some((preview_path.clone(), is_custom));
+                }
+            } else {
+                editor.pool_preview = None;
+            }
         }
     }
 
