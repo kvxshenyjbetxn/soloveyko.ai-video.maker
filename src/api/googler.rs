@@ -194,6 +194,11 @@ fn poll_operation(key: &str, operation_id: &str, agent: &ureq::Agent) -> Result<
     Err("Перевищено час очікування операції (5 хвилин)".to_string())
 }
 
+/// Перевіряє, чи помилка є перевищенням ліміту одночасних запитів.
+fn is_concurrency_exceeded(err: &str) -> bool {
+    err.contains("rate_limit.concurrency_exceeded")
+}
+
 /// Спроба генерації зображення через конкретного провайдера.
 fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
     let _permit = GooglerImageLimiter::get().acquire();
@@ -303,17 +308,27 @@ pub fn generate_image_with_priority(
         .build();
 
     for provider in priority {
-        for attempt in 0..=RETRIES {
-            if attempt > 0 {
-                std::thread::sleep(DELAY);
-            }
+        let mut failures = 0u32;
+        loop {
             match try_generate_image(key, prompt, aspect_ratio, provider, &agent) {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    crate::logger::log(&format!(
-                        " Зображення [{}] спроба {}/{}: {}",
-                        provider, attempt + 1, RETRIES + 1, e
-                    ));
+                    if is_concurrency_exceeded(&e) {
+                        crate::logger::log(&format!(
+                            " Зображення [{}] ліміт потоків, чекаю…",
+                            provider
+                        ));
+                    } else {
+                        failures += 1;
+                        crate::logger::log(&format!(
+                            " Зображення [{}] спроба {}/{}: {}",
+                            provider, failures, RETRIES + 1, e
+                        ));
+                        if failures > RETRIES {
+                            break;
+                        }
+                    }
+                    std::thread::sleep(DELAY);
                 }
             }
         }
@@ -379,17 +394,27 @@ pub fn animate_image_with_priority(
         .build();
 
     for provider in priority {
-        for attempt in 0..=RETRIES {
-            if attempt > 0 {
-                std::thread::sleep(DELAY);
-            }
+        let mut failures = 0u32;
+        loop {
             match try_animate_image(key, image_data_uri, prompt, provider, &agent) {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    crate::logger::log(&format!(
-                        " Анімація [{}] спроба {}/{}: {}",
-                        provider, attempt + 1, RETRIES + 1, e
-                    ));
+                    if is_concurrency_exceeded(&e) {
+                        crate::logger::log(&format!(
+                            " Анімація [{}] ліміт потоків, чекаю…",
+                            provider
+                        ));
+                    } else {
+                        failures += 1;
+                        crate::logger::log(&format!(
+                            " Анімація [{}] спроба {}/{}: {}",
+                            provider, failures, RETRIES + 1, e
+                        ));
+                        if failures > RETRIES {
+                            break;
+                        }
+                    }
+                    std::thread::sleep(DELAY);
                 }
             }
         }
@@ -415,17 +440,27 @@ pub fn generate_video_with_priority(
         .build();
 
     for provider in priority {
-        for attempt in 0..=RETRIES {
-            if attempt > 0 {
-                std::thread::sleep(DELAY);
-            }
+        let mut failures = 0u32;
+        loop {
             match try_generate_video(key, prompt, aspect_ratio, provider, &agent) {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    crate::logger::log(&format!(
-                        " Відео [{}] спроба {}/{}: {}",
-                        provider, attempt + 1, RETRIES + 1, e
-                    ));
+                    if is_concurrency_exceeded(&e) {
+                        crate::logger::log(&format!(
+                            " Відео [{}] ліміт потоків, чекаю…",
+                            provider
+                        ));
+                    } else {
+                        failures += 1;
+                        crate::logger::log(&format!(
+                            " Відео [{}] спроба {}/{}: {}",
+                            provider, failures, RETRIES + 1, e
+                        ));
+                        if failures > RETRIES {
+                            break;
+                        }
+                    }
+                    std::thread::sleep(DELAY);
                 }
             }
         }
