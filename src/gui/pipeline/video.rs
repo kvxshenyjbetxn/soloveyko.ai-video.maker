@@ -310,7 +310,7 @@ pub fn draw_video_section(
             ui.add_space(4.0);
 
             let agent_available_width = ui.available_width();
-            let agent_te_resp = egui::ScrollArea::vertical()
+            egui::ScrollArea::vertical()
                 .max_height(60.0)
                 .id_salt("video_agent_prompt_scroll")
                 .show(ui, |ui| {
@@ -319,46 +319,9 @@ pub fn draw_video_section(
                             .desired_width(agent_available_width)
                             .hint_text(translate(language, "video_agent_prompt_hint")),
                     )
-                })
-                .inner;
+                });
 
             ui.add_space(4.0);
-
-            // Кнопки вставки плейсхолдерів
-            ui.horizontal(|ui| {
-                for to_insert in &["{{srt}}", "{{path}}"] {
-                    if ui.button(*to_insert).clicked() {
-                        let te_id = agent_te_resp.id;
-                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), te_id) {
-                            if let Some(cursor_range) = state.cursor.char_range() {
-                                let cursor_idx = cursor_range.primary.index;
-                                let byte_idx = video_agent_prompt
-                                    .char_indices()
-                                    .map(|(b, _)| b)
-                                    .nth(cursor_idx)
-                                    .unwrap_or(video_agent_prompt.len());
-                                video_agent_prompt.insert_str(byte_idx, to_insert);
-                                let new_char_idx = cursor_idx + to_insert.chars().count();
-                                let new_cursor = egui::text::CCursor::new(new_char_idx);
-                                state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
-                                state.store(ui.ctx(), te_id);
-                            } else {
-                                video_agent_prompt.push_str(to_insert);
-                            }
-                        } else {
-                            video_agent_prompt.push_str(to_insert);
-                        }
-                        agent_te_resp.request_focus();
-                    }
-                }
-            });
-
-            ui.add_space(2.0);
-            ui.label(
-                egui::RichText::new(translate(language, "video_agent_prompt_hint"))
-                    .weak()
-                    .size(11.0)
-            );
 
             // Розгорнуте вікно редагування промту агента
             if agent_expand_open {
@@ -371,7 +334,7 @@ pub fn draw_video_section(
                     .constrain(true)
                     .default_size([600.0, 400.0])
                     .show(ui.ctx(), |ui| {
-                        let win_te_resp = egui::ScrollArea::vertical()
+                        egui::ScrollArea::vertical()
                             .max_height(ui.ctx().screen_rect().height() * 0.7)
                             .id_salt("win_video_agent_prompt_scroll")
                             .show(ui, |ui| {
@@ -380,36 +343,7 @@ pub fn draw_video_section(
                                         .desired_width(f32::INFINITY)
                                         .hint_text(translate(language, "video_agent_prompt_hint")),
                                 )
-                            })
-                            .inner;
-                        let win_te_id = win_te_resp.id;
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            for to_insert in &["{{srt}}", "{{path}}"] {
-                                if ui.button(*to_insert).clicked() {
-                                    if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), win_te_id) {
-                                        if let Some(cursor_range) = state.cursor.char_range() {
-                                            let cursor_idx = cursor_range.primary.index;
-                                            let byte_idx = video_agent_prompt
-                                                .char_indices()
-                                                .map(|(b, _)| b)
-                                                .nth(cursor_idx)
-                                                .unwrap_or(video_agent_prompt.len());
-                                            video_agent_prompt.insert_str(byte_idx, to_insert);
-                                            let new_char_idx = cursor_idx + to_insert.chars().count();
-                                            let new_cursor = egui::text::CCursor::new(new_char_idx);
-                                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
-                                            state.store(ui.ctx(), win_te_id);
-                                        } else {
-                                            video_agent_prompt.push_str(to_insert);
-                                        }
-                                    } else {
-                                        video_agent_prompt.push_str(to_insert);
-                                    }
-                                    ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
-                                }
-                            }
-                        });
+                            });
                     });
                 if !still_open {
                     ui.data_mut(|d| d.insert_persisted(agent_expand_id, false));

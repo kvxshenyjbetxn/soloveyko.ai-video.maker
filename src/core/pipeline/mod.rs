@@ -2,6 +2,7 @@ pub mod voiceover;
 pub mod timeline;
 pub mod montage;
 pub mod capcut;
+pub mod agent_prompts;
 
 use std::sync::{Arc, Condvar, Mutex};
 use eframe::egui;
@@ -1410,9 +1411,17 @@ fn run_agent_timeline(
     let timeline_path = save_dir.join("timeline.json");
     // Передаємо шлях до SRT файлу — агент читає його сам через Read/Bash.
     // Це усуває дублювання SRT-контенту в кожному turn агентної сесії.
-    let agent_prompt = settings.video_agent_prompt
+    let system_instruction = agent_prompts::VIDEO_AGENT_SYSTEM_PROMPT
         .replace("{{srt}}", &srt_path.to_string_lossy())
         .replace("{{path}}", &timeline_path.to_string_lossy());
+    let user_part = settings.video_agent_prompt
+        .replace("{{srt}}", &srt_path.to_string_lossy())
+        .replace("{{path}}", &timeline_path.to_string_lossy());
+    let agent_prompt = if user_part.trim().is_empty() {
+        system_instruction
+    } else {
+        format!("{}\n\n{}", system_instruction, user_part)
+    };
 
     crate::logger::log_job(job_id, job_name,
         &format!("Agent ({}): generating timeline.json...", settings.video_llm_service));
