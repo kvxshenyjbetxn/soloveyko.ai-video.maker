@@ -316,8 +316,7 @@ pub fn draw_video_section(
                 .show(ui, |ui| {
                     ui.add(
                         egui::TextEdit::multiline(video_agent_prompt)
-                            .desired_width(agent_available_width)
-                            .hint_text(translate(language, "video_agent_prompt_hint")),
+                            .desired_width(agent_available_width),
                     )
                 });
 
@@ -340,8 +339,7 @@ pub fn draw_video_section(
                             .show(ui, |ui| {
                                 ui.add(
                                     egui::TextEdit::multiline(video_agent_prompt)
-                                        .desired_width(f32::INFINITY)
-                                        .hint_text(translate(language, "video_agent_prompt_hint")),
+                                        .desired_width(f32::INFINITY),
                                 )
                             });
                     });

@@ -185,7 +185,6 @@ pub fn translate_ru(key: &str) -> &'static str {
         "video_prompt_label" => "Промт для видеоряда",
         "video_prompt_hint" => "Введите инструкцию для генерации изображений...",
         "video_agent_prompt_label" => "Инструкция агента (timeline)",
-        "video_agent_prompt_hint" => "{{srt}} — путь к subtitle.srt (агент читает сам), {{path}} — путь к timeline.json",
         "video_style_label" => "Указать стиль",
         "video_style_prompt_label" => "Промт стиля для генерации медиа",
         "video_style_prompt_hint" => "{{text}} — текст из поля text в timeline.json будет подставлен сюда",

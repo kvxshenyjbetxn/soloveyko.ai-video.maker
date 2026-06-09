@@ -185,7 +185,6 @@ pub fn translate_en(key: &str) -> &'static str {
         "video_prompt_label" => "Video Prompt",
         "video_prompt_hint" => "Enter instructions for image generation...",
         "video_agent_prompt_label" => "Agent instruction (timeline)",
-        "video_agent_prompt_hint" => "{{srt}} — path to subtitle.srt (agent reads it), {{path}} — path to timeline.json",
         "video_style_label" => "Specify style",
         "video_style_prompt_label" => "Style prompt for media generation",
         "video_style_prompt_hint" => "{{text}} — text from the 'text' field in timeline.json will be inserted here",
