@@ -32,270 +32,20 @@ fn stage_color(stage: &crate::queue::StageStatus, ui: &egui::Ui) -> egui::Color3
     }
 }
 
-/// Малює нижню панель черги задач пайплайну.
-pub fn draw_queue_panel(
+/// Малює горизонтальний список карток задач з прокруткою.
+/// Виноситься окремо, щоб можна було показати і в нижній панелі, і у повноекранному режимі.
+pub fn draw_queue_jobs_list(
     ui: &mut egui::Ui,
     language: crate::localization::Language,
     jobs: &mut Vec<crate::queue::PipelineJob>,
-    job_counter: &mut u64,
     selected_job_logs: &mut Option<(u64, String)>,
     selected_job_control: &mut Option<u64>,
     control_text_input: &mut String,
-    whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
     selected_agent_chat: &mut Option<u64>,
     open_montage_editor: &mut Option<u64>,
-    collapsed: &mut bool,
 ) {
-    ui.add_space(4.0);
-
-    // Загальна вартість всіх OpenRouter запитів у черзі
-    let total_cost: f64 = jobs.iter()
-        .filter_map(|j| *j.total_cost.lock().unwrap())
-        .sum();
-
-    // Верхній рядок керування
-    ui.horizontal(|ui| {
-        let btn_size = egui::vec2(16.0, 16.0);
-        let (btn_rect, btn_resp) = ui.allocate_exact_size(btn_size, egui::Sense::click());
-        if ui.is_rect_visible(btn_rect) {
-            let color = if btn_resp.hovered() {
-                ui.visuals().strong_text_color()
-            } else {
-                ui.visuals().weak_text_color()
-            };
-            let cx = btn_rect.center().x;
-            let top = btn_rect.center().y - 3.0;
-            let bot = btn_rect.center().y + 3.0;
-            let left = cx - 5.0;
-            let right = cx + 5.0;
-            // ▲ коли згорнута (розгорнути), ▼ коли розгорнута (згорнути)
-            let points = if *collapsed {
-                vec![egui::pos2(cx, top), egui::pos2(right, bot), egui::pos2(left, bot)]
-            } else {
-                vec![egui::pos2(left, top), egui::pos2(right, top), egui::pos2(cx, bot)]
-            };
-            ui.painter().add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
-        }
-        let tooltip_key = if *collapsed { "queue_expand_tooltip" } else { "queue_collapse_tooltip" };
-        if btn_resp.on_hover_text(translate(language, tooltip_key)).clicked() {
-            *collapsed = !*collapsed;
-        }
-        ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
-        ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
-
-        let has_pending = jobs.iter().any(|j| {
-            *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
-        });
-
-        // Перевіряємо, чи всі потрібні моделі завантажені для задач у черзі
-        let model_download_state = whisper_model_download.lock().unwrap().clone();
-        let whisper_blocked: Option<String> = jobs.iter()
-            .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::Pending)
-            .find(|j| {
-                j.settings.subtitles_enabled
-                    && j.settings.subtitles_service == "Whisper"
-                    && !crate::bundle::whisper_model_exists(&j.settings.whisper_model)
-            })
-            .map(|j| {
-                let is_downloading = matches!(model_download_state, crate::gui::welcome::BinaryDownload::Downloading(_));
-                if is_downloading {
-                    format!("⏳ Модель Whisper '{}' ще завантажується...", j.settings.whisper_model)
-                } else {
-                    format!("⚠ Модель Whisper '{}' не завантажена. Завантажте її в секції Субтитри.", j.settings.whisper_model)
-                }
-            });
-
-        let can_run = has_pending && whisper_blocked.is_none();
-
-        let has_active = jobs.iter().any(|j| {
-            let s = j.status.lock().unwrap().clone();
-            matches!(
-                s,
-                crate::queue::JobStatus::Running
-                    | crate::queue::JobStatus::AwaitingControl
-                    | crate::queue::JobStatus::AwaitingMediaControl
-                    | crate::queue::JobStatus::AwaitingAgentControl
-                    | crate::queue::JobStatus::AwaitingMontageControl
-            )
-        });
-        let can_clear = !jobs.is_empty() && !has_active;
-
-        let mut clicked = false;
-        let mut clear_clicked = false;
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let run_btn = ui.add_enabled(
-                can_run,
-                egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
-            );
-            if run_btn.clicked() {
-                clicked = true;
-            }
-            if let Some(ref msg) = whisper_blocked {
-                run_btn.on_disabled_hover_text(msg);
-            }
-
-            let clear_btn = ui.add_enabled(
-                can_clear,
-                egui::Button::new(egui::RichText::new(translate(language, "queue_clear_btn"))),
-            );
-            if clear_btn.clicked() {
-                clear_clicked = true;
-            }
-            if has_active {
-                clear_btn.on_disabled_hover_text(translate(language, "queue_clear_disabled_hint"));
-            }
-
-            // Малюємо загальний прогресбар черги всередині right_to_left макету,
-            // щоб він зайняв весь доступний простір по центру.
-            if !jobs.is_empty() {
-                ui.add_space(8.0);
-
-                let total_jobs = jobs.len();
-                let overall_progress = if total_jobs > 0 {
-                    let sum: f32 = jobs.iter().map(|j| {
-                        let status = j.status.lock().unwrap().clone();
-                        match status {
-                            crate::queue::JobStatus::Done => 1.0,
-                            crate::queue::JobStatus::Running
-                            | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingAgentControl => {
-                                let (prog, _, _) = j.calculate_progress();
-                                prog
-                            }
-                            _ => 0.0,
-                        }
-                    }).sum();
-                    sum / total_jobs as f32
-                } else {
-                    0.0
-                };
-
-                let is_running = jobs.iter().any(|j| {
-                    let s = j.status.lock().unwrap().clone();
-                    s == crate::queue::JobStatus::Running
-                        || s == crate::queue::JobStatus::AwaitingMediaControl
-                        || s == crate::queue::JobStatus::AwaitingAgentControl
-                });
-
-                let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
-                    .size(11.0)
-                    .weak();
-                ui.label(pct_label);
-                ui.add_space(4.0);
-
-                // Резервуємо місце для лейблу вартості зліва від бару
-                let cost_text_opt = if total_cost > 0.0 {
-                    Some(format!("${:.5}", total_cost))
-                } else {
-                    None
-                };
-                let cost_reserve = cost_text_opt.as_deref().map(|text| {
-                    let galley = ui.painter().layout_no_wrap(
-                        text.to_string(),
-                        egui::FontId::proportional(11.0),
-                        egui::Color32::WHITE,
-                    );
-                    galley.size().x + ui.spacing().item_spacing.x + 4.0
-                }).unwrap_or(0.0);
-
-                let bar_width = (ui.available_width() - 8.0 - cost_reserve).max(20.0);
-                if bar_width > 20.0 {
-                    let bar = egui::ProgressBar::new(overall_progress)
-                        .animate(is_running)
-                        .desired_height(6.0);
-                    ui.add_sized([bar_width, 6.0], bar);
-                }
-
-                // Вартість всіх задач зліва від прогрес бару
-                if let Some(text) = cost_text_opt {
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new(text)
-                            .size(11.0)
-                            .color(egui::Color32::from_rgb(46, 204, 113)),
-                    );
-                }
-            }
-        });
-
-        if clear_clicked {
-            jobs.clear();
-            *job_counter = 0;
-        }
-
-        if clicked {
-            let ctx = ui.ctx().clone();
-            for job in jobs.iter() {
-                if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
-                    continue;
-                }
-                if let Some(resume_stage) = job.settings.resume_from_stage.clone() {
-                    // Відновлення з конкретного етапу замість повного запуску
-                    crate::core::pipeline::retry_from_stage(
-                        resume_stage,
-                        job.id,
-                        job.name.clone(),
-                        job.settings.clone(),
-                        std::sync::Arc::clone(&job.status),
-                        std::sync::Arc::clone(&job.translation_stage),
-                        std::sync::Arc::clone(&job.voiceover_stage),
-                        std::sync::Arc::clone(&job.video_stage),
-                        std::sync::Arc::clone(&job.subtitles_stage),
-                        std::sync::Arc::clone(&job.montage_stage),
-                        std::sync::Arc::clone(&job.translated_text),
-                        std::sync::Arc::clone(&job.total_cost),
-                        std::sync::Arc::clone(&job.audio_duration),
-                        std::sync::Arc::clone(&job.prompts_progress),
-                        std::sync::Arc::clone(&job.media_progress),
-                        std::sync::Arc::clone(&job.montage_progress),
-                        std::sync::Arc::clone(&job.montage_file_size),
-                        std::sync::Arc::clone(&job.media_control_resume),
-                        std::sync::Arc::clone(&job.agent_control_resume),
-                        std::sync::Arc::clone(&job.montage_control_resume),
-                        std::sync::Arc::clone(&job.agent_chat),
-                        std::sync::Arc::clone(&job.agent_session),
-                        ctx.clone(),
-                    );
-                } else {
-                    crate::core::pipeline::run_pipeline(
-                        job.id,
-                        job.name.clone(),
-                        job.settings.clone(),
-                        std::sync::Arc::clone(&job.status),
-                        std::sync::Arc::clone(&job.translation_stage),
-                        std::sync::Arc::clone(&job.voiceover_stage),
-                        std::sync::Arc::clone(&job.video_stage),
-                        std::sync::Arc::clone(&job.subtitles_stage),
-                        std::sync::Arc::clone(&job.montage_stage),
-                        std::sync::Arc::clone(&job.translated_text),
-                        std::sync::Arc::clone(&job.total_cost),
-                        std::sync::Arc::clone(&job.audio_duration),
-                        std::sync::Arc::clone(&job.prompts_progress),
-                        std::sync::Arc::clone(&job.media_progress),
-                        std::sync::Arc::clone(&job.montage_progress),
-                        std::sync::Arc::clone(&job.montage_file_size),
-                        std::sync::Arc::clone(&job.media_control_resume),
-                        std::sync::Arc::clone(&job.agent_control_resume),
-                        std::sync::Arc::clone(&job.montage_control_resume),
-                        std::sync::Arc::clone(&job.agent_chat),
-                        std::sync::Arc::clone(&job.agent_session),
-                        ctx.clone(),
-                    );
-                }
-            }
-        }
-    });
-
-    if *collapsed {
-        return;
-    }
-
-    ui.add_space(10.0);
-
-    // Список задач з горизонтальною прокруткою
     egui::ScrollArea::horizontal()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -750,5 +500,326 @@ pub fn draw_queue_panel(
                     ui.add_space(4.0);
                 }
             });
+        });
+}
+
+/// Малює нижню панель черги задач пайплайну.
+pub fn draw_queue_panel(
+    ui: &mut egui::Ui,
+    language: crate::localization::Language,
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    job_counter: &mut u64,
+    selected_job_logs: &mut Option<(u64, String)>,
+    selected_job_control: &mut Option<u64>,
+    control_text_input: &mut String,
+    whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
+    active_tab: &mut Tab,
+    retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
+    selected_agent_chat: &mut Option<u64>,
+    open_montage_editor: &mut Option<u64>,
+    collapsed: &mut bool,
+    fullscreen: &mut bool,
+) {
+    ui.add_space(4.0);
+
+    // Загальна вартість всіх OpenRouter запитів у черзі
+    let total_cost: f64 = jobs.iter()
+        .filter_map(|j| *j.total_cost.lock().unwrap())
+        .sum();
+
+    // Верхній рядок керування
+    ui.horizontal(|ui| {
+        // Кнопка collapse (трикутник)
+        let btn_size = egui::vec2(16.0, 16.0);
+        let (btn_rect, btn_resp) = ui.allocate_exact_size(btn_size, egui::Sense::click());
+        if ui.is_rect_visible(btn_rect) {
+            let color = if btn_resp.hovered() {
+                ui.visuals().strong_text_color()
+            } else {
+                ui.visuals().weak_text_color()
+            };
+            let cx = btn_rect.center().x;
+            let top = btn_rect.center().y - 3.0;
+            let bot = btn_rect.center().y + 3.0;
+            let left = cx - 5.0;
+            let right = cx + 5.0;
+            // ▲ коли згорнута (розгорнути), ▼ коли розгорнута (згорнути)
+            let points = if *collapsed {
+                vec![egui::pos2(cx, top), egui::pos2(right, bot), egui::pos2(left, bot)]
+            } else {
+                vec![egui::pos2(left, top), egui::pos2(right, top), egui::pos2(cx, bot)]
+            };
+            ui.painter().add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+        }
+        let tooltip_key = if *collapsed { "queue_expand_tooltip" } else { "queue_collapse_tooltip" };
+        if btn_resp.on_hover_text(translate(language, tooltip_key)).clicked() {
+            *collapsed = !*collapsed;
+            if *collapsed { *fullscreen = false; }
+        }
+
+        // Кнопка fullscreen (4 куточки) — не показуємо якщо згорнута
+        if !*collapsed {
+            let fs_size = egui::vec2(16.0, 16.0);
+            let (fs_rect, fs_resp) = ui.allocate_exact_size(fs_size, egui::Sense::click());
+            if ui.is_rect_visible(fs_rect) {
+                let color = if fs_resp.hovered() {
+                    ui.visuals().strong_text_color()
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                let stroke = egui::Stroke::new(1.5, color);
+                let l = fs_rect.left();
+                let r = fs_rect.right();
+                let t = fs_rect.top();
+                let b = fs_rect.bottom();
+                let p = ui.painter();
+                if *fullscreen {
+                    // Іконка "exit fullscreen": куточки спрямовані всередину
+                    p.line_segment([egui::pos2(l+1.0, t+5.0), egui::pos2(l+5.0, t+5.0)], stroke);
+                    p.line_segment([egui::pos2(l+5.0, t+5.0), egui::pos2(l+5.0, t+1.0)], stroke);
+                    p.line_segment([egui::pos2(r-1.0, t+5.0), egui::pos2(r-5.0, t+5.0)], stroke);
+                    p.line_segment([egui::pos2(r-5.0, t+5.0), egui::pos2(r-5.0, t+1.0)], stroke);
+                    p.line_segment([egui::pos2(l+1.0, b-5.0), egui::pos2(l+5.0, b-5.0)], stroke);
+                    p.line_segment([egui::pos2(l+5.0, b-5.0), egui::pos2(l+5.0, b-1.0)], stroke);
+                    p.line_segment([egui::pos2(r-1.0, b-5.0), egui::pos2(r-5.0, b-5.0)], stroke);
+                    p.line_segment([egui::pos2(r-5.0, b-5.0), egui::pos2(r-5.0, b-1.0)], stroke);
+                } else {
+                    // Іконка "fullscreen": куточки спрямовані назовні
+                    p.line_segment([egui::pos2(l+1.0, t+5.0), egui::pos2(l+1.0, t+1.0)], stroke);
+                    p.line_segment([egui::pos2(l+1.0, t+1.0), egui::pos2(l+5.0, t+1.0)], stroke);
+                    p.line_segment([egui::pos2(r-1.0, t+5.0), egui::pos2(r-1.0, t+1.0)], stroke);
+                    p.line_segment([egui::pos2(r-1.0, t+1.0), egui::pos2(r-5.0, t+1.0)], stroke);
+                    p.line_segment([egui::pos2(l+1.0, b-5.0), egui::pos2(l+1.0, b-1.0)], stroke);
+                    p.line_segment([egui::pos2(l+1.0, b-1.0), egui::pos2(l+5.0, b-1.0)], stroke);
+                    p.line_segment([egui::pos2(r-1.0, b-5.0), egui::pos2(r-1.0, b-1.0)], stroke);
+                    p.line_segment([egui::pos2(r-1.0, b-1.0), egui::pos2(r-5.0, b-1.0)], stroke);
+                }
+            }
+            let fs_tooltip = if *fullscreen { "queue_fullscreen_exit_tooltip" } else { "queue_fullscreen_tooltip" };
+            if fs_resp.on_hover_text(translate(language, fs_tooltip)).clicked() {
+                *fullscreen = !*fullscreen;
+            }
+        }
+
+        ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
+        ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
+
+        let has_pending = jobs.iter().any(|j| {
+            *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
+        });
+
+        // Перевіряємо, чи всі потрібні моделі завантажені для задач у черзі
+        let model_download_state = whisper_model_download.lock().unwrap().clone();
+        let whisper_blocked: Option<String> = jobs.iter()
+            .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::Pending)
+            .find(|j| {
+                j.settings.subtitles_enabled
+                    && j.settings.subtitles_service == "Whisper"
+                    && !crate::bundle::whisper_model_exists(&j.settings.whisper_model)
+            })
+            .map(|j| {
+                let is_downloading = matches!(model_download_state, crate::gui::welcome::BinaryDownload::Downloading(_));
+                if is_downloading {
+                    format!("⏳ Модель Whisper '{}' ще завантажується...", j.settings.whisper_model)
+                } else {
+                    format!("⚠ Модель Whisper '{}' не завантажена. Завантажте її в секції Субтитри.", j.settings.whisper_model)
+                }
+            });
+
+        let can_run = has_pending && whisper_blocked.is_none();
+
+        let has_active = jobs.iter().any(|j| {
+            let s = j.status.lock().unwrap().clone();
+            matches!(
+                s,
+                crate::queue::JobStatus::Running
+                    | crate::queue::JobStatus::AwaitingControl
+                    | crate::queue::JobStatus::AwaitingMediaControl
+                    | crate::queue::JobStatus::AwaitingAgentControl
+                    | crate::queue::JobStatus::AwaitingMontageControl
+            )
+        });
+        let can_clear = !jobs.is_empty() && !has_active;
+
+        let mut clicked = false;
+        let mut clear_clicked = false;
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let run_btn = ui.add_enabled(
+                can_run,
+                egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
+            );
+            if run_btn.clicked() {
+                clicked = true;
+            }
+            if let Some(ref msg) = whisper_blocked {
+                run_btn.on_disabled_hover_text(msg);
+            }
+
+            let clear_btn = ui.add_enabled(
+                can_clear,
+                egui::Button::new(egui::RichText::new(translate(language, "queue_clear_btn"))),
+            );
+            if clear_btn.clicked() {
+                clear_clicked = true;
+            }
+            if has_active {
+                clear_btn.on_disabled_hover_text(translate(language, "queue_clear_disabled_hint"));
+            }
+
+            // Малюємо загальний прогресбар черги всередині right_to_left макету,
+            // щоб він зайняв весь доступний простір по центру.
+            if !jobs.is_empty() {
+                ui.add_space(8.0);
+
+                let total_jobs = jobs.len();
+                let overall_progress = if total_jobs > 0 {
+                    let sum: f32 = jobs.iter().map(|j| {
+                        let status = j.status.lock().unwrap().clone();
+                        match status {
+                            crate::queue::JobStatus::Done => 1.0,
+                            crate::queue::JobStatus::Running
+                            | crate::queue::JobStatus::AwaitingControl
+                            | crate::queue::JobStatus::AwaitingMediaControl
+                            | crate::queue::JobStatus::AwaitingAgentControl => {
+                                let (prog, _, _) = j.calculate_progress();
+                                prog
+                            }
+                            _ => 0.0,
+                        }
+                    }).sum();
+                    sum / total_jobs as f32
+                } else {
+                    0.0
+                };
+
+                let is_running = jobs.iter().any(|j| {
+                    let s = j.status.lock().unwrap().clone();
+                    s == crate::queue::JobStatus::Running
+                        || s == crate::queue::JobStatus::AwaitingMediaControl
+                        || s == crate::queue::JobStatus::AwaitingAgentControl
+                });
+
+                let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
+                    .size(11.0)
+                    .weak();
+                ui.label(pct_label);
+                ui.add_space(4.0);
+
+                // Резервуємо місце для лейблу вартості зліва від бару
+                let cost_text_opt = if total_cost > 0.0 {
+                    Some(format!("${:.5}", total_cost))
+                } else {
+                    None
+                };
+                let cost_reserve = cost_text_opt.as_deref().map(|text| {
+                    let galley = ui.painter().layout_no_wrap(
+                        text.to_string(),
+                        egui::FontId::proportional(11.0),
+                        egui::Color32::WHITE,
+                    );
+                    galley.size().x + ui.spacing().item_spacing.x + 4.0
+                }).unwrap_or(0.0);
+
+                let bar_width = (ui.available_width() - 8.0 - cost_reserve).max(20.0);
+                if bar_width > 20.0 {
+                    let bar = egui::ProgressBar::new(overall_progress)
+                        .animate(is_running)
+                        .desired_height(6.0);
+                    ui.add_sized([bar_width, 6.0], bar);
+                }
+
+                // Вартість всіх задач зліва від прогрес бару
+                if let Some(text) = cost_text_opt {
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(text)
+                            .size(11.0)
+                            .color(egui::Color32::from_rgb(46, 204, 113)),
+                    );
+                }
+            }
+        });
+
+        if clear_clicked {
+            jobs.clear();
+            *job_counter = 0;
+        }
+
+        if clicked {
+            let ctx = ui.ctx().clone();
+            for job in jobs.iter() {
+                if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
+                    continue;
+                }
+                if let Some(resume_stage) = job.settings.resume_from_stage.clone() {
+                    // Відновлення з конкретного етапу замість повного запуску
+                    crate::core::pipeline::retry_from_stage(
+                        resume_stage,
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.video_stage),
+                        std::sync::Arc::clone(&job.subtitles_stage),
+                        std::sync::Arc::clone(&job.montage_stage),
+                        std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.total_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
+                        std::sync::Arc::clone(&job.prompts_progress),
+                        std::sync::Arc::clone(&job.media_progress),
+                        std::sync::Arc::clone(&job.montage_progress),
+                        std::sync::Arc::clone(&job.montage_file_size),
+                        std::sync::Arc::clone(&job.media_control_resume),
+                        std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.montage_control_resume),
+                        std::sync::Arc::clone(&job.agent_chat),
+                        std::sync::Arc::clone(&job.agent_session),
+                        ctx.clone(),
+                    );
+                } else {
+                    crate::core::pipeline::run_pipeline(
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.video_stage),
+                        std::sync::Arc::clone(&job.subtitles_stage),
+                        std::sync::Arc::clone(&job.montage_stage),
+                        std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.total_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
+                        std::sync::Arc::clone(&job.prompts_progress),
+                        std::sync::Arc::clone(&job.media_progress),
+                        std::sync::Arc::clone(&job.montage_progress),
+                        std::sync::Arc::clone(&job.montage_file_size),
+                        std::sync::Arc::clone(&job.media_control_resume),
+                        std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.montage_control_resume),
+                        std::sync::Arc::clone(&job.agent_chat),
+                        std::sync::Arc::clone(&job.agent_session),
+                        ctx.clone(),
+                    );
+                }
+            }
+        }
+    });
+
+    // При fullscreen список задач показується у CentralPanel, тут більше нічого не малюємо
+    if *collapsed || *fullscreen {
+        return;
+    }
+
+    egui::Frame::none()
+        .inner_margin(egui::Margin { left: 0.0, right: 0.0, top: 10.0, bottom: 8.0 })
+        .show(ui, |ui| {
+            draw_queue_jobs_list(
+                ui, language, jobs,
+                selected_job_logs, selected_job_control, control_text_input,
+                active_tab, retry_request, selected_agent_chat, open_montage_editor,
+            );
         });
 }

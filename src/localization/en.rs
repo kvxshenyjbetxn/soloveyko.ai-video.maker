@@ -212,6 +212,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "queue_panel_title" => "Queue",
         "queue_collapse_tooltip" => "Collapse panel",
         "queue_expand_tooltip" => "Expand panel",
+        "queue_fullscreen_tooltip" => "Expand to full screen",
+        "queue_fullscreen_exit_tooltip" => "Exit full screen",
         "queue_run_btn" => "▶ Run",
         "queue_clear_btn" => "🗑 Clear",
         "queue_clear_disabled_hint" => "Cannot clear: there are active tasks",

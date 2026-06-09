@@ -410,6 +410,8 @@ pub struct VideoMakerApp {
     pub update_dialog_open: bool,
     /// Чи згорнута нижня панель черги задач.
     pub queue_panel_collapsed: bool,
+    /// Чи розгорнута черга на весь центральний екран.
+    pub queue_panel_fullscreen: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -611,6 +613,7 @@ impl Default for VideoMakerApp {
             update_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
             update_dialog_open: false,
             queue_panel_collapsed: false,
+            queue_panel_fullscreen: false,
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -1001,6 +1004,7 @@ impl VideoMakerApp {
             update_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
             update_dialog_open: false,
             queue_panel_collapsed: false,
+            queue_panel_fullscreen: false,
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
@@ -1562,10 +1566,10 @@ impl eframe::App for VideoMakerApp {
 
         // Нижня панель черги задач (тільки якщо є задачі і ми не на Gallery)
         if !self.jobs.is_empty() && self.active_tab != Tab::Gallery {
-            let collapsed = self.queue_panel_collapsed;
+            let minimized = self.queue_panel_collapsed || self.queue_panel_fullscreen;
             let mut panel = egui::TopBottomPanel::bottom("queue_panel")
-                .resizable(!collapsed);
-            panel = if collapsed {
+                .resizable(!minimized);
+            panel = if minimized {
                 panel.exact_height(32.0)
             } else {
                 panel.min_height(140.0).default_height(160.0).max_height(350.0)
@@ -1585,6 +1589,7 @@ impl eframe::App for VideoMakerApp {
                     &mut self.selected_agent_chat,
                     &mut self.montage_editor_open_job,
                     &mut self.queue_panel_collapsed,
+                    &mut self.queue_panel_fullscreen,
                 );
             });
         }
@@ -1646,6 +1651,26 @@ impl eframe::App for VideoMakerApp {
         egui::CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
+                // Повноекранний режим черги: займає всю центральну область
+                if self.queue_panel_fullscreen && !self.jobs.is_empty() && self.active_tab != Tab::Gallery {
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin { left: 8.0, right: 0.0, top: 8.0, bottom: 0.0 })
+                        .show(ui, |ui| {
+                            crate::gui::queue::draw_queue_jobs_list(
+                                ui,
+                                self.language,
+                                &mut self.jobs,
+                                &mut self.selected_job_logs,
+                                &mut self.selected_job_control,
+                                &mut self.control_text_input,
+                                &mut self.active_tab,
+                                &mut self.retry_request,
+                                &mut self.selected_agent_chat,
+                                &mut self.montage_editor_open_job,
+                            );
+                        });
+                    return;
+                }
                 match self.active_tab {
                     Tab::Main => {
                         gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit, &mut self.editor_stats);

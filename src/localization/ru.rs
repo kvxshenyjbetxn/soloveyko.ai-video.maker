@@ -212,6 +212,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "queue_panel_title" => "Очередь",
         "queue_collapse_tooltip" => "Свернуть панель",
         "queue_expand_tooltip" => "Развернуть панель",
+        "queue_fullscreen_tooltip" => "Развернуть на весь экран",
+        "queue_fullscreen_exit_tooltip" => "Выйти из полноэкранного режима",
         "queue_run_btn" => "▶ Запустить",
         "queue_clear_btn" => "🗑 Очистить",
         "queue_clear_disabled_hint" => "Невозможно очистить: есть активные задачи",

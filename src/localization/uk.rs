@@ -212,6 +212,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "queue_panel_title" => "Черга",
         "queue_collapse_tooltip" => "Згорнути панель",
         "queue_expand_tooltip" => "Розгорнути панель",
+        "queue_fullscreen_tooltip" => "Розгорнути на весь екран",
+        "queue_fullscreen_exit_tooltip" => "Вийти з повноекранного режиму",
         "queue_run_btn" => "▶ Запустити",
         "queue_clear_btn" => "🗑 Очистити",
         "queue_clear_disabled_hint" => "Неможливо очистити: є активні задачі",
