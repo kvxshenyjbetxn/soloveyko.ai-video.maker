@@ -1308,15 +1308,17 @@ fn run_video_branch(
 
             let result = if use_video {
                 crate::api::googler::generate_video_with_priority(&key, &prompt, "16:9", &priority)
+                    .map(|(p, d)| (Some(p), d))
             } else {
                 crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority)
+                    .map(|d| (None, d))
             };
 
             sem.release();
 
             match result {
                 Err(e) => (i, Err(e)),
-                Ok(data_uri) => {
+                Ok((provider_used, data_uri)) => {
                     match decode_result(&data_uri, i + 1, total, &media_dir) {
                         Err(e) => (i, Err(e)),
                         Ok(path) => {
@@ -1325,11 +1327,13 @@ fn run_video_branch(
                                 &format!("{} {}/{} saved: {}", if use_video { "Video" } else { "Image" }, i + 1, total, path.display()),
                             );
                             if use_video {
+                                let is_omni = provider_used.as_deref() == Some("flow_omni_flash");
                                 if let Err(err) = upscale_video_if_needed(
                                     &path,
                                     upscale_enabled,
                                     &upscale_resolution,
                                     &upscale_quality,
+                                    is_omni,
                                     job_id_c,
                                     &job_name_c,
                                 ) {
@@ -2572,6 +2576,7 @@ pub fn animate_single_image(
                 googler_video_upscale_enabled,
                 &googler_video_upscale_resolution,
                 &googler_video_upscale_quality,
+                false, // animate не використовує omni
                 job_id,
                 &job_name,
             ) {
@@ -2688,8 +2693,10 @@ pub fn regenerate_single_media(
 
         let api_result = if media_type == "video" {
             crate::api::googler::generate_video_with_priority(&googler_key, &prompt, "16:9", &priority)
+                .map(|(p, d)| (Some(p), d))
         } else {
             crate::api::googler::generate_image_with_priority(&googler_key, &prompt, "16:9", &priority)
+                .map(|d| (None, d))
         };
 
         let outcome = match api_result {
@@ -2697,15 +2704,17 @@ pub fn regenerate_single_media(
                 crate::logger::log_job(job_id, &job_name, &format!("Regen {} failed: {}", file_name, e));
                 Err(e)
             }
-            Ok(data_uri) => match save_media_bytes(&data_uri, &file_path) {
+            Ok((provider_used, data_uri)) => match save_media_bytes(&data_uri, &file_path) {
                 Ok(()) => {
                     crate::logger::log_job(job_id, &job_name, &format!("Regen {} done.", file_name));
                     if media_type == "video" {
+                        let is_omni = provider_used.as_deref() == Some("flow_omni_flash");
                         if let Err(e) = upscale_video_if_needed(
                             &file_path,
                             googler_video_upscale_enabled,
                             &googler_video_upscale_resolution,
                             &googler_video_upscale_quality,
+                            is_omni,
                             job_id,
                             &job_name,
                         ) {
@@ -2841,6 +2850,7 @@ pub fn upscale_video_if_needed(
     enabled: bool,
     resolution: &str,
     quality: &str,
+    is_omni: bool,
     job_id: u64,
     job_name: &str,
 ) -> Result<(), String> {
@@ -2851,7 +2861,10 @@ pub fn upscale_video_if_needed(
     crate::logger::log_job(
         job_id,
         job_name,
-        &format!("Обробка відео (апскейл: {}, роздільна здатність: {}, кроп: 107% (дефолт), якість: {})...", enabled, resolution, quality),
+        &format!("Обробка відео (апскейл: {}, роздільна здатність: {}, кроп: 107% (дефолт){}, якість: {})...",
+            enabled, resolution,
+            if is_omni { " + omni watermark crop 10%" } else { "" },
+            quality),
     );
 
     // Створюємо шлях для тимчасового файлу
@@ -2959,10 +2972,12 @@ pub fn upscale_video_if_needed(
     let scale_h = ((target_h as f64 * 1.07).round() as i32) & !1;
     let fit = format!("scale={}:{}:flags=lanczos:force_original_aspect_ratio=increase,crop={}:{}:iw-{}:0", scale_w, scale_h, target_w, target_h, target_w);
 
+    // Для omni-провайдера спочатку прибираємо вотермарку (10% знизу і справа)
+    let omni_crop = if is_omni { "crop=iw*0.89:ih*0.89:0:0," } else { "" };
     let vf = if sharpen.is_empty() {
-        format!("setpts=N/({}*TB),{}", fps, fit)
+        format!("{}setpts=N/({}*TB),{}", omni_crop, fps, fit)
     } else {
-        format!("setpts=N/({}*TB),{},{}", fps, fit, sharpen)
+        format!("{}setpts=N/({}*TB),{},{}", omni_crop, fps, fit, sharpen)
     };
     let fps_str = format!("{}", fps);
 

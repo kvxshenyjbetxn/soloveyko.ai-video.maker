@@ -524,12 +524,13 @@ pub fn animate_image_with_priority(
 
 /// Генерує відео з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+/// Повертає `(provider_name, data_uri)` — щоб caller знав який провайдер переміг.
 pub fn generate_video_with_priority(
     key: &str,
     prompt: &str,
     aspect_ratio: &str,
     priority: &[String],
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -542,7 +543,7 @@ pub fn generate_video_with_priority(
         let mut failures = 0u32;
         loop {
             match try_generate_video(key, prompt, aspect_ratio, provider, &agent) {
-                Ok(result) => return Ok(result),
+                Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
                     if is_concurrency_exceeded(&e) {
                         crate::logger::log(&format!(
