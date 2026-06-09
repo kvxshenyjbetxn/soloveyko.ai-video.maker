@@ -296,9 +296,44 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
 
     // Доріжка 0 з "segments"
     if let Some(segs) = v["segments"].as_array() {
-        for seg in segs {
-            if let Some(media) = seg["media"].as_str() {
-                clips.push(clip_from_json_seg(seg, media, save_path, 0));
+        // Збираємо медіафайли для відновлення null-media сегментів
+        // (агент міг випадково прибрати шляхи при редагуванні таймінгів)
+        let media_dir = save_path.join("media");
+        let recovery_files: Vec<String> = if media_dir.exists() {
+            let mut files: Vec<String> = std::fs::read_dir(&media_dir)
+                .ok().into_iter().flatten()
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    let name = e.file_name();
+                    let s = name.to_string_lossy();
+                    let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
+                    matches!(ext.as_str(), "jpg"|"jpeg"|"png"|"webp"|"gif"|"mp4"|"mov"|"webm")
+                })
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .collect();
+            files.sort();
+            files
+        } else {
+            Vec::new()
+        };
+        let n_segs = segs.len();
+        let n_files = recovery_files.len();
+
+        for (i, seg) in segs.iter().enumerate() {
+            let media_str = seg["media"].as_str().map(|s| s.to_string())
+                .or_else(|| {
+                    // Відновлення лише для pipeline-формату (є поле "text"), не для редакторських gap-сегментів
+                    if seg["text"].as_str().is_none() || n_files == 0 { return None; }
+                    let file_idx = if n_files <= n_segs {
+                        (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
+                    } else {
+                        i.min(n_files - 1)
+                    };
+                    recovery_files.get(file_idx).map(|f| format!("media/{}", f))
+                });
+
+            if let Some(media) = media_str {
+                clips.push(clip_from_json_seg(seg, &media, save_path, 0));
             }
         }
     }

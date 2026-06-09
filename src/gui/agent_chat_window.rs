@@ -27,7 +27,7 @@ pub fn draw_agent_chat_window(
     let job_status = jobs[job_idx].status.lock().unwrap().clone();
     let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
     let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
-    let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
+    let timeline_rebuild_arc = std::sync::Arc::clone(&jobs[job_idx].timeline_rebuild_requested);
     let job_settings = jobs[job_idx].settings.clone();
     let job_id_clone = job_id;
 
@@ -54,7 +54,7 @@ pub fn draw_agent_chat_window(
 
     let mut is_open = true;
     let mut trigger_send = false;
-    let mut trigger_continue = false;
+    let mut trigger_rebuild = false;
 
     let title = format!("{} — #{} {}",
         translate(language, "agent_chat_title"),
@@ -182,13 +182,14 @@ pub fn draw_agent_chat_window(
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if job_settings.agent_control_enabled {
+                        let has_session = agent_session_arc.lock().unwrap().is_some();
+                        if has_session {
                             if ui.add(
                                 egui::Button::new(
-                                    egui::RichText::new(translate(language, "agent_chat_continue_btn")).strong()
+                                    egui::RichText::new(translate(language, "agent_chat_rebuild_btn")).strong()
                                 )
                             ).clicked() {
-                                trigger_continue = true;
+                                trigger_rebuild = true;
                             }
                         }
                     });
@@ -234,12 +235,9 @@ pub fn draw_agent_chat_window(
         }
     }
 
-    // Продовжуємо пайплайн
-    if trigger_continue {
-        let (lock, cvar) = &*agent_control_resume_arc;
-        *lock.lock().unwrap() = true;
-        cvar.notify_one();
-        is_open = false;
+    // Сигналізуємо про перебудову таймлінії в редакторі монтажу
+    if trigger_rebuild {
+        *timeline_rebuild_arc.lock().unwrap() = true;
     }
 
     if !is_open {

@@ -85,13 +85,6 @@ pub fn draw_queue_jobs_list(
                                 egui::Color32::from_rgb(230, 126, 34),
                             )
                         }
-                        crate::queue::JobStatus::AwaitingAgentControl => {
-                            let (prog, _, _) = job.calculate_progress();
-                            (
-                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_agent"), prog * 100.0),
-                                egui::Color32::from_rgb(52, 152, 219),
-                            )
-                        }
                         crate::queue::JobStatus::AwaitingMontageControl => {
                             let (prog, _, _) = job.calculate_progress();
                             (
@@ -115,7 +108,6 @@ pub fn draw_queue_jobs_list(
                         crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
                             | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingAgentControl
                             | crate::queue::JobStatus::AwaitingMontageControl
                     );
 
@@ -490,8 +482,6 @@ pub fn draw_queue_jobs_list(
                             }
                         } else if status == crate::queue::JobStatus::AwaitingMediaControl {
                             *active_tab = Tab::Gallery;
-                        } else if status == crate::queue::JobStatus::AwaitingAgentControl {
-                            *selected_agent_chat = Some(job.id);
                         } else {
                             *selected_job_logs = Some((job.id, job.name.clone()));
                         }
@@ -635,7 +625,6 @@ pub fn draw_queue_panel(
                 crate::queue::JobStatus::Running
                     | crate::queue::JobStatus::AwaitingControl
                     | crate::queue::JobStatus::AwaitingMediaControl
-                    | crate::queue::JobStatus::AwaitingAgentControl
                     | crate::queue::JobStatus::AwaitingMontageControl
             )
         });
@@ -679,8 +668,7 @@ pub fn draw_queue_panel(
                             crate::queue::JobStatus::Done => 1.0,
                             crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingAgentControl => {
+                            | crate::queue::JobStatus::AwaitingMediaControl => {
                                 let (prog, _, _) = j.calculate_progress();
                                 prog
                             }
@@ -696,7 +684,6 @@ pub fn draw_queue_panel(
                     let s = j.status.lock().unwrap().clone();
                     s == crate::queue::JobStatus::Running
                         || s == crate::queue::JobStatus::AwaitingMediaControl
-                        || s == crate::queue::JobStatus::AwaitingAgentControl
                 });
 
                 let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
@@ -772,7 +759,6 @@ pub fn draw_queue_panel(
                         std::sync::Arc::clone(&job.montage_progress),
                         std::sync::Arc::clone(&job.montage_file_size),
                         std::sync::Arc::clone(&job.media_control_resume),
-                        std::sync::Arc::clone(&job.agent_control_resume),
                         std::sync::Arc::clone(&job.montage_control_resume),
                         std::sync::Arc::clone(&job.agent_chat),
                         std::sync::Arc::clone(&job.agent_session),
@@ -797,7 +783,6 @@ pub fn draw_queue_panel(
                         std::sync::Arc::clone(&job.montage_progress),
                         std::sync::Arc::clone(&job.montage_file_size),
                         std::sync::Arc::clone(&job.media_control_resume),
-                        std::sync::Arc::clone(&job.agent_control_resume),
                         std::sync::Arc::clone(&job.montage_control_resume),
                         std::sync::Arc::clone(&job.agent_chat),
                         std::sync::Arc::clone(&job.agent_session),

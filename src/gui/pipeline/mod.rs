@@ -98,7 +98,6 @@ pub fn draw_pipeline_panel(
     pipeline_translation_control_enabled: &mut bool,
     pipeline_control_auto_open: &mut bool,
     pipeline_media_control_enabled: &mut bool,
-    pipeline_agent_control_enabled: &mut bool,
     pipeline_montage_control_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
@@ -225,7 +224,6 @@ pub fn draw_pipeline_panel(
                             *pipeline_translation_control_enabled,
                             *pipeline_control_auto_open,
                             *pipeline_media_control_enabled,
-                            *pipeline_agent_control_enabled,
                             *pipeline_montage_control_enabled,
                             *pipeline_voiceover_enabled,
                             *pipeline_video_enabled,
@@ -370,7 +368,6 @@ pub fn draw_pipeline_panel(
                                     pipeline_translation_control_enabled,
                                     pipeline_control_auto_open,
                                     pipeline_media_control_enabled,
-                                    pipeline_agent_control_enabled,
                                     pipeline_montage_control_enabled,
                                     pipeline_voiceover_enabled,
                                     pipeline_video_enabled,
@@ -520,7 +517,7 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open, pipeline_media_control_enabled, pipeline_agent_control_enabled, pipeline_montage_control_enabled);
+                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open, pipeline_media_control_enabled, pipeline_montage_control_enabled);
                             });
                         }
 
@@ -866,7 +863,6 @@ pub fn draw_pipeline_panel(
                                             *pipeline_translation_enabled,
                                             *pipeline_translation_control_enabled,
                                             *pipeline_media_control_enabled,
-                                            *pipeline_agent_control_enabled,
                                             *pipeline_montage_control_enabled,
                                             translation_prompt,
                                             translation_model,
@@ -952,7 +948,6 @@ pub fn draw_pipeline_panel(
                                         *pipeline_translation_enabled,
                                         *pipeline_translation_control_enabled,
                                         *pipeline_media_control_enabled,
-                                        *pipeline_agent_control_enabled,
                                         *pipeline_montage_control_enabled,
                                         translation_prompt,
                                         translation_model,
@@ -1045,7 +1040,6 @@ fn build_job_settings(
     translation_enabled: bool,
     translation_control_enabled: bool,
     media_control_enabled: bool,
-    agent_control_enabled: bool,
     montage_control_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
@@ -1186,7 +1180,6 @@ fn build_job_settings(
         montage_image_shake_enabled,
         montage_image_shake_intensity,
         media_control_enabled,
-        agent_control_enabled,
         montage_control_enabled,
         overlay_triggers_enabled,
         overlay_triggers,
@@ -1204,7 +1197,6 @@ fn validate_and_enqueue(
     translation_enabled: bool,
     translation_control_enabled: bool,
     media_control_enabled: bool,
-    agent_control_enabled: bool,
     montage_control_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
@@ -1292,7 +1284,6 @@ fn validate_and_enqueue(
         translation_enabled,
         translation_control_enabled,
         media_control_enabled,
-        agent_control_enabled,
         montage_control_enabled,
         translation_prompt,
         translation_model,

@@ -79,8 +79,6 @@ pub struct VideoMakerApp {
     pub pipeline_control_auto_open: bool,
     /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду).
     pub pipeline_media_control_enabled: bool,
-    /// Чи увімкнено контроль агента (пауза після timeline.json для чату з агентом).
-    pub pipeline_agent_control_enabled: bool,
     /// Чи увімкнено контроль монтажу (показує кнопку редактора монтажу в карточці задачі).
     pub pipeline_montage_control_enabled: bool,
     /// ID задачі, для якої відкрито редактор монтажу. None = редактор закрито.
@@ -447,7 +445,7 @@ impl Default for VideoMakerApp {
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
-            pipeline_agent_control_enabled: false,
+
             pipeline_montage_control_enabled: false,
             montage_editor_open_job: None,
             montage_editor_state: None,
@@ -664,7 +662,6 @@ impl VideoMakerApp {
         let pipeline_translation_control_enabled = saved.pipeline_translation_control_enabled;
         let pipeline_control_auto_open = saved.pipeline_control_auto_open;
         let pipeline_media_control_enabled = saved.pipeline_media_control_enabled;
-        let pipeline_agent_control_enabled = saved.pipeline_agent_control_enabled;
         let pipeline_montage_control_enabled = saved.pipeline_montage_control_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
@@ -837,7 +834,6 @@ impl VideoMakerApp {
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
-            pipeline_agent_control_enabled,
             pipeline_montage_control_enabled,
             montage_editor_open_job: None,
             montage_editor_state: None,
@@ -1034,7 +1030,6 @@ impl VideoMakerApp {
             pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
             pipeline_control_auto_open: self.pipeline_control_auto_open,
             pipeline_media_control_enabled: self.pipeline_media_control_enabled,
-            pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
             pipeline_montage_control_enabled: self.pipeline_montage_control_enabled,
             pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
             pipeline_video_enabled: self.pipeline_video_enabled,
@@ -1123,7 +1118,6 @@ impl VideoMakerApp {
         self.pipeline_translation_control_enabled = t.pipeline_translation_control_enabled;
         self.pipeline_control_auto_open = t.pipeline_control_auto_open;
         self.pipeline_media_control_enabled = t.pipeline_media_control_enabled;
-        self.pipeline_agent_control_enabled = t.pipeline_agent_control_enabled;
         self.pipeline_montage_control_enabled = t.pipeline_montage_control_enabled;
         self.pipeline_voiceover_enabled = t.pipeline_voiceover_enabled;
         self.pipeline_video_enabled = t.pipeline_video_enabled;
@@ -1433,7 +1427,6 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_translation_control_enabled,
                         &mut self.pipeline_control_auto_open,
                         &mut self.pipeline_media_control_enabled,
-                        &mut self.pipeline_agent_control_enabled,
                         &mut self.pipeline_montage_control_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
@@ -1617,7 +1610,6 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&job.montage_progress),
                     std::sync::Arc::clone(&job.montage_file_size),
                     std::sync::Arc::clone(&job.media_control_resume),
-                    std::sync::Arc::clone(&job.agent_control_resume),
                     std::sync::Arc::clone(&job.montage_control_resume),
                     std::sync::Arc::clone(&job.agent_chat),
                     std::sync::Arc::clone(&job.agent_session),
@@ -1753,6 +1745,7 @@ impl eframe::App for VideoMakerApp {
                     ctx.clone(),
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
+                    None,
                     settings.googler_video_upscale_enabled,
                     settings.googler_video_upscale_resolution.clone(),
                     settings.googler_video_upscale_quality.clone(),
@@ -2009,6 +2002,55 @@ impl eframe::App for VideoMakerApp {
             &self.agent_chat_result,
         );
 
+        // Перебудова таймлінії в редакторі після чату з агентом
+        for job in &self.jobs {
+            let requested = {
+                let mut flag = job.timeline_rebuild_requested.lock().unwrap();
+                if *flag { *flag = false; true } else { false }
+            };
+            if requested {
+                if Some(job.id) == self.montage_editor_open_job {
+                    let save_path = std::path::Path::new(&job.settings.save_path);
+
+                    // Знаходимо сегменти де агент змінив промти — перегенеруємо тільки їх
+                    let changed = crate::core::pipeline::find_changed_prompts_for_rebuild(
+                        save_path,
+                        job.settings.video_style_enabled,
+                        &job.settings.video_style_prompt,
+                    );
+                    if !changed.is_empty() {
+                        let priority = if job.settings.video_media_type == "video" {
+                            job.settings.googler_video_priority.clone()
+                        } else {
+                            job.settings.googler_image_priority.clone()
+                        };
+                        for (file_path, new_prompt) in changed {
+                            crate::core::pipeline::regenerate_single_media(
+                                file_path,
+                                job.settings.video_media_type.clone(),
+                                priority.clone(),
+                                job.settings.googler_key.clone(),
+                                Some(new_prompt),
+                                job.id,
+                                job.name.clone(),
+                                ctx.clone(),
+                                std::sync::Arc::new(std::sync::Mutex::new(None)),
+                                std::sync::Arc::new(std::sync::Mutex::new(false)),
+                                Some(std::sync::Arc::clone(&self.gallery_anim_loading)),
+                                job.settings.googler_video_upscale_enabled,
+                                job.settings.googler_video_upscale_resolution.clone(),
+                                job.settings.googler_video_upscale_quality.clone(),
+                            );
+                        }
+                    }
+
+                    self.montage_editor_state = Some(
+                        crate::gui::montage_editor::MontageEditorState::load(save_path, &job.name)
+                    );
+                }
+            }
+        }
+
         // Редактор монтажу
         let montage_actions = crate::gui::montage_editor::draw_montage_editor_window(
             ctx,
@@ -2087,6 +2129,7 @@ impl eframe::App for VideoMakerApp {
                     ctx.clone(),
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
+                    None,
                     settings.googler_video_upscale_enabled,
                     settings.googler_video_upscale_resolution.clone(),
                     settings.googler_video_upscale_quality.clone(),
@@ -2125,7 +2168,6 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_translation_control_enabled != self.last_saved_settings.pipeline_translation_control_enabled
                 || self.pipeline_control_auto_open != self.last_saved_settings.pipeline_control_auto_open
                 || self.pipeline_media_control_enabled != self.last_saved_settings.pipeline_media_control_enabled
-                || self.pipeline_agent_control_enabled != self.last_saved_settings.pipeline_agent_control_enabled
                 || self.pipeline_montage_control_enabled != self.last_saved_settings.pipeline_montage_control_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
@@ -2227,7 +2269,6 @@ impl eframe::App for VideoMakerApp {
                     pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
                     pipeline_control_auto_open: self.pipeline_control_auto_open,
                     pipeline_media_control_enabled: self.pipeline_media_control_enabled,
-                    pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
                     pipeline_montage_control_enabled: self.pipeline_montage_control_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
@@ -2401,6 +2442,7 @@ impl eframe::App for VideoMakerApp {
                                     ctx.clone(),
                                     std::sync::Arc::clone(&self.media_regen_result),
                                     std::sync::Arc::clone(&self.media_regen_loading),
+                                    None,
                                     settings.googler_video_upscale_enabled,
                                     settings.googler_video_upscale_resolution.clone(),
                                     settings.googler_video_upscale_quality.clone(),

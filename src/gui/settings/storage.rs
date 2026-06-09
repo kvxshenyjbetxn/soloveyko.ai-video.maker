@@ -119,9 +119,6 @@ pub struct AppSettings {
     /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду)
     #[serde(default)]
     pub pipeline_media_control_enabled: bool,
-    /// Чи увімкнено контроль агента (пауза після timeline.json для чату з агентом)
-    #[serde(default)]
-    pub pipeline_agent_control_enabled: bool,
     /// Чи увімкнено контроль монтажу (показує кнопку редактора монтажу в карточці)
     #[serde(default)]
     pub pipeline_montage_control_enabled: bool,
@@ -390,7 +387,6 @@ impl Default for AppSettings {
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
-            pipeline_agent_control_enabled: false,
             pipeline_montage_control_enabled: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
@@ -589,9 +585,6 @@ pub struct PipelineTemplate {
     /// Чи увімкнено контроль зображень
     #[serde(default)]
     pub pipeline_media_control_enabled: bool,
-    /// Чи увімкнено контроль агента
-    #[serde(default)]
-    pub pipeline_agent_control_enabled: bool,
     /// Чи увімкнено контроль монтажу
     #[serde(default)]
     pub pipeline_montage_control_enabled: bool,
@@ -829,7 +822,6 @@ pub fn save_template(
     pipeline_translation_control_enabled: bool,
     pipeline_control_auto_open: bool,
     pipeline_media_control_enabled: bool,
-    pipeline_agent_control_enabled: bool,
     pipeline_montage_control_enabled: bool,
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
@@ -919,7 +911,6 @@ pub fn save_template(
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
-            pipeline_agent_control_enabled,
             pipeline_montage_control_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,

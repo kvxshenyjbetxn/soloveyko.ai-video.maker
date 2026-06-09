@@ -1257,10 +1257,13 @@ fn run_video_branch(
         return Err(e.to_string());
     }
 
-    // Зберігаємо промти у JSON для можливої перегенерації окремих файлів
+    // Зберігаємо промти та сирі тексти сегментів для порівняння при перебудові
     let prompts_path = media_dir.join("prompts.json");
     if let Ok(json) = serde_json::to_string_pretty(&prompts) {
         let _ = std::fs::write(&prompts_path, json);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&segments) {
+        let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
     }
 
     *media_progress.lock().unwrap() = Some((0, total));
@@ -1390,15 +1393,13 @@ fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>
 }
 
 /// Запускає агента (Claude Code або Gemini CLI) для створення timeline.json на основі subtitle.srt.
-/// Якщо `agent_control_enabled`, зберігає session_id та чекає підтвердження користувача.
+/// Запускає агента для створення timeline.json та зберігає сесію для подальшого чату.
 fn run_agent_timeline(
     job_id: u64,
     job_name: &str,
     settings: &crate::queue::JobSettings,
-    status: Arc<Mutex<crate::queue::JobStatus>>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
-    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
     let save_dir = std::path::Path::new(&settings.save_path);
@@ -1476,28 +1477,26 @@ fn run_agent_timeline(
 
     save_agent_chat_to_file(save_dir, &agent_chat.lock().unwrap());
 
-    // Сесію зберігаємо тільки якщо увімкнено контроль — для можливості продовження чату
-    if settings.agent_control_enabled {
-        *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
-            session_id: actual_session_id.clone(),
-            service: settings.video_llm_service.clone(),
-            model: settings.video_llm_model.clone(),
-        });
+    // Зберігаємо сесію агента завжди — для можливості продовження чату при контролі монтажу
+    *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
+        session_id: actual_session_id.clone(),
+        service: settings.video_llm_service.clone(),
+        model: settings.video_llm_model.clone(),
+    });
 
-        // Оновлюємо лише перший рядок (заголовок) — хвіст зі стрімінгом зберігаємо
-        if settings.video_llm_service == "Codex CLI" {
-            let mut chat = agent_chat.lock().unwrap();
-            if let Some(first) = chat.first_mut() {
-                let tail = first.content.find('\n')
-                    .map(|p| first.content[p..].to_string())
-                    .unwrap_or_default();
-                first.content = format!(
-                    "Running: codex exec --model {} --json [Thread: {}]{}",
-                    settings.video_llm_model,
-                    actual_session_id,
-                    tail
-                );
-            }
+    // Оновлюємо заголовок для Codex CLI — підставляємо реальний thread ID
+    if settings.video_llm_service == "Codex CLI" {
+        let mut chat = agent_chat.lock().unwrap();
+        if let Some(first) = chat.first_mut() {
+            let tail = first.content.find('\n')
+                .map(|p| first.content[p..].to_string())
+                .unwrap_or_default();
+            first.content = format!(
+                "Running: codex exec --model {} --json [Thread: {}]{}",
+                settings.video_llm_model,
+                actual_session_id,
+                tail
+            );
         }
     }
 
@@ -1512,24 +1511,6 @@ fn run_agent_timeline(
         .map_err(|e| format!("Agent timeline.json is invalid: {}", e))?;
 
     crate::logger::log_job(job_id, job_name, "Agent timeline.json created and validated.");
-
-    // Пауза для контролю агента — чекаємо підтвердження користувача
-    if settings.agent_control_enabled {
-        crate::logger::log_job(job_id, job_name, "Awaiting agent control confirmation from user...");
-        *status.lock().unwrap() = crate::queue::JobStatus::AwaitingAgentControl;
-        ctx.request_repaint();
-
-        let (lock, cvar) = &*agent_control_resume;
-        let mut resumed = lock.lock().unwrap();
-        while !*resumed {
-            resumed = cvar.wait(resumed).unwrap();
-        }
-        *resumed = false;
-
-        crate::logger::log_job(job_id, job_name, "Agent control confirmed. Resuming pipeline...");
-        *status.lock().unwrap() = crate::queue::JobStatus::Running;
-        ctx.request_repaint();
-    }
 
     ctx.request_repaint();
     Ok(())
@@ -1675,7 +1656,6 @@ pub fn run_pipeline(
     montage_progress: Arc<Mutex<Option<f32>>>,
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
-    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
@@ -1789,10 +1769,8 @@ pub fn run_pipeline(
 
             if let Err(e) = run_agent_timeline(
                 job_id, &job_name, &settings,
-                Arc::clone(&status),
                 Arc::clone(&agent_chat),
                 Arc::clone(&agent_session),
-                Arc::clone(&agent_control_resume),
                 &ctx,
             ) {
                 crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2205,7 +2183,6 @@ pub fn retry_from_stage(
     montage_progress: Arc<Mutex<Option<f32>>>,
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
-    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
@@ -2230,14 +2207,13 @@ pub fn retry_from_stage(
             *montage_progress.lock().unwrap() = None;
             *montage_file_size.lock().unwrap() = None;
             *media_control_resume.0.lock().unwrap() = false;
-            *agent_control_resume.0.lock().unwrap() = false;
             *montage_control_resume.0.lock().unwrap() = false;
             run_pipeline(
                 job_id, job_name, settings, status,
                 translation_stage, voiceover_stage, video_stage, subtitles_stage, montage_stage,
                 translated_text, total_cost, audio_duration,
                 prompts_progress, media_progress, montage_progress, montage_file_size,
-                media_control_resume, agent_control_resume, montage_control_resume,
+                media_control_resume, montage_control_resume,
                 agent_chat, agent_session, ctx,
             );
         }
@@ -2285,10 +2261,8 @@ pub fn retry_from_stage(
 
                     if let Err(e) = run_agent_timeline(
                         job_id, &job_name, &settings,
-                        Arc::clone(&status),
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2360,10 +2334,8 @@ pub fn retry_from_stage(
                     ctx.request_repaint();
                     if let Err(e) = run_agent_timeline(
                         job_id, &job_name, &settings,
-                        Arc::clone(&status),
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2464,10 +2436,8 @@ pub fn retry_from_stage(
 
                     if let Err(e) = run_agent_timeline(
                         job_id, &job_name, &settings,
-                        Arc::clone(&status),
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2689,6 +2659,8 @@ pub fn regenerate_single_media(
     ctx: egui::Context,
     result_slot: Arc<Mutex<Option<Result<(), String>>>>,
     loading: Arc<Mutex<bool>>,
+    // Якщо передано — файл додається в набір "завантажується" (для анімації в редакторі)
+    path_loading_set: Option<Arc<Mutex<std::collections::HashSet<std::path::PathBuf>>>>,
     googler_video_upscale_enabled: bool,
     googler_video_upscale_resolution: String,
     googler_video_upscale_quality: String,
@@ -2696,6 +2668,9 @@ pub fn regenerate_single_media(
 
     std::thread::spawn(move || {
         *loading.lock().unwrap() = true;
+        if let Some(ref set) = path_loading_set {
+            set.lock().unwrap().insert(file_path.clone());
+        }
 
         let file_name = file_path.file_name()
             .and_then(|n| n.to_str())
@@ -2749,8 +2724,113 @@ pub fn regenerate_single_media(
 
         *result_slot.lock().unwrap() = Some(outcome);
         *loading.lock().unwrap() = false;
+        if let Some(ref set) = path_loading_set {
+            set.lock().unwrap().remove(&file_path);
+        }
         ctx.request_repaint();
     });
+}
+
+/// Порівнює тексти сегментів у timeline.json з segment_texts.json (сирі тексти до стилю).
+/// Повертає список (шлях до медіафайлу, готовий промт) для сегментів де текст змінився.
+/// Одразу оновлює segment_texts.json — щоб наступний rebuild порівнював з новим станом.
+/// Повний промт будується як: video_style_prompt.replace("{{text}}", new_text).
+pub fn find_changed_prompts_for_rebuild(
+    save_dir: &std::path::Path,
+    video_style_enabled: bool,
+    video_style_prompt: &str,
+) -> Vec<(std::path::PathBuf, String)> {
+    let timeline_path = save_dir.join("timeline.json");
+    let content = match std::fs::read_to_string(&timeline_path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+    let v: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+    let segs = match v["segments"].as_array() {
+        Some(s) => s,
+        None => return vec![],
+    };
+
+    // Витягуємо тексти з timeline.json (лише pipeline-формат має поле "text")
+    let new_texts: Vec<String> = segs.iter()
+        .map(|seg| seg["text"].as_str().unwrap_or("").to_string())
+        .collect();
+
+    if new_texts.iter().all(|t| t.is_empty()) {
+        return vec![]; // editor-формат без полів text — нічого порівнювати
+    }
+
+    let media_dir = save_dir.join("media");
+
+    // Старі тексти сегментів на момент останньої генерації/перебудови
+    let old_texts: Vec<String> = std::fs::read_to_string(media_dir.join("segment_texts.json"))
+        .ok()
+        .and_then(|c| serde_json::from_str::<Vec<String>>(&c).ok())
+        .unwrap_or_default();
+
+    let mut files: Vec<String> = std::fs::read_dir(&media_dir)
+        .ok().into_iter().flatten()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name();
+            let s = name.to_string_lossy();
+            let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
+            matches!(ext.as_str(), "jpg"|"jpeg"|"png"|"webp"|"gif"|"mp4"|"mov"|"webm")
+        })
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    files.sort();
+
+    if files.is_empty() {
+        return vec![];
+    }
+
+    let n_segs = new_texts.len();
+    let n_files = files.len();
+    let mut changed = vec![];
+
+    for (i, new_text) in new_texts.iter().enumerate() {
+        if new_text.trim().is_empty() { continue; }
+
+        let file_idx = if n_files <= n_segs {
+            (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
+        } else {
+            i.min(n_files - 1)
+        };
+
+        let old_text = old_texts.get(i).map(|s| s.as_str()).unwrap_or("");
+
+        if new_text.trim() != old_text.trim() {
+            if let Some(filename) = files.get(file_idx) {
+                let file_path = media_dir.join(filename);
+                if file_path.exists() {
+                    // Будуємо повний промт так само як при початковій генерації
+                    let full_prompt = if video_style_enabled && !video_style_prompt.is_empty() {
+                        if video_style_prompt.contains("{{text}}") {
+                            video_style_prompt.replace("{{text}}", new_text)
+                        } else {
+                            format!("{}\n\n{}", video_style_prompt, new_text)
+                        }
+                    } else {
+                        new_text.clone()
+                    };
+                    changed.push((file_path, full_prompt));
+                }
+            }
+        }
+    }
+
+    // Одразу оновлюємо segment_texts.json — щоб наступний rebuild порівнював з поточним станом
+    if !changed.is_empty() {
+        if let Ok(json) = serde_json::to_string_pretty(&new_texts) {
+            let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
+        }
+    }
+
+    changed
 }
 
 /// Виконує апскейл та кроп відеофайлу за допомогою FFmpeg.

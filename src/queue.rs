@@ -8,8 +8,6 @@ pub enum JobStatus {
     AwaitingControl,
     /// Очікує перегляду згенерованих зображень користувачем
     AwaitingMediaControl,
-    /// Очікує підтвердження користувача після завершення агента
-    AwaitingAgentControl,
     /// Очікує підтвердження монтажу від користувача
     AwaitingMontageControl,
     Done,
@@ -134,8 +132,6 @@ pub struct JobSettings {
     pub montage_image_shake_enabled: bool,
     pub montage_image_shake_intensity: f32,
     pub media_control_enabled: bool,
-    /// Чи увімкнено контроль агента (пауза після генерації timeline.json для чату з агентом)
-    pub agent_control_enabled: bool,
     /// Чи увімкнено контроль монтажу (показує кнопку редактора монтажу в карточці задачі)
     pub montage_control_enabled: bool,
     /// Чи увімкнено тригери накладення медіа за ключовими фразами
@@ -180,10 +176,10 @@ pub struct PipelineJob {
     pub montage_file_size: Arc<Mutex<Option<u64>>>,
     /// Condvar для відновлення пайплайну після контролю зображень
     pub media_control_resume: Arc<(Mutex<bool>, Condvar)>,
-    /// Condvar для відновлення пайплайну після контролю агента
-    pub agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     /// Condvar для відновлення пайплайну після контролю монтажу
     pub montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Сигнал для перебудови таймлінії в редакторі монтажу після чату з агентом
+    pub timeline_rebuild_requested: Arc<Mutex<bool>>,
     /// Повідомлення чату з агентом (зберігається між сесіями)
     pub agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>,
     /// Активна сесія агента (session_id для продовження чату)
@@ -210,8 +206,8 @@ impl PipelineJob {
             montage_progress: Arc::new(Mutex::new(None)),
             montage_file_size: Arc::new(Mutex::new(None)),
             media_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
-            agent_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
             montage_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            timeline_rebuild_requested: Arc::new(Mutex::new(false)),
             agent_chat: Arc::new(Mutex::new(Vec::new())),
             agent_session: Arc::new(Mutex::new(None)),
         }
