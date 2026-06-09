@@ -216,50 +216,12 @@ pub struct VideoMakerApp {
     pub queue_error: Option<String>,
     /// Запит на повтор конкретного етапу задачі: (job_id, stage)
     pub retry_request: Option<(u64, crate::queue::RetryStage)>,
-    /// Обрана задача для перегляду її логів
-    pub selected_job_logs: Option<(u64, String)>,
-    /// Задача, для якої зараз відкрито вікно контролю перекладу
-    pub selected_job_control: Option<u64>,
-    /// Текстовий буфер для редагування перекладу під час контролю
-    pub control_text_input: String,
-    /// Задача, для якої зараз відкрито вікно чату з агентом
-    pub selected_agent_chat: Option<u64>,
-    /// Буфер введення повідомлення для чату з агентом
-    pub agent_chat_input: String,
-    /// Прапорець завантаження відповіді агента у фоні
-    pub agent_chat_loading: std::sync::Arc<std::sync::Mutex<bool>>,
-    /// Результат фонової відповіді агента
-    pub agent_chat_result: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
-    /// Помилка чату з агентом
-    pub agent_chat_error: Option<String>,
-    /// Чи відкрите вікно розширеної перегенерації
-    pub control_regen_extended_open: bool,
-    /// Одноразовий сервіс перекладу для перегенерації
-    pub control_regen_service: String,
-    /// Одноразова активна модель для перегенерації
-    pub control_regen_model: String,
-    /// Одноразова модель OpenRouter для перегенерації
-    pub control_regen_model_openrouter: String,
-    /// Одноразова модель Claude для перегенерації
-    pub control_regen_model_claude: String,
-    /// Одноразова модель Gemini для перегенерації
-    pub control_regen_model_gemini: String,
-    /// Одноразова модель Codex для перегенерації
-    pub control_regen_model_codex: String,
-    /// Одноразова модель AGY для перегенерації
-    pub control_regen_model_agy: String,
-    /// Рядок пошуку моделі для перегенерації
-    pub control_regen_model_search: String,
-    /// Одноразовий промт для перегенерації
-    pub control_regen_prompt: String,
-    /// Одноразова температура для перегенерації
-    pub control_regen_temperature: f32,
-    /// Результат фонової перегенерації (текст, вартість)
-    pub control_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<(String, Option<f64>), String>>>>,
-    /// Прапорець виконання перегенерації
-    pub control_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
-    /// Помилка перегенерації
-    pub control_regen_error: Option<String>,
+    /// Відкриті вікна логів задач: job_id → job_name.
+    pub open_job_logs: std::collections::HashMap<u64, String>,
+    /// Відкриті вікна контролю перекладу: job_id → стан вікна.
+    pub open_job_controls: std::collections::HashMap<u64, crate::gui::pipeline::translation_control::TranslationControlWindowState>,
+    /// Відкриті вікна чату з агентом: job_id → стан вікна.
+    pub open_agent_chats: std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
     /// Задачі, для яких користувач вручну закрив вікно контролю (авто-відкриття їх пропускає).
     pub control_dismissed: std::collections::HashSet<u64>,
     /// Чи відкрите вікно введення назви задачі.
@@ -410,6 +372,8 @@ pub struct VideoMakerApp {
     pub queue_panel_collapsed: bool,
     /// Чи розгорнута черга на весь центральний екран.
     pub queue_panel_fullscreen: bool,
+    /// ID задач, для яких вже було авто-перейдено на вкладку Галерея при MediaControl.
+    pub media_control_notified: std::collections::HashSet<u64>,
 }
 
 impl Default for VideoMakerApp {
@@ -514,28 +478,9 @@ impl Default for VideoMakerApp {
             job_counter: 0,
             queue_error: None,
             retry_request: None,
-            selected_job_logs: None,
-            selected_job_control: None,
-            control_text_input: String::new(),
-            selected_agent_chat: None,
-            agent_chat_input: String::new(),
-            agent_chat_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
-            agent_chat_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            agent_chat_error: None,
-            control_regen_extended_open: false,
-            control_regen_service: String::new(),
-            control_regen_model: String::new(),
-            control_regen_model_openrouter: String::new(),
-            control_regen_model_claude: "sonnet".to_string(),
-            control_regen_model_gemini: "gemini-2.5-flash".to_string(),
-            control_regen_model_codex: "gpt-5.4-mini".to_string(),
-            control_regen_model_agy: "gemini-3.5-flash".to_string(),
-            control_regen_model_search: String::new(),
-            control_regen_prompt: String::new(),
-            control_regen_temperature: 0.7,
-            control_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            control_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
-            control_regen_error: None,
+            open_job_logs: std::collections::HashMap::new(),
+            open_job_controls: std::collections::HashMap::new(),
+            open_agent_chats: std::collections::HashMap::new(),
             control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
@@ -612,6 +557,7 @@ impl Default for VideoMakerApp {
             update_dialog_open: false,
             queue_panel_collapsed: false,
             queue_panel_fullscreen: false,
+            media_control_notified: std::collections::HashSet::new(),
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -903,28 +849,9 @@ impl VideoMakerApp {
             job_counter: 0,
             queue_error: None,
             retry_request: None,
-            selected_job_logs: None,
-            selected_job_control: None,
-            control_text_input: String::new(),
-            selected_agent_chat: None,
-            agent_chat_input: String::new(),
-            agent_chat_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
-            agent_chat_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            agent_chat_error: None,
-            control_regen_extended_open: false,
-            control_regen_service: String::new(),
-            control_regen_model: String::new(),
-            control_regen_model_openrouter: String::new(),
-            control_regen_model_claude: "sonnet".to_string(),
-            control_regen_model_gemini: "gemini-2.5-flash".to_string(),
-            control_regen_model_codex: "gpt-5.4-mini".to_string(),
-            control_regen_model_agy: "gemini-3.5-flash".to_string(),
-            control_regen_model_search: String::new(),
-            control_regen_prompt: String::new(),
-            control_regen_temperature: 0.7,
-            control_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            control_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
-            control_regen_error: None,
+            open_job_logs: std::collections::HashMap::new(),
+            open_job_controls: std::collections::HashMap::new(),
+            open_agent_chats: std::collections::HashMap::new(),
             control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
@@ -1001,6 +928,7 @@ impl VideoMakerApp {
             update_dialog_open: false,
             queue_panel_collapsed: false,
             queue_panel_fullscreen: false,
+            media_control_notified: std::collections::HashSet::new(),
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
@@ -1573,13 +1501,12 @@ impl eframe::App for VideoMakerApp {
                     self.language,
                     &mut self.jobs,
                     &mut self.job_counter,
-                    &mut self.selected_job_logs,
-                    &mut self.selected_job_control,
-                    &mut self.control_text_input,
+                    &mut self.open_job_logs,
+                    &mut self.open_job_controls,
                     &self.whisper_model_download,
                     &mut self.active_tab,
                     &mut self.retry_request,
-                    &mut self.selected_agent_chat,
+                    &mut self.open_agent_chats,
                     &mut self.montage_editor_open_job,
                     &mut self.queue_panel_collapsed,
                     &mut self.queue_panel_fullscreen,
@@ -1652,12 +1579,11 @@ impl eframe::App for VideoMakerApp {
                                 ui,
                                 self.language,
                                 &mut self.jobs,
-                                &mut self.selected_job_logs,
-                                &mut self.selected_job_control,
-                                &mut self.control_text_input,
+                                &mut self.open_job_logs,
+                                &mut self.open_job_controls,
                                 &mut self.active_tab,
                                 &mut self.retry_request,
-                                &mut self.selected_agent_chat,
+                                &mut self.open_agent_chats,
                                 &mut self.montage_editor_open_job,
                             );
                         });
@@ -1949,75 +1875,70 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
-        if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
-            if !crate::gui::logs::draw_job_logs_window(
-                ctx,
-                self.language,
-                job_id,
-                &job_name,
-                &mut self.auto_scroll_logs,
-                &mut self.copied_toast,
-            ) {
-                self.selected_job_logs = None;
+        // Відкриті вікна логів задач
+        {
+            let log_ids: Vec<(u64, String)> = self.open_job_logs.iter().map(|(&id, name)| (id, name.clone())).collect();
+            let mut to_close_logs = Vec::new();
+            for (job_id, job_name) in log_ids {
+                if !crate::gui::logs::draw_job_logs_window(
+                    ctx,
+                    self.language,
+                    job_id,
+                    &job_name,
+                    &mut self.auto_scroll_logs,
+                    &mut self.copied_toast,
+                ) {
+                    to_close_logs.push(job_id);
+                }
+            }
+            for id in to_close_logs {
+                self.open_job_logs.remove(&id);
             }
         }
 
         // Авто-відкриття вікна контролю коли задача переходить в AwaitingControl
-        if self.pipeline_control_auto_open && self.selected_job_control.is_none() {
-            if let Some(job) = self.jobs.iter().find(|j| {
-                !self.control_dismissed.contains(&j.id)
-                    && *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingControl
-            }) {
-                let job_id = job.id;
-                let translated_text = job.translated_text.lock().unwrap().clone();
-                self.selected_job_control = Some(job_id);
-                self.control_text_input = translated_text.unwrap_or_default();
+        if self.pipeline_control_auto_open {
+            for job in &self.jobs {
+                if !self.control_dismissed.contains(&job.id)
+                    && *job.status.lock().unwrap() == crate::queue::JobStatus::AwaitingControl
+                    && !self.open_job_controls.contains_key(&job.id)
+                {
+                    let text = job.translated_text.lock().unwrap().clone().unwrap_or_default();
+                    self.open_job_controls.insert(
+                        job.id,
+                        crate::gui::pipeline::translation_control::TranslationControlWindowState::new_with_text(text),
+                    );
+                }
             }
         }
 
-        // Авто-перехід на вкладку Галерея коли задача переходить в AwaitingMediaControl
-        if self.jobs.iter().any(|j| {
-            *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl
-        }) {
-            self.active_tab = Tab::Gallery;
+        // Авто-перехід на вкладку Галерея при першій появі AwaitingMediaControl (лише один раз на задачу)
+        for job in &self.jobs {
+            if *job.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl
+                && !self.media_control_notified.contains(&job.id)
+            {
+                self.media_control_notified.insert(job.id);
+                self.active_tab = Tab::Gallery;
+            }
         }
 
-        // Спливаюче вікно контролю перекладу
-        crate::gui::pipeline::translation_control::draw_translation_control_window(
+        // Спливаючі вікна контролю перекладу (по одному на задачу)
+        crate::gui::pipeline::translation_control::draw_translation_control_windows(
             ctx,
             self.language,
             &self.jobs,
-            &mut self.selected_job_control,
-            &mut self.control_text_input,
-            &mut self.control_regen_extended_open,
-            &mut self.control_regen_service,
-            &mut self.control_regen_model,
-            &mut self.control_regen_model_openrouter,
-            &mut self.control_regen_model_claude,
-            &mut self.control_regen_model_gemini,
-            &mut self.control_regen_model_codex,
-            &mut self.control_regen_model_agy,
-            &mut self.control_regen_model_search,
-            &mut self.control_regen_prompt,
-            &mut self.control_regen_temperature,
-            &self.control_regen_result,
-            &self.control_regen_loading,
-            &mut self.control_regen_error,
+            &mut self.open_job_controls,
             &mut self.control_dismissed,
             &self.openrouter_models,
             &self.openrouter_models_loading,
         );
 
-        // Спливаюче вікно чату з агентом
-        crate::gui::agent_chat_window::draw_agent_chat_window(
+        // Спливаючі вікна чату з агентом (по одному на задачу)
+        crate::gui::agent_chat_window::draw_agent_chat_windows(
             ctx,
             self.language,
             &self.jobs,
-            &mut self.selected_agent_chat,
-            &mut self.agent_chat_input,
-            &self.agent_chat_loading,
-            &mut self.agent_chat_error,
-            &self.agent_chat_result,
+            &mut self.open_agent_chats,
         );
 
         // Перебудова таймлінії в редакторі після чату з агентом

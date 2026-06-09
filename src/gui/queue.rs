@@ -38,12 +38,11 @@ pub fn draw_queue_jobs_list(
     ui: &mut egui::Ui,
     language: crate::localization::Language,
     jobs: &mut Vec<crate::queue::PipelineJob>,
-    selected_job_logs: &mut Option<(u64, String)>,
-    selected_job_control: &mut Option<u64>,
-    control_text_input: &mut String,
+    open_job_logs: &mut std::collections::HashMap<u64, String>,
+    open_job_controls: &mut std::collections::HashMap<u64, crate::gui::pipeline::translation_control::TranslationControlWindowState>,
     active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
-    selected_agent_chat: &mut Option<u64>,
+    open_agent_chats: &mut std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
     open_montage_editor: &mut Option<u64>,
 ) {
     egui::ScrollArea::horizontal()
@@ -165,7 +164,7 @@ pub fn draw_queue_jobs_list(
                                             egui::RichText::new("💬").size(11.0),
                                         );
                                         if chat_btn.on_hover_text(translate(language, "agent_chat_open_btn")).clicked() {
-                                            *selected_agent_chat = Some(job.id);
+                                            open_agent_chats.entry(job.id).or_insert_with(crate::gui::agent_chat_window::AgentChatWindowState::new);
                                             retry_clicked = true;
                                         }
                                     }
@@ -474,16 +473,14 @@ pub fn draw_queue_jobs_list(
 
                     if card_clicked && !any_retry_clicked {
                         if status == crate::queue::JobStatus::AwaitingControl {
-                            *selected_job_control = Some(job.id);
-                            if let Some(text) = job.translated_text.lock().unwrap().as_ref() {
-                                *control_text_input = text.clone();
-                            } else {
-                                *control_text_input = String::new();
-                            }
+                            open_job_controls.entry(job.id).or_insert_with(|| {
+                                let text = job.translated_text.lock().unwrap().clone().unwrap_or_default();
+                                crate::gui::pipeline::translation_control::TranslationControlWindowState::new_with_text(text)
+                            });
                         } else if status == crate::queue::JobStatus::AwaitingMediaControl {
                             *active_tab = Tab::Gallery;
                         } else {
-                            *selected_job_logs = Some((job.id, job.name.clone()));
+                            open_job_logs.entry(job.id).or_insert_with(|| job.name.clone());
                         }
                     }
 
@@ -499,13 +496,12 @@ pub fn draw_queue_panel(
     language: crate::localization::Language,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
-    selected_job_logs: &mut Option<(u64, String)>,
-    selected_job_control: &mut Option<u64>,
-    control_text_input: &mut String,
+    open_job_logs: &mut std::collections::HashMap<u64, String>,
+    open_job_controls: &mut std::collections::HashMap<u64, crate::gui::pipeline::translation_control::TranslationControlWindowState>,
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
-    selected_agent_chat: &mut Option<u64>,
+    open_agent_chats: &mut std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
     open_montage_editor: &mut Option<u64>,
     collapsed: &mut bool,
     fullscreen: &mut bool,
@@ -803,8 +799,8 @@ pub fn draw_queue_panel(
         .show(ui, |ui| {
             draw_queue_jobs_list(
                 ui, language, jobs,
-                selected_job_logs, selected_job_control, control_text_input,
-                active_tab, retry_request, selected_agent_chat, open_montage_editor,
+                open_job_logs, open_job_controls,
+                active_tab, retry_request, open_agent_chats, open_montage_editor,
             );
         });
 }

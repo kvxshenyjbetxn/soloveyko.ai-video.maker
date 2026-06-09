@@ -1,257 +1,265 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
 
-/// Вікно чату з агентом — відображає историю, поле для введення та кнопки керування.
-#[allow(clippy::too_many_arguments)]
-pub fn draw_agent_chat_window(
+/// Стан одного вікна чату з агентом (зберігається per-job).
+pub struct AgentChatWindowState {
+    pub input: String,
+    pub loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    pub result: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
+    pub error: Option<String>,
+}
+
+impl AgentChatWindowState {
+    pub fn new() -> Self {
+        Self {
+            input: String::new(),
+            loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            error: None,
+        }
+    }
+}
+
+/// Малює всі відкриті вікна чату з агентами. Закриті вікна видаляються з мапи.
+pub fn draw_agent_chat_windows(
     ctx: &egui::Context,
     language: Language,
     jobs: &[crate::queue::PipelineJob],
-    selected_agent_chat: &mut Option<u64>,
-    agent_chat_input: &mut String,
-    agent_chat_loading: &std::sync::Arc<std::sync::Mutex<bool>>,
-    agent_chat_error: &mut Option<String>,
-    agent_chat_result: &std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
+    open_agent_chats: &mut std::collections::HashMap<u64, AgentChatWindowState>,
 ) {
-    let job_id = match *selected_agent_chat {
-        Some(id) => id,
-        None => return,
-    };
+    let job_ids: Vec<u64> = open_agent_chats.keys().cloned().collect();
+    let mut to_remove = Vec::new();
 
-    let Some(job_idx) = jobs.iter().position(|j| j.id == job_id) else {
-        *selected_agent_chat = None;
-        return;
-    };
+    for job_id in job_ids {
+        let Some(job_idx) = jobs.iter().position(|j| j.id == job_id) else {
+            to_remove.push(job_id);
+            continue;
+        };
 
-    let job_name = jobs[job_idx].name.clone();
-    let job_status = jobs[job_idx].status.lock().unwrap().clone();
-    let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
-    let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
-    let timeline_rebuild_arc = std::sync::Arc::clone(&jobs[job_idx].timeline_rebuild_requested);
-    let job_settings = jobs[job_idx].settings.clone();
-    let job_id_clone = job_id;
+        let job_name = jobs[job_idx].name.clone();
+        let job_status = jobs[job_idx].status.lock().unwrap().clone();
+        let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
+        let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
+        let timeline_rebuild_arc = std::sync::Arc::clone(&jobs[job_idx].timeline_rebuild_requested);
+        let job_settings = jobs[job_idx].settings.clone();
 
-    // Перевіряємо результат фонової відповіді агента
-    {
-        let result = agent_chat_result.lock().unwrap().take();
-        if let Some(res) = result {
-            match res {
-                Ok(response) => {
-                    agent_chat_arc.lock().unwrap().push(crate::queue::AgentChatMessage {
-                        role: "agent".to_string(),
-                        content: response,
-                    });
-                    let save_dir = std::path::Path::new(&job_settings.save_path);
-                    save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
-                    *agent_chat_error = None;
-                }
-                Err(e) => {
-                    *agent_chat_error = Some(e);
+        let state = open_agent_chats.get_mut(&job_id).unwrap();
+
+        // Перевіряємо результат фонової відповіді агента
+        {
+            let result = state.result.lock().unwrap().take();
+            if let Some(res) = result {
+                match res {
+                    Ok(response) => {
+                        agent_chat_arc.lock().unwrap().push(crate::queue::AgentChatMessage {
+                            role: "agent".to_string(),
+                            content: response,
+                        });
+                        let save_dir = std::path::Path::new(&job_settings.save_path);
+                        save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
+                        state.error = None;
+                    }
+                    Err(e) => {
+                        state.error = Some(e);
+                    }
                 }
             }
         }
-    }
 
-    let mut is_open = true;
-    let mut trigger_send = false;
-    let mut trigger_rebuild = false;
+        let mut is_open = true;
+        let mut trigger_send = false;
+        let mut trigger_rebuild = false;
 
-    let title = format!("{} — #{} {}",
-        translate(language, "agent_chat_title"),
-        job_id + 1,
-        job_name,
-    );
+        let title = format!(
+            "{} — #{} {}",
+            translate(language, "agent_chat_title"),
+            job_id + 1,
+            job_name,
+        );
 
-    egui::Window::new(title)
-        .open(&mut is_open)
-        .resizable(true)
-        .min_size([380.0, 300.0])
-        .default_size([640.0, 760.0])
-        .show(ctx, |ui| {
-            ui.vertical(|ui| {
-                // Область прокрутки з повідомленнями чату
-                let chat_snapshot = agent_chat_arc.lock().unwrap().clone();
+        egui::Window::new(title)
+            .id(egui::Id::new(("agent_chat", job_id)))
+            .open(&mut is_open)
+            .resizable(true)
+            .min_size([380.0, 300.0])
+            .default_size([640.0, 760.0])
+            .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    let chat_snapshot = agent_chat_arc.lock().unwrap().clone();
+                    let is_loading = *state.loading.lock().unwrap();
+                    let pipeline_generating = job_status == crate::queue::JobStatus::Running
+                        && chat_snapshot.last().map(|m| {
+                            m.role == "agent" && !m.content.contains("[STATS]")
+                        }).unwrap_or(false);
+                    let show_spinner = is_loading || pipeline_generating;
 
-                let is_loading = *agent_chat_loading.lock().unwrap();
-                // Спінер для всіх агентів — показується внизу біля кнопки надіслати.
-                // pipeline_generating = false коли агент завершив роботу (є [STATS] в останньому повідомленні).
-                let pipeline_generating = job_status == crate::queue::JobStatus::Running
-                    && chat_snapshot.last().map(|m| {
-                        m.role == "agent" && !m.content.contains("[STATS]")
-                    }).unwrap_or(false);
-                let show_spinner = is_loading || pipeline_generating;
-
-                // ScrollArea займає весь простір вікна за винятком нижньої панелі (~120px)
-                let scroll_height = (ui.available_height() - 120.0).max(80.0);
-                egui::ScrollArea::vertical()
-                    .max_height(scroll_height)
-                    .stick_to_bottom(true)
-                    .show(ui, |ui| {
-                        ui.add_space(4.0);
-                        for msg in &chat_snapshot {
-                            let is_user = msg.role == "user";
-                            let bg_color = if is_user {
-                                ui.visuals().selection.bg_fill.linear_multiply(0.25)
-                            } else {
-                                ui.visuals().widgets.noninteractive.bg_fill
-                            };
-                            let role_label = if is_user { "You" } else { "Agent" };
-                            let role_color = if is_user {
-                                ui.visuals().selection.bg_fill
-                            } else {
-                                egui::Color32::from_rgb(46, 204, 113)
-                            };
-
-                            egui::Frame::none()
-                                .fill(bg_color)
-                                .inner_margin(egui::Margin::same(8.0))
-                                .rounding(egui::Rounding::same(6.0))
-                                .show(ui, |ui| {
-                                    ui.label(
-                                        egui::RichText::new(role_label)
-                                            .strong()
-                                            .size(11.0)
-                                            .color(role_color),
-                                    );
-                                    ui.add_space(2.0);
-                                    if is_user {
-                                        ui.add(egui::Label::new(
-                                            egui::RichText::new(&msg.content).size(12.0)
-                                        ).wrap());
-                                    } else {
-                                        render_message_content(ui, &msg.content);
-                                    }
-                                });
+                    let scroll_height = (ui.available_height() - 120.0).max(80.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(scroll_height)
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
                             ui.add_space(4.0);
-                        }
-                        if chat_snapshot.is_empty() {
-                            ui.label(
-                                egui::RichText::new("— история чату порожня —")
-                                    .weak()
-                                    .size(11.0)
-                                    .italics(),
-                            );
-                        }
-                    });
+                            for msg in &chat_snapshot {
+                                let is_user = msg.role == "user";
+                                let bg_color = if is_user {
+                                    ui.visuals().selection.bg_fill.linear_multiply(0.25)
+                                } else {
+                                    ui.visuals().widgets.noninteractive.bg_fill
+                                };
+                                let role_label = if is_user { "You" } else { "Agent" };
+                                let role_color = if is_user {
+                                    ui.visuals().selection.bg_fill
+                                } else {
+                                    egui::Color32::from_rgb(46, 204, 113)
+                                };
 
-                ui.separator();
-                ui.add_space(4.0);
-
-                // Відображаємо помилку якщо є
-                if let Some(ref err) = *agent_chat_error {
-                    ui.add(egui::Label::new(
-                        egui::RichText::new(format!("{} {}", translate(language, "agent_chat_error"), err))
-                            .color(egui::Color32::from_rgb(231, 76, 60))
-                            .size(11.0),
-                    ).wrap());
-                    ui.add_space(4.0);
-                }
-
-                let has_session = agent_session_arc.lock().unwrap().is_some();
-
-                // Поле введення повідомлення (Enter = надіслати, Shift+Enter = новий рядок)
-                let input_response = ui.add(
-                    egui::TextEdit::multiline(agent_chat_input)
-                        .hint_text(translate(language, "agent_chat_input_hint"))
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(3),
-                );
-                if input_response.has_focus()
-                    && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift)
-                {
-                    if !is_loading && has_session && !agent_chat_input.trim().is_empty() {
-                        trigger_send = true;
-                    }
-                }
-
-                ui.add_space(4.0);
-
-                // Кнопки + спінер в одному рядку
-                ui.horizontal(|ui| {
-                    // Спінер зліва від кнопки надіслати — для всіх агентів
-                    if show_spinner {
-                        ui.add(egui::Spinner::new().size(16.0));
-                        ui.add_space(6.0);
-                    }
-
-                    if ui.add_enabled(
-                        !is_loading && has_session && !agent_chat_input.trim().is_empty(),
-                        egui::Button::new(translate(language, "agent_chat_send_btn")),
-                    ).clicked() {
-                        trigger_send = true;
-                    }
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let has_session = agent_session_arc.lock().unwrap().is_some();
-                        if has_session {
-                            if ui.add(
-                                egui::Button::new(
-                                    egui::RichText::new(translate(language, "agent_chat_rebuild_btn")).strong()
-                                )
-                            ).clicked() {
-                                trigger_rebuild = true;
+                                egui::Frame::none()
+                                    .fill(bg_color)
+                                    .inner_margin(egui::Margin::same(8.0))
+                                    .rounding(egui::Rounding::same(6.0))
+                                    .show(ui, |ui| {
+                                        ui.label(
+                                            egui::RichText::new(role_label)
+                                                .strong()
+                                                .size(11.0)
+                                                .color(role_color),
+                                        );
+                                        ui.add_space(2.0);
+                                        if is_user {
+                                            ui.add(egui::Label::new(
+                                                egui::RichText::new(&msg.content).size(12.0)
+                                            ).wrap());
+                                        } else {
+                                            render_message_content(ui, &msg.content);
+                                        }
+                                    });
+                                ui.add_space(4.0);
                             }
+                            if chat_snapshot.is_empty() {
+                                ui.label(
+                                    egui::RichText::new("— история чату порожня —")
+                                        .weak()
+                                        .size(11.0)
+                                        .italics(),
+                                );
+                            }
+                        });
+
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    if let Some(ref err) = state.error {
+                        ui.add(egui::Label::new(
+                            egui::RichText::new(format!("{} {}", translate(language, "agent_chat_error"), err))
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(11.0),
+                        ).wrap());
+                        ui.add_space(4.0);
+                    }
+
+                    let has_session = agent_session_arc.lock().unwrap().is_some();
+
+                    let input_response = ui.add(
+                        egui::TextEdit::multiline(&mut state.input)
+                            .hint_text(translate(language, "agent_chat_input_hint"))
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(3),
+                    );
+                    if input_response.has_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift)
+                    {
+                        if !is_loading && has_session && !state.input.trim().is_empty() {
+                            trigger_send = true;
                         }
+                    }
+
+                    ui.add_space(4.0);
+
+                    ui.horizontal(|ui| {
+                        if show_spinner {
+                            ui.add(egui::Spinner::new().size(16.0));
+                            ui.add_space(6.0);
+                        }
+
+                        if ui.add_enabled(
+                            !is_loading && has_session && !state.input.trim().is_empty(),
+                            egui::Button::new(translate(language, "agent_chat_send_btn")),
+                        ).clicked() {
+                            trigger_send = true;
+                        }
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let has_session = agent_session_arc.lock().unwrap().is_some();
+                            if has_session {
+                                if ui.add(
+                                    egui::Button::new(
+                                        egui::RichText::new(translate(language, "agent_chat_rebuild_btn")).strong()
+                                    )
+                                ).clicked() {
+                                    trigger_rebuild = true;
+                                }
+                            }
+                        });
                     });
                 });
             });
-        });
 
-    // Надсилаємо повідомлення агенту через --resume
-    if trigger_send {
-        let message = agent_chat_input.trim().to_string();
-        if !message.is_empty() {
-            let session_snapshot = agent_session_arc.lock().unwrap().clone();
-            if let Some(session) = session_snapshot {
-                agent_chat_arc.lock().unwrap().push(crate::queue::AgentChatMessage {
-                    role: "user".to_string(),
-                    content: message.clone(),
-                });
-                let save_dir = std::path::Path::new(&job_settings.save_path);
-                save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
-                agent_chat_input.clear();
-                *agent_chat_error = None;
+        // Надсилаємо повідомлення агенту через --resume
+        if trigger_send {
+            let message = state.input.trim().to_string();
+            if !message.is_empty() {
+                let session_snapshot = agent_session_arc.lock().unwrap().clone();
+                if let Some(session) = session_snapshot {
+                    agent_chat_arc.lock().unwrap().push(crate::queue::AgentChatMessage {
+                        role: "user".to_string(),
+                        content: message.clone(),
+                    });
+                    let save_dir = std::path::Path::new(&job_settings.save_path);
+                    save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
+                    state.input.clear();
+                    state.error = None;
 
-                let result_arc = std::sync::Arc::clone(agent_chat_result);
-                let loading_arc = std::sync::Arc::clone(agent_chat_loading);
-                let ctx_clone = ctx.clone();
-                let save_path = job_settings.save_path.clone();
-                *loading_arc.lock().unwrap() = true;
+                    let result_arc = std::sync::Arc::clone(&state.result);
+                    let loading_arc = std::sync::Arc::clone(&state.loading);
+                    let ctx_clone = ctx.clone();
+                    let save_path = job_settings.save_path.clone();
+                    *loading_arc.lock().unwrap() = true;
 
-                std::thread::spawn(move || {
-                    let result = crate::core::pipeline::call_agent_resume(
-                        &session.service,
-                        &session.model,
-                        &message,
-                        &session.session_id,
-                        Some((job_id_clone, String::new())),
-                        Some(&save_path),
-                    );
-                    *result_arc.lock().unwrap() = Some(result);
-                    *loading_arc.lock().unwrap() = false;
-                    ctx_clone.request_repaint();
-                });
+                    std::thread::spawn(move || {
+                        let result = crate::core::pipeline::call_agent_resume(
+                            &session.service,
+                            &session.model,
+                            &message,
+                            &session.session_id,
+                            Some((job_id, String::new())),
+                            Some(&save_path),
+                        );
+                        *result_arc.lock().unwrap() = Some(result);
+                        *loading_arc.lock().unwrap() = false;
+                        ctx_clone.request_repaint();
+                    });
+                }
             }
+        }
+
+        if trigger_rebuild {
+            *timeline_rebuild_arc.lock().unwrap() = true;
+        }
+
+        if !is_open {
+            to_remove.push(job_id);
         }
     }
 
-    // Сигналізуємо про перебудову таймлінії в редакторі монтажу
-    if trigger_rebuild {
-        *timeline_rebuild_arc.lock().unwrap() = true;
-    }
-
-    if !is_open {
-        *selected_agent_chat = None;
-        *agent_chat_error = None;
+    for id in to_remove {
+        open_agent_chats.remove(&id);
     }
 }
 
 /// Рендерить вміст повідомлення агента рядок за рядком.
-/// Розпізнає маркери [->], [!!], [STATS], [LIVE_STATS], [THINK] — малює іконки через Painter.
 fn render_message_content(ui: &mut egui::Ui, content: &str) {
     let lines: Vec<&str> = content.split('\n').collect();
 
-    // Якщо є фінальний [STATS] — [LIVE_STATS] ігноруємо, інакше показуємо лише останній.
     let has_final_stats = lines.iter().any(|l| l.starts_with("[STATS]"));
     let last_live_idx = if has_final_stats {
         None
@@ -263,7 +271,6 @@ fn render_message_content(ui: &mut egui::Ui, content: &str) {
         if let Some(data) = line.strip_prefix("[STATS]") {
             render_stats_line(ui, data);
         } else if line.starts_with("[LIVE_STATS]") {
-            // показуємо тільки останній live-рядок (якщо нема фінального [STATS])
             if Some(i) == last_live_idx {
                 if let Some(data) = line.strip_prefix("[LIVE_STATS]") {
                     render_live_stats_line(ui, data);
@@ -283,7 +290,6 @@ fn render_message_content(ui: &mut egui::Ui, content: &str) {
     }
 }
 
-/// Рядок результату інструменту: [->] або [!!] зі намальованою іконкою.
 fn render_result_line(ui: &mut egui::Ui, text: &str, is_error: bool) {
     ui.horizontal(|ui| {
         ui.add_space(4.0);
@@ -305,7 +311,6 @@ fn render_result_line(ui: &mut egui::Ui, text: &str, is_error: bool) {
     });
 }
 
-/// Рядок статистики: намальовані роздільники, стрілки токенів, крапки між секціями.
 fn render_stats_line(ui: &mut egui::Ui, data: &str) {
     let mut iter = data.split('|');
     let duration_s: f64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
@@ -345,8 +350,6 @@ fn render_stats_line(ui: &mut egui::Ui, data: &str) {
     ui.add_space(2.0);
 }
 
-/// Рядок live-статистики під час роботи агента: накопичені токени вхід/вихід.
-/// Формат data: "acc_in|acc_out". Показується лише поки не з'явиться фінальний [STATS].
 fn render_live_stats_line(ui: &mut egui::Ui, data: &str) {
     let mut iter = data.split('|');
     let in_tok:  u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -367,10 +370,8 @@ fn render_live_stats_line(ui: &mut egui::Ui, data: &str) {
     });
 }
 
-/// Рядок роздумів моделі (extended thinking). Відображається курсивом із лівою рискою.
 fn render_think_line(ui: &mut egui::Ui, text: &str) {
     ui.horizontal(|ui| {
-        // Вертикальна риска зліва — візуальний маркер блоку думок
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 14.0), egui::Sense::hover());
         if ui.is_rect_visible(rect) {
             let color = ui.visuals().weak_text_color().linear_multiply(0.4);
@@ -384,9 +385,6 @@ fn render_think_line(ui: &mut egui::Ui, text: &str) {
     });
 }
 
-// --- Базові функції малювання ---
-
-/// Горизонтальна лінія на всю ширину (заміна ───).
 fn draw_h_line(ui: &mut egui::Ui, color: egui::Color32) {
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 1.0), egui::Sense::hover());
@@ -395,7 +393,6 @@ fn draw_h_line(ui: &mut egui::Ui, color: egui::Color32) {
     }
 }
 
-/// Крапка-роздільник між елементами (заміна ·).
 fn draw_dot_sep(ui: &mut egui::Ui, color: egui::Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
     if ui.is_rect_visible(rect) {
@@ -403,7 +400,6 @@ fn draw_dot_sep(ui: &mut egui::Ui, color: egui::Color32) {
     }
 }
 
-/// Стрілка вгору для вхідних токенів (заміна ↑).
 fn draw_icon_arrow_up(ui: &mut egui::Ui, color: egui::Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(9.0, 14.0), egui::Sense::hover());
     if ui.is_rect_visible(rect) {
@@ -418,7 +414,6 @@ fn draw_icon_arrow_up(ui: &mut egui::Ui, color: egui::Color32) {
     }
 }
 
-/// Стрілка вниз для вихідних токенів (заміна ↓).
 fn draw_icon_arrow_down(ui: &mut egui::Ui, color: egui::Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(9.0, 14.0), egui::Sense::hover());
     if ui.is_rect_visible(rect) {
@@ -433,7 +428,6 @@ fn draw_icon_arrow_down(ui: &mut egui::Ui, color: egui::Color32) {
     }
 }
 
-/// L-подібна стрілка вправо (заміна ↳) для результату інструменту.
 fn draw_icon_l_arrow(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
     let stroke = egui::Stroke::new(1.5, color);
     let x = rect.left() + 3.0;
@@ -445,7 +439,6 @@ fn draw_icon_l_arrow(painter: &egui::Painter, rect: egui::Rect, color: egui::Col
     painter.line_segment([egui::pos2(rx - 3.5, my + 2.5), egui::pos2(rx, my)], stroke);
 }
 
-/// X-хрест червоний (заміна ✗) для помилок інструменту.
 fn draw_icon_x(painter: &egui::Painter, rect: egui::Rect) {
     let color = egui::Color32::from_rgb(220, 80, 60);
     let stroke = egui::Stroke::new(1.5, color);
