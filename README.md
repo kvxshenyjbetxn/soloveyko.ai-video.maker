@@ -4,6 +4,39 @@
 
 ---
 
+## Індекс (навігація)
+
+| Розділ | Рядок | Опис |
+|--------|-------|------|
+| [Архітектура](#архітектура) | ~8 | Стек Rust+egui, state management, 4 вкладки, розділення відповідальностей |
+| [Структура проекту](#структура-проекту) | ~23 | Повне дерево `src/` з однорядковими коментарями до кожного файлу |
+| [`VideoMakerApp`](#videomakерapp-srcapprs) | ~126 | Центральна структура: UI, панелі черги/балансів/галереї, автозбереження |
+| [Панель историї задач](#панель-историї-задач-srcguitask_historyrs) | ~208 | Ліва панель 190px: список минулих задач, відновлення налаштувань |
+| [Редактор монтажу](#редактор-монтажу-srcguimontage_editor) | ~223 | 5 зон: медіа-пул, прев'ю+транспорт, інспектор, таймлінія, топбар |
+| [Текстовий редактор сценарію](#текстовий-редактор-сценарію-srcguieditorrs) | ~348 | Підрахунок токенів tiktoken, live split-preview, lazy cache |
+| [Черга задач (`queue.rs`)](#черга-задач-srcqueuers) | ~361 | `JobSettings`, `JobStatus`, `PipelineJob`, arc-поля стану |
+| [Панель пайплайну](#панель-пайплайну-srcguipipelinemodrs) | ~386 | 9 секцій: Шаблони→Монтаж; `validate_and_enqueue`, `build_job_settings` |
+| [Пайплайн виконання](#пайплайн-виконання-задачі-srccorepipeline) | ~408 | `run_pipeline`, `retry_from_stage`, `run_final_stages`, контроль зображень |
+| [→ Переклад](#переклад) | ~427 | `call_llm`, OpenRouter, плейсхолдер `{{text}}`, контроль перекладу |
+| [→ Озвучка](#озвучка-voiceover) | ~435 | VoiceBot/Edge TTS, розбиття на чанки, паралельне склеювання |
+| [→ Субтитри](#субтитри-whisper--whisperx--assemblyai--whisper-amd) | ~453 | Whisper/WhisperX/AssemblyAI/AMD, karaoke-ефект (fill/switch/follow) |
+| [→ Відеоряд](#відеоряд-timeline) | ~504 | Агентний режим CLI, `run_video_branch`, `assign_media_to_timeline` |
+| [→ Синхронізація медіа](#синхронізація-медіа-і-таймлайн-timelinesyncrs) | ~560 | `build_timeline`, fuzzy match SRT→сегменти, STRETCH/SPLIT/NORMAL |
+| [→ Монтаж](#монтаж-montage) | ~578 | `run_montage`, filter graph, xfade sync-компенсація, overlay-тригери |
+| [→ Ефекти зображень](#ефекти-для-зображень-build_image_filter_parts) | ~622 | zoompan: oscillate/alternate; shake через crop+синусоїда |
+| [→ `split_text`](#split_text-timelinetext_splitterrs) | ~653 | 4 режими нарізки: paragraphs/sentences/char_limit/full |
+| [→ `regenerate_single_media`](#pub-fn-regenerate_single_media) | ~678 | Перегенерація одного медіафайлу; `find_changed_prompts_for_rebuild` |
+| [→ CapCut](#експорт-capcut-проекту-srccorepipelinecapcut) | ~688 | `draft_content.json`, `draft_meta_info.json`, overlay-доріжки у треках |
+| [Бандл бінарників](#бандл-бінарників-srcbundlers) | ~748 | `ffmpeg_path()`, `set_no_window()`, завантаження ggml-моделей, whisperx |
+| [Вікно привітання](#вікно-привітання-srcguiwelcomers) | ~775 | Перевірка CLI-інструментів, авто-завантаження бінарників при старті |
+| [Збереження налаштувань](#збереження-налаштувань-srcguisettingsstoragery) | ~803 | `AppSettings`, `PipelineTemplate`, `task_history.json`, міграція save_path |
+| [API-сервіси](#api-сервіси-srcapi) | ~814 | Семафори-лімітери, ureq, Arc<Mutex>, таблиця ендпоінтів |
+| [Логер та вкладка Логів](#глобальний-логер-та-вкладка-логів-srcloggerrs) | ~840 | OnceLock+Vec<LogEntry>, job_id прив'язка, автопрокрутка, toast |
+| [API Інтеграції (таблиця)](#api-інтеграції) | ~854 | OpenRouter/VoiceBot/EdgeTTS/Googler/AssemblyAI/Claude/Codex/AGY |
+| [Важливі нюанси та НО](#важливі-нюанси-та-но) | ~871 | ~50 архітектурних нотаток: egui quirks, FFmpeg, sync drift, API деталі |
+
+---
+
 ## Архітектура
 
 **Стек:** Rust + [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) (egui). Один головний потік UI, всі мережеві запити або системні процеси (наприклад, виклики Claude CLI, Gemini CLI, Codex CLI чи AGY CLI) виконуються у окремих `std::thread::spawn` потоках та повертають результат через `Arc<Mutex<Option<T>>>` + `ctx.request_repaint()`. Для обмеження паралельних запитів до API OpenRouter, запусків Claude CLI, Gemini CLI, Codex CLI, AGY CLI та з'єднань до Edge TTS використовуються потокобезпечні глобальні лімітери (семафори), що запобігають перевищенню лімітів та перевантаженню системи.
