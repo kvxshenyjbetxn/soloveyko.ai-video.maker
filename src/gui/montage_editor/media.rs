@@ -66,14 +66,25 @@ impl MediaItem {
             let flag = extraction_complete.clone();
             std::thread::spawn(move || {
                 std::fs::create_dir_all(&dir).ok();
-                if let Ok(img) = image::open(&path_clone) {
-                    let thumb = img.thumbnail(PREVIEW_WIDTH, PREVIEW_WIDTH * 2);
-                    let out = dir.join("000001.jpg");
-                    if thumb.save(&out).is_ok() {
-                        std::fs::write(dir.join(".complete"), b"1").ok();
-                        flag.store(true, Ordering::Relaxed);
+                let out = dir.join("000001.jpg");
+                // Retry з затримками: файл може бути ще не повністю записаний пайплайном
+                // Використовуємо read+load_from_memory (як галерея) — стабільніше ніж open()
+                for delay_ms in [0u64, 400, 1200, 3500] {
+                    if delay_ms > 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                    }
+                    if out.exists() { break; }
+                    if let Ok(bytes) = std::fs::read(&path_clone) {
+                        if let Ok(img) = image::load_from_memory(&bytes) {
+                            let thumb = img.thumbnail(PREVIEW_WIDTH, PREVIEW_WIDTH * 2);
+                            if thumb.save(&out).is_ok() {
+                                std::fs::write(dir.join(".complete"), b"1").ok();
+                                break;
+                            }
+                        }
                     }
                 }
+                flag.store(true, Ordering::Relaxed);
             });
         } else if is_video {
             // Відео: витягуємо всі кадри через ffmpeg
