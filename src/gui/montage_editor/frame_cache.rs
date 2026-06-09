@@ -170,4 +170,12 @@ impl FrameCache {
 
         texture
     }
+
+    /// Видаляє всі закешовані кадри для конкретного media_id (після перегенерації)
+    pub fn clear_for_media_id(&mut self, media_id: &str) {
+        let prefix = format!("{}_", media_id);
+        self.textures.retain(|k, _| !k.starts_with(&prefix));
+        self.access_order.retain(|k| !k.starts_with(&prefix));
+        self.loading_keys.retain(|k| !k.starts_with(&prefix));
+    }
 }

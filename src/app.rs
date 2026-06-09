@@ -1874,6 +1874,24 @@ impl eframe::App for VideoMakerApp {
                         // Скидаємо кеш щоб нове зображення підтягнулось
                         if let Some(ref path) = self.media_regen_target {
                             self.gallery_textures.remove(path);
+
+                            // Оновлюємо MediaItem у редакторі монтажу якщо він відкритий
+                            if let Some(ref mut editor) = self.montage_editor_state {
+                                if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == *path) {
+                                    // Видаляємо старий кеш кадрів з диску
+                                    let _ = std::fs::remove_dir_all(&m.cache_dir);
+                                    // Очищаємо FrameCache від старих текстур
+                                    editor.frame_cache.clear_for_media_id(&m.id);
+                                    // Перестворюємо MediaItem — запускає нову екстракцію кадрів
+                                    let old_id = m.id.clone();
+                                    *m = crate::gui::montage_editor::MediaItem::new(path.clone(), &editor.save_path);
+                                    m.id = old_id;
+                                }
+                                // Якщо fullscreen preview відкритий для цього файлу — скидаємо текстуру
+                                if editor.pool_preview.as_deref() == Some(path.as_path()) {
+                                    editor.pool_preview_texture = None;
+                                }
+                            }
                         }
                         self.media_regen_target = None;
                         self.media_regen_error = None;
