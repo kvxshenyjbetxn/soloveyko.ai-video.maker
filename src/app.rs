@@ -196,6 +196,8 @@ pub struct VideoMakerApp {
     pub googler_image_priority: Vec<String>,
     /// Пріоритетний список провайдерів відео Googler.
     pub googler_video_priority: Vec<String>,
+    /// Вимкнені провайдери відео Googler.
+    pub googler_video_disabled: Vec<String>,
     /// Температура моделі для перекладу (0.0 — 2.0).
     pub translation_temperature: f32,
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code").
@@ -425,7 +427,7 @@ impl Default for VideoMakerApp {
             media_regen_base_settings: None,
             media_regen_media_type: "image".to_string(),
             media_regen_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
-            media_regen_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
+            media_regen_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string(), "flow_omni_flash".to_string(), "flow_fast".to_string(), "flow_light".to_string(), "flow_quality".to_string()],
             media_regen_prompt: String::new(),
             media_regen_error: None,
             media_regen_job_id: 0,
@@ -467,7 +469,8 @@ impl Default for VideoMakerApp {
             video_llm_temperature: 0.7,
             video_llm_model_search: String::new(),
             googler_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
-            googler_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
+            googler_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string(), "flow_omni_flash".to_string(), "flow_fast".to_string(), "flow_light".to_string(), "flow_quality".to_string()],
+            googler_video_disabled: vec![],
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
             balance_window_open: false,
@@ -685,7 +688,12 @@ impl VideoMakerApp {
             _             => saved.video_llm_model.clone(),
         };
         let googler_image_priority = saved.googler_image_priority.clone();
-        let googler_video_priority = saved.googler_video_priority.clone();
+        let mut googler_video_priority = saved.googler_video_priority.clone();
+        for p in &["flow_omni_flash", "flow_fast", "flow_light", "flow_quality"] {
+            if !googler_video_priority.contains(&p.to_string()) {
+                googler_video_priority.push(p.to_string());
+            }
+        }
         let googler_video_upscale_enabled = saved.googler_video_upscale_enabled;
         let googler_video_upscale_resolution = saved.googler_video_upscale_resolution.clone();
         let googler_video_upscale_quality = saved.googler_video_upscale_quality.clone();
@@ -795,7 +803,7 @@ impl VideoMakerApp {
             media_regen_base_settings: None,
             media_regen_media_type: "image".to_string(),
             media_regen_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
-            media_regen_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
+            media_regen_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string(), "flow_omni_flash".to_string(), "flow_fast".to_string(), "flow_light".to_string(), "flow_quality".to_string()],
             media_regen_prompt: String::new(),
             media_regen_error: None,
             media_regen_job_id: 0,
@@ -839,6 +847,7 @@ impl VideoMakerApp {
             video_llm_model_search: String::new(),
             googler_image_priority,
             googler_video_priority,
+            googler_video_disabled: saved.googler_video_disabled.clone(),
             translation_temperature,
             translation_service,
             balance_window_open: false,
@@ -990,8 +999,8 @@ impl VideoMakerApp {
             video_style_enabled: self.video_style_enabled,
             video_style_prompt: self.video_style_prompt.clone(),
             googler_image_priority: self.googler_image_priority.clone(),
-
             googler_video_priority: self.googler_video_priority.clone(),
+            googler_video_disabled: self.googler_video_disabled.clone(),
             video_media_type: self.video_media_type.clone(),
             subtitles_service: self.subtitles_service.clone(),
             whisper_language: self.whisper_language.clone(),
@@ -1096,6 +1105,7 @@ impl VideoMakerApp {
         self.voiceover_convert_to_wav = t.voiceover_convert_to_wav;
         self.googler_image_priority = t.googler_image_priority;
         self.googler_video_priority = t.googler_video_priority;
+        self.googler_video_disabled = t.googler_video_disabled;
         self.subtitles_service = t.subtitles_service;
         self.whisper_language = t.whisper_language;
         self.whisper_model = t.whisper_model;
@@ -1396,6 +1406,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.voiceover_convert_to_wav,
                         &mut self.googler_image_priority,
                         &mut self.googler_video_priority,
+                        &mut self.googler_video_disabled,
                         &mut self.subtitles_service,
                         &mut self.whisper_language,
                         &mut self.whisper_model,
@@ -2156,6 +2167,7 @@ impl eframe::App for VideoMakerApp {
                 || self.voiceover_convert_to_wav != self.last_saved_settings.voiceover_convert_to_wav
                 || self.googler_image_priority != self.last_saved_settings.googler_image_priority
                 || self.googler_video_priority != self.last_saved_settings.googler_video_priority
+                || self.googler_video_disabled != self.last_saved_settings.googler_video_disabled
                 || self.translation_temperature != self.last_saved_settings.translation_temperature
                 || self.subtitles_service != self.last_saved_settings.subtitles_service
                 || self.whisper_language != self.last_saved_settings.whisper_language
@@ -2257,6 +2269,7 @@ impl eframe::App for VideoMakerApp {
                     voiceover_convert_to_wav: self.voiceover_convert_to_wav,
                     googler_image_priority: self.googler_image_priority.clone(),
                     googler_video_priority: self.googler_video_priority.clone(),
+                    googler_video_disabled: self.googler_video_disabled.clone(),
                     subtitles_service: self.subtitles_service.clone(),
                     whisper_language: self.whisper_language.clone(),
                     whisper_model: self.whisper_model.clone(),

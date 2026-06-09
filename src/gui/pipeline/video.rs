@@ -95,10 +95,14 @@ pub(crate) fn image_provider_info(key: &str) -> (&'static str, &'static str) {
 /// Повертає відображувану назву та вартість провайдера відео.
 pub(crate) fn video_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
-        "flow"   => ("Flow (VEO)",       "1 кр."),
-        "flower" => ("Flower (Veo 3.1)", "1 кр."),
-        "grok"   => ("Grok",             "1 кр."),
-        _        => ("Unknown",          ""),
+        "flow"            => ("Flow (VEO)",         "1 кр."),
+        "flower"          => ("Flower (Veo 3.1)",  "1 кр."),
+        "grok"            => ("Grok",              "1 кр."),
+        "flow_omni_flash" => ("Omni Flash (Flow)",     "1 кр."),
+        "flow_fast"       => ("Veo 3.1 Fast (Flow)",  "1 кр."),
+        "flow_light"      => ("Veo 3.1 Light (Flow)",    "1 кр."),
+        "flow_quality"    => ("Veo 3.1 Quality (Flow)", "10 кр."),
+        _                 => ("Unknown",               ""),
     }
 }
 
@@ -113,6 +117,7 @@ pub fn draw_video_section(
     video_prompt: &mut String,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
+    googler_video_disabled: &mut Vec<String>,
     video_llm_service: &mut String,
     video_llm_model: &mut String,
     video_llm_model_openrouter: &mut String,
@@ -784,8 +789,18 @@ pub fn draw_video_section(
                         ui.add_space(4.0);
                         let mut swap_vid: Option<(usize, usize)> = None;
                         for i in 0..googler_video_priority.len() {
-                            let (name, credits) = video_provider_info(&googler_video_priority[i]);
+                            let provider_key = googler_video_priority[i].clone();
+                            let (name, credits) = video_provider_info(&provider_key);
+                            let is_disabled = googler_video_disabled.contains(&provider_key);
                             ui.horizontal(|ui| {
+                                let mut enabled = !is_disabled;
+                                if ui.checkbox(&mut enabled, "").changed() {
+                                    if enabled {
+                                        googler_video_disabled.retain(|p| p != &provider_key);
+                                    } else {
+                                        googler_video_disabled.push(provider_key.clone());
+                                    }
+                                }
                                 ui.label(egui::RichText::new(format!("#{}", i + 1)).weak().monospace());
                                 ui.add_space(4.0);
                                 if arrow_button(ui, true, i > 0).clicked() {
@@ -795,7 +810,9 @@ pub fn draw_video_section(
                                     swap_vid = Some((i, i + 1));
                                 }
                                 ui.add_space(4.0);
-                                ui.label(name);
+                                let label = egui::RichText::new(name);
+                                let label = if is_disabled { label.weak() } else { label };
+                                ui.label(label);
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     ui.label(egui::RichText::new(credits).weak().size(11.0));
                                 });

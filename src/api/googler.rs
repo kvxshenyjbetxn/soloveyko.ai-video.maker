@@ -2,6 +2,7 @@ use eframe::egui;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 const BASE_URL: &str = "https://googler.fast-gen.ai/api";
+const STORAGE_URL: &str = "https://storage.fast-gen.ai";
 
 /// Баланс та ліміти акаунту Googler.
 #[derive(Clone, Default)]
@@ -29,11 +30,14 @@ struct HourlyUsage {
 }
 
 #[derive(serde::Deserialize, Default)]
+#[allow(dead_code)]
 struct ActiveThreads {
     #[serde(default)]
     image_threads: i64,
     #[serde(default)]
     video_threads: i64,
+    #[serde(default)]
+    flow_ultra_threads: i64,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -44,16 +48,23 @@ struct CurrentUsage {
     active_threads: ActiveThreads,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Default)]
+#[allow(dead_code)]
 struct AccountLimits {
     #[serde(default)]
-    img_gen_per_hour_limit: serde_json::Value,
+    img_gen_per_hour_limit: i64,
     #[serde(default)]
-    video_gen_per_hour_limit: serde_json::Value,
+    video_gen_per_hour_limit: i64,
     #[serde(default)]
-    img_generation_threads_allowed: serde_json::Value,
+    img_generation_threads_allowed: i64,
     #[serde(default)]
-    video_generation_threads_allowed: serde_json::Value,
+    video_generation_threads_allowed: i64,
+    #[serde(default)]
+    prompt_tokens_per_hour_limit: i64,
+    #[serde(default)]
+    flow_ultra_hour_limit: i64,
+    #[serde(default)]
+    flow_ultra_threads_allowed: i64,
 }
 
 #[derive(serde::Deserialize)]
@@ -62,36 +73,20 @@ struct UsageResponse {
     current_usage: CurrentUsage,
 }
 
-/// Витягує числове значення з Value (може бути число або об'єкт).
-fn extract_i64(val: &serde_json::Value) -> i64 {
-    match val {
-        serde_json::Value::Number(n) => n.as_i64().unwrap_or(0),
-        serde_json::Value::Object(map) => {
-            for key in &["used", "count", "current_usage"] {
-                if let Some(v) = map.get(*key).and_then(|v| v.as_i64()) {
-                    return v;
-                }
-            }
-            0
-        }
-        _ => 0,
-    }
-}
-
 fn parse_balance(data: UsageResponse) -> GooglerBalance {
     GooglerBalance {
         img_used: data.current_usage.hourly_usage.image_generation
             .map(|s| s.current_usage)
             .unwrap_or(0),
-        img_limit: extract_i64(&data.account_limits.img_gen_per_hour_limit),
+        img_limit: data.account_limits.img_gen_per_hour_limit,
         video_used: data.current_usage.hourly_usage.video_generation
             .map(|s| s.current_usage)
             .unwrap_or(0),
-        video_limit: extract_i64(&data.account_limits.video_gen_per_hour_limit),
+        video_limit: data.account_limits.video_gen_per_hour_limit,
         img_threads_active: data.current_usage.active_threads.image_threads,
-        img_threads_allowed: extract_i64(&data.account_limits.img_generation_threads_allowed),
+        img_threads_allowed: data.account_limits.img_generation_threads_allowed,
         video_threads_active: data.current_usage.active_threads.video_threads,
-        video_threads_allowed: extract_i64(&data.account_limits.video_generation_threads_allowed),
+        video_threads_allowed: data.account_limits.video_generation_threads_allowed,
     }
 }
 
@@ -109,7 +104,7 @@ pub fn check_key(
             .timeout(std::time::Duration::from_secs(15))
             .build();
 
-        let url = format!("{}/v3/account/usage?api_key={}", BASE_URL, key);
+        let url = format!("{}/v5/usage", BASE_URL);
 
         let (status_text, balance_opt) = match agent.get(&url).set("X-API-Key", &key).call() {
             Ok(response) => match response.into_json::<UsageResponse>() {
@@ -194,6 +189,86 @@ fn poll_operation(key: &str, operation_id: &str, agent: &ureq::Agent) -> Result<
     Err("Перевищено час очікування операції (5 хвилин)".to_string())
 }
 
+// ─── V5 API ──────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+struct V5GenerationStarted {
+    id: String,
+}
+
+#[derive(serde::Deserialize)]
+struct V5GenerationResult {
+    download_path: Option<String>,
+    data: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct V5GenerationStatus {
+    status: String,
+    results: Option<Vec<V5GenerationResult>>,
+    error: Option<String>,
+}
+
+/// Опитує v5 generation до завершення. Повертає data URI або завантажує з storage.
+fn poll_v5_generation(key: &str, gen_id: &str, agent: &ureq::Agent) -> Result<String, String> {
+    use std::io::Read;
+    use base64::Engine;
+
+    let url = format!("{}/v5/generations/{}", BASE_URL, gen_id);
+    let poll_interval = std::time::Duration::from_secs(3);
+
+    for _ in 0..100 {
+        std::thread::sleep(poll_interval);
+
+        let response = agent
+            .get(&url)
+            .set("X-API-Key", key)
+            .call()
+            .map_err(|e| format!("Помилка опитування v5: {}", e))?;
+
+        let status: V5GenerationStatus = response
+            .into_json()
+            .map_err(|e| format!("Помилка парсингу статусу v5: {}", e))?;
+
+        match status.status.as_str() {
+            "succeeded" => {
+                let result = status.results
+                    .and_then(|r| r.into_iter().next())
+                    .ok_or_else(|| "Порожній результат v5".to_string())?;
+
+                if let Some(data) = result.data {
+                    return Ok(data);
+                }
+
+                if let Some(path) = result.download_path {
+                    let storage_url = format!("{}{}", STORAGE_URL, path);
+                    let resp = agent
+                        .get(&storage_url)
+                        .call()
+                        .map_err(|e| format!("Помилка завантаження медіа: {}", e))?;
+                    let mime = resp.content_type().to_string();
+                    let mut bytes = Vec::new();
+                    resp.into_reader()
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| format!("Помилка читання медіа: {}", e))?;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    return Ok(format!("data:{};base64,{}", mime, b64));
+                }
+
+                return Err("Результат v5 не містить даних".to_string());
+            }
+            "failed" => {
+                return Err(status.error.unwrap_or_else(|| "Невідома помилка v5".to_string()));
+            }
+            _ => {} // queued / running — продовжуємо
+        }
+    }
+
+    Err("Перевищено час очікування v5 (5 хвилин)".to_string())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// Перевіряє, чи помилка є перевищенням ліміту одночасних запитів.
 fn is_concurrency_exceeded(err: &str) -> bool {
     err.contains("rate_limit.concurrency_exceeded")
@@ -254,6 +329,30 @@ fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &st
 /// Спроба генерації відео через конкретного провайдера.
 fn try_generate_video(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
     let _permit = GooglerVideoLimiter::get().acquire();
+
+    // v5 провайдери
+    let v5_operation = match provider {
+        "flow_omni_flash" => Some("flow_video_omni_flash_from_text_10s"),
+        "flow_fast"        => Some("flow_video_from_text"),
+        "flow_light"       => Some("flow_video_light_from_text"),
+        "flow_quality"     => Some("flow_video_quality_from_text"),
+        _ => None,
+    };
+    if let Some(operation) = v5_operation {
+        let url = format!("{}/v5/generations", BASE_URL);
+        let body = serde_json::json!({"operation": operation, "prompt": prompt, "aspect_ratio": aspect_ratio});
+        let response = match agent.post(&url).set("X-API-Key", key).set("Content-Type", "application/json").send_json(body) {
+            Ok(r) => r,
+            Err(ureq::Error::Status(code, r)) => {
+                let body = r.into_string().unwrap_or_default();
+                return Err(format!("HTTP {}: {}", code, body));
+            }
+            Err(e) => return Err(format!("Помилка запиту: {}", e)),
+        };
+        let started: V5GenerationStarted = response.into_json().map_err(|e| format!("Помилка парсингу v5: {}", e))?;
+        return poll_v5_generation(key, &started.id, agent);
+    }
+
     let (url, body) = match provider {
         "flow" => (
             format!("{}/v4/flow/video/from-text", BASE_URL),
@@ -589,7 +688,7 @@ pub fn fetch_balance(key: String, result: Arc<Mutex<Option<GooglerBalance>>>, ct
             .timeout(std::time::Duration::from_secs(15))
             .build();
 
-        let url = format!("{}/v3/account/usage?api_key={}", BASE_URL, key);
+        let url = format!("{}/v5/usage", BASE_URL);
 
         if let Ok(response) = agent.get(&url).set("X-API-Key", &key).call() {
             if let Ok(data) = response.into_json::<UsageResponse>() {

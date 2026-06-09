@@ -135,7 +135,11 @@
             "x-max-output-items": 1,
             "x-timeout-seconds": null,
             "x-operation-ttl-seconds": null,
-            "x-provider-options": {}
+            "x-provider-options": {
+              "upscale_credit_multipliers": {
+                "2x": 2
+              }
+            }
           }
         ],
         "x-operation-costs": [
@@ -927,7 +931,7 @@
           "v4-grok-image"
         ],
         "summary": "Edit Image",
-        "description": "Edit an image using Grok. Returns 2 edited variations.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_image_edit`: 1 credit; billing `operation`; media `image`; provider `grok`.",
+        "description": "Edit an image using Grok. Returns 2 edited variations.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_image_edit`: 2 credits; billing `operation`; media `image`; provider `grok`.",
         "operationId": "grok_image_edit",
         "requestBody": {
           "content": {
@@ -969,16 +973,16 @@
             "x-operation-type": "grok_image_edit",
             "x-provider": "grok",
             "x-media-type": "image",
-            "x-credit-cost": 1,
+            "x-credit-cost": 2,
             "x-cost": {
               "operation_type": "grok_image_edit",
               "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
+              "credit_cost": 2,
+              "rate_limit_count": 2,
               "cost_source": null
             },
             "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
+            "x-rate-limit-count": 2,
             "x-concurrency-bucket": "image",
             "x-enabled": true,
             "x-docs-enabled": true,
@@ -1001,28 +1005,28 @@
           {
             "operation_type": "grok_image_edit",
             "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
+            "credit_cost": 2,
+            "rate_limit_count": 2,
             "cost_source": null
           }
         ],
         "x-cost": {
           "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
+          "credit_cost": 2,
+          "rate_limit_count": 2,
           "cost_source": null,
-          "display": "1 credit",
+          "display": "2 credits",
           "operations": [
             {
               "operation_type": "grok_image_edit",
               "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
+              "credit_cost": 2,
+              "rate_limit_count": 2,
               "cost_source": null
             }
           ]
         },
-        "x-credit-cost": 1,
+        "x-credit-cost": 2,
         "x-billing-unit": "operation",
         "x-provider": "grok",
         "x-media-type": "image",
@@ -1109,7 +1113,12 @@
             "x-max-output-items": 6,
             "x-timeout-seconds": null,
             "x-operation-ttl-seconds": null,
-            "x-provider-options": {}
+            "x-provider-options": {
+              "quality_credit_costs": {
+                "speed": 1,
+                "quality": 3
+              }
+            }
           }
         ],
         "x-operation-costs": [
@@ -1157,7 +1166,7 @@
           "v4-grok-video"
         ],
         "summary": "Generate Video From Image",
-        "description": "Generate a video from an image using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_video_from_image`: 1 credit; billing `operation`; media `video`; provider `grok`.",
+        "description": "Generate a video from an image using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_video_from_image`: 2 credits; billing `operation`; media `video`; provider `grok`.",
         "operationId": "grok_video_from_image",
         "requestBody": {
           "content": {
@@ -1199,16 +1208,16 @@
             "x-operation-type": "grok_video_from_image",
             "x-provider": "grok",
             "x-media-type": "video",
-            "x-credit-cost": 1,
+            "x-credit-cost": 2,
             "x-cost": {
               "operation_type": "grok_video_from_image",
               "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
+              "credit_cost": 2,
+              "rate_limit_count": 2,
               "cost_source": null
             },
             "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
+            "x-rate-limit-count": 2,
             "x-concurrency-bucket": "video",
             "x-enabled": true,
             "x-docs-enabled": true,
@@ -1229,7 +1238,11 @@
               "available_resolutions": [
                 "480p",
                 "720p"
-              ]
+              ],
+              "resolution_credit_costs": {
+                "480p": 2,
+                "720p": 4
+              }
             }
           }
         ],
@@ -1237,28 +1250,28 @@
           {
             "operation_type": "grok_video_from_image",
             "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
+            "credit_cost": 2,
+            "rate_limit_count": 2,
             "cost_source": null
           }
         ],
         "x-cost": {
           "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
+          "credit_cost": 2,
+          "rate_limit_count": 2,
           "cost_source": null,
-          "display": "1 credit",
+          "display": "2 credits",
           "operations": [
             {
               "operation_type": "grok_video_from_image",
               "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
+              "credit_cost": 2,
+              "rate_limit_count": 2,
               "cost_source": null
             }
           ]
         },
-        "x-credit-cost": 1,
+        "x-credit-cost": 2,
         "x-billing-unit": "operation",
         "x-provider": "grok",
         "x-media-type": "video",
@@ -1350,7 +1363,11 @@
               "available_resolutions": [
                 "480p",
                 "720p"
-              ]
+              ],
+              "resolution_credit_costs": {
+                "480p": 1,
+                "720p": 3
+              }
             }
           }
         ],
@@ -3257,6 +3274,17 @@
             ],
             "title": "Seed",
             "description": "Random seed for reproducibility"
+          },
+          "generation_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FlowImageGenerationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional generation configuration. Set upscale.type='2x' to return a 2x upscaled image. 2x upscale doubles the base Flow image credit cost and rate-limit count."
           }
         },
         "type": "object",
@@ -3303,6 +3331,38 @@
           "prompt"
         ],
         "title": "FlowGenerateVideoFromTextRequest"
+      },
+      "FlowImageGenerationConfig": {
+        "properties": {
+          "upscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FlowImageUpscaleConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional image upscale configuration. 2x upscale doubles the base Flow image credit cost and rate-limit count."
+          }
+        },
+        "type": "object",
+        "title": "FlowImageGenerationConfig"
+      },
+      "FlowImageUpscaleConfig": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "2x",
+            "title": "Type",
+            "description": "Upscale type. Currently only '2x' is supported. 2x upscale doubles the base Flow image credit cost and rate-limit count."
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "FlowImageUpscaleConfig"
       },
       "FlowerGenerateImageRequest": {
         "properties": {
@@ -3727,6 +3787,23 @@
         ],
         "title": "GenerationCancelResponse"
       },
+      "GenerationConfig": {
+        "properties": {
+          "upscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerationUpscaleConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional image upscale configuration. For Flow images, 2x upscale doubles the base credit cost and rate-limit count."
+          }
+        },
+        "type": "object",
+        "title": "GenerationConfig"
+      },
       "GenerationCreateRequest": {
         "properties": {
           "operation": {
@@ -3761,11 +3838,11 @@
           },
           "inputs": {
             "items": {
-              "$ref": "#/components/schemas/V5MediaInput"
+              "$ref": "#/components/schemas/V5GenerationInput"
             },
             "type": "array",
             "title": "Inputs",
-            "description": "Input media as data URIs or 32-character storage file ids. Meaning is inferred from the selected model and input count."
+            "description": "Input media as data URIs or 32-character storage file ids. Items may also be objects with 'filename' and 'input' so prompts can refer to references by filename."
           },
           "aspect_ratio": {
             "type": "string",
@@ -3851,6 +3928,17 @@
             "title": "Keyframes",
             "description": "Flow video only. Interpret inputs[0] as start frame and inputs[1] as optional end frame.",
             "default": false
+          },
+          "generation_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional generation configuration. For Flow images, set upscale.type='2x' to return a 2x upscaled image. 2x upscale doubles the base credit cost and rate-limit count."
           }
         },
         "type": "object",
@@ -4056,6 +4144,20 @@
           "usage": {
             "$ref": "#/components/schemas/GenerationUsage"
           },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
           "error": {
             "anyOf": [
               {
@@ -4087,6 +4189,21 @@
           "operation_type"
         ],
         "title": "GenerationStatusResponse"
+      },
+      "GenerationUpscaleConfig": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "2x",
+            "title": "Type",
+            "description": "Upscale type. Currently only '2x' is supported. For Flow images, 2x upscale doubles the base credit cost and rate-limit count."
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "GenerationUpscaleConfig"
       },
       "GenerationUsage": {
         "properties": {
@@ -5147,6 +5264,21 @@
             "title": "Result",
             "description": "List of results when status is 'success'. By default media results are resolved data URIs; pass result_format=ref to receive file: references for streamable storage-server downloads. Extract-prompt returns 1 plain text string."
           },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings",
+            "description": "Non-fatal warnings for successful operations."
+          },
           "error": {
             "anyOf": [
               {
@@ -5331,6 +5463,16 @@
         "title": "UsageResponse",
         "description": "Response for usage statistics endpoint."
       },
+      "V5GenerationInput": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/V5MediaInput"
+          },
+          {
+            "$ref": "#/components/schemas/V5NamedMediaInput"
+          }
+        ]
+      },
       "V5MediaInput": {
         "anyOf": [
           {
@@ -5343,6 +5485,27 @@
           }
         ],
         "description": "Image or video as a data URI, or a 32-character storage file id. Inline images are limited to 5MB; inline videos are limited to 1GB."
+      },
+      "V5NamedMediaInput": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "description": "Client-visible filename for referring to this input in the prompt."
+          },
+          "input": {
+            "$ref": "#/components/schemas/V5MediaInput",
+            "description": "Image or video input as a data URI or 32-character storage file id."
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "input"
+        ],
+        "title": "V5NamedMediaInput"
       },
       "ValidationError": {
         "properties": {

@@ -57,6 +57,7 @@ pub fn draw_templates_section(
     voiceover_convert_to_wav: &mut bool,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
+    googler_video_disabled: &mut Vec<String>,
     subtitles_service: &mut String,
     whisper_language: &mut String,
     whisper_model: &mut String,
@@ -190,6 +191,7 @@ pub fn draw_templates_section(
                             *voiceover_convert_to_wav = template.voiceover_convert_to_wav;
                             *googler_image_priority = template.googler_image_priority;
                             *googler_video_priority = template.googler_video_priority;
+                            *googler_video_disabled = template.googler_video_disabled;
                             *subtitles_service = template.subtitles_service;
                             *whisper_language = template.whisper_language;
                             *whisper_model = template.whisper_model;

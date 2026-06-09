@@ -10,7 +10,7 @@ fn default_image_priority() -> Vec<String> {
     vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()]
 }
 fn default_video_priority() -> Vec<String> {
-    vec!["flow".to_string(), "flower".to_string(), "grok".to_string()]
+    vec!["flow".to_string(), "flower".to_string(), "grok".to_string(), "flow_omni_flash".to_string(), "flow_fast".to_string(), "flow_light".to_string(), "flow_quality".to_string()]
 }
 fn default_video_service() -> String { "Googler".to_string() }
 fn default_video_llm_service() -> String { "None".to_string() }
@@ -240,6 +240,9 @@ pub struct AppSettings {
     /// Пріоритетний список провайдерів відео
     #[serde(default = "default_video_priority")]
     pub googler_video_priority: Vec<String>,
+    /// Вимкнені провайдери відео
+    #[serde(default)]
+    pub googler_video_disabled: Vec<String>,
     /// Тип медіа для генерації: "image" або "video"
     #[serde(default = "default_video_media_type")]
     pub video_media_type: String,
@@ -428,6 +431,7 @@ impl Default for AppSettings {
             video_style_prompt: String::new(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
+            googler_video_disabled: vec![],
             video_media_type: "image".to_string(),
             subtitles_service: "Whisper".to_string(),
             whisper_language: "auto".to_string(),
@@ -679,6 +683,9 @@ pub struct PipelineTemplate {
     /// Пріоритетний список провайдерів відео
     #[serde(default = "default_video_priority")]
     pub googler_video_priority: Vec<String>,
+    /// Вимкнені провайдери відео
+    #[serde(default)]
+    pub googler_video_disabled: Vec<String>,
     /// Тип медіа для генерації: "image" або "video"
     #[serde(default = "default_video_media_type")]
     pub video_media_type: String,
@@ -852,6 +859,7 @@ pub fn save_template(
     video_style_prompt: &str,
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
+    googler_video_disabled: Vec<String>,
     video_media_type: &str,
     subtitles_service: &str,
     whisper_language: &str,
@@ -941,6 +949,7 @@ pub fn save_template(
             video_style_prompt: video_style_prompt.to_string(),
             googler_image_priority,
             googler_video_priority,
+            googler_video_disabled,
             video_media_type: video_media_type.to_string(),
             subtitles_service: subtitles_service.to_string(),
             whisper_language: whisper_language.to_string(),
