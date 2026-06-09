@@ -408,6 +408,8 @@ pub struct VideoMakerApp {
     pub update_info: std::sync::Arc<std::sync::Mutex<Option<crate::api::updater::UpdateInfo>>>,
     /// Чи відкрите вікно сповіщення про оновлення.
     pub update_dialog_open: bool,
+    /// Чи згорнута нижня панель черги задач.
+    pub queue_panel_collapsed: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -608,6 +610,7 @@ impl Default for VideoMakerApp {
             task_history: Vec::new(),
             update_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
             update_dialog_open: false,
+            queue_panel_collapsed: false,
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -997,6 +1000,7 @@ impl VideoMakerApp {
             task_history: crate::gui::settings::storage::load_task_history(),
             update_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
             update_dialog_open: false,
+            queue_panel_collapsed: false,
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
@@ -1558,27 +1562,31 @@ impl eframe::App for VideoMakerApp {
 
         // Нижня панель черги задач (тільки якщо є задачі і ми не на Gallery)
         if !self.jobs.is_empty() && self.active_tab != Tab::Gallery {
-            egui::TopBottomPanel::bottom("queue_panel")
-                .min_height(140.0)
-                .default_height(160.0)
-                .max_height(350.0)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    crate::gui::queue::draw_queue_panel(
-                        ui,
-                        self.language,
-                        &mut self.jobs,
-                        &mut self.job_counter,
-                        &mut self.selected_job_logs,
-                        &mut self.selected_job_control,
-                        &mut self.control_text_input,
-                        &self.whisper_model_download,
-                        &mut self.active_tab,
-                        &mut self.retry_request,
-                        &mut self.selected_agent_chat,
-                        &mut self.montage_editor_open_job,
-                    );
-                });
+            let collapsed = self.queue_panel_collapsed;
+            let mut panel = egui::TopBottomPanel::bottom("queue_panel")
+                .resizable(!collapsed);
+            panel = if collapsed {
+                panel.exact_height(32.0)
+            } else {
+                panel.min_height(140.0).default_height(160.0).max_height(350.0)
+            };
+            panel.show(ctx, |ui| {
+                crate::gui::queue::draw_queue_panel(
+                    ui,
+                    self.language,
+                    &mut self.jobs,
+                    &mut self.job_counter,
+                    &mut self.selected_job_logs,
+                    &mut self.selected_job_control,
+                    &mut self.control_text_input,
+                    &self.whisper_model_download,
+                    &mut self.active_tab,
+                    &mut self.retry_request,
+                    &mut self.selected_agent_chat,
+                    &mut self.montage_editor_open_job,
+                    &mut self.queue_panel_collapsed,
+                );
+            });
         }
 
 

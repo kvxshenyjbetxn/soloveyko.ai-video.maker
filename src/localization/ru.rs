@@ -210,6 +210,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "storage_path_active" => "(активный)",
         "queue_add_btn" => "Добавить в очередь",
         "queue_panel_title" => "Очередь",
+        "queue_collapse_tooltip" => "Свернуть панель",
+        "queue_expand_tooltip" => "Развернуть панель",
         "queue_run_btn" => "▶ Запустить",
         "queue_clear_btn" => "🗑 Очистить",
         "queue_clear_disabled_hint" => "Невозможно очистить: есть активные задачи",

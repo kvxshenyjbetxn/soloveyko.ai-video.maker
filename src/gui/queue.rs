@@ -46,6 +46,7 @@ pub fn draw_queue_panel(
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
     selected_agent_chat: &mut Option<u64>,
     open_montage_editor: &mut Option<u64>,
+    collapsed: &mut bool,
 ) {
     ui.add_space(4.0);
 
@@ -56,6 +57,31 @@ pub fn draw_queue_panel(
 
     // Верхній рядок керування
     ui.horizontal(|ui| {
+        let btn_size = egui::vec2(16.0, 16.0);
+        let (btn_rect, btn_resp) = ui.allocate_exact_size(btn_size, egui::Sense::click());
+        if ui.is_rect_visible(btn_rect) {
+            let color = if btn_resp.hovered() {
+                ui.visuals().strong_text_color()
+            } else {
+                ui.visuals().weak_text_color()
+            };
+            let cx = btn_rect.center().x;
+            let top = btn_rect.center().y - 3.0;
+            let bot = btn_rect.center().y + 3.0;
+            let left = cx - 5.0;
+            let right = cx + 5.0;
+            // ▲ коли згорнута (розгорнути), ▼ коли розгорнута (згорнути)
+            let points = if *collapsed {
+                vec![egui::pos2(cx, top), egui::pos2(right, bot), egui::pos2(left, bot)]
+            } else {
+                vec![egui::pos2(left, top), egui::pos2(right, top), egui::pos2(cx, bot)]
+            };
+            ui.painter().add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+        }
+        let tooltip_key = if *collapsed { "queue_expand_tooltip" } else { "queue_collapse_tooltip" };
+        if btn_resp.on_hover_text(translate(language, tooltip_key)).clicked() {
+            *collapsed = !*collapsed;
+        }
         ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
         ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
 
@@ -262,6 +288,10 @@ pub fn draw_queue_panel(
             }
         }
     });
+
+    if *collapsed {
+        return;
+    }
 
     ui.add_space(10.0);
 
