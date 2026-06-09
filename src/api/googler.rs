@@ -439,6 +439,35 @@ pub fn generate_image_with_priority(
 /// Спроба анімації зображення (image-to-video) через конкретного провайдера.
 fn try_animate_image(key: &str, image_data_uri: &str, prompt: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
     let _permit = GooglerVideoLimiter::get().acquire();
+
+    // v5 провайдери — POST /api/v5/generations з inputs (підтверджено для omni_flash,
+    // решта виводиться з паттерну _from_text → _from_ingredients)
+    let v5_operation = match provider {
+        "flow_omni_flash" => Some("flow_video_omni_flash_from_ingredients_10s"),
+        "flow_fast"       => Some("flow_video_from_ingredients"),
+        "flow_light"      => Some("flow_video_light_from_ingredients"),
+        _ => None,
+    };
+    if let Some(operation) = v5_operation {
+        let url = format!("{}/v5/generations", BASE_URL);
+        let body = serde_json::json!({
+            "operation": operation,
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "inputs": [image_data_uri]
+        });
+        let response = match agent.post(&url).set("X-API-Key", key).set("Content-Type", "application/json").send_json(body) {
+            Ok(r) => r,
+            Err(ureq::Error::Status(code, r)) => {
+                let body = r.into_string().unwrap_or_default();
+                return Err(format!("HTTP {}: {}", code, body));
+            }
+            Err(e) => return Err(format!("Помилка запиту: {}", e)),
+        };
+        let started: V5GenerationStarted = response.into_json().map_err(|e| format!("Помилка парсингу v5: {}", e))?;
+        return poll_v5_generation(key, &started.id, agent);
+    }
+
     let (url, body) = match provider {
         "flower" => (
             format!("{}/v4/flower/video/from-image", BASE_URL),
@@ -478,12 +507,13 @@ fn try_animate_image(key: &str, image_data_uri: &str, prompt: &str, provider: &s
 
 /// Анімує зображення в відео з перебором провайдерів за пріоритетом (image-to-video).
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+/// Повертає `(provider_name, data_uri)` — щоб caller знав який провайдер переміг.
 pub fn animate_image_with_priority(
     key: &str,
     image_data_uri: &str,
     prompt: &str,
     priority: &[String],
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -496,7 +526,7 @@ pub fn animate_image_with_priority(
         let mut failures = 0u32;
         loop {
             match try_animate_image(key, image_data_uri, prompt, provider, &agent) {
-                Ok(result) => return Ok(result),
+                Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
                     if is_concurrency_exceeded(&e) {
                         crate::logger::log(&format!(

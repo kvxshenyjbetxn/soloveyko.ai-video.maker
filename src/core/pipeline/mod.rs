@@ -2563,7 +2563,7 @@ pub fn animate_single_image(
             let prompt = "Animate this image with smooth, natural motion.";
             crate::logger::log_job(job_id, &job_name, &format!("Animate {}: запуск image-to-video", file_name));
 
-            let api_result = crate::api::googler::animate_image_with_priority(
+            let (anim_provider, api_result) = crate::api::googler::animate_image_with_priority(
                 &googler_key, &data_uri, prompt, &priority,
             )?;
 
@@ -2571,12 +2571,13 @@ pub fn animate_single_image(
             let video_path = file_path.with_extension("mp4");
             save_media_bytes(&api_result, &video_path)?;
 
+            let is_omni = anim_provider == "flow_omni_flash";
             if let Err(e) = upscale_video_if_needed(
                 &video_path,
                 googler_video_upscale_enabled,
                 &googler_video_upscale_resolution,
                 &googler_video_upscale_quality,
-                false, // animate не використовує omni
+                is_omni,
                 job_id,
                 &job_name,
             ) {
