@@ -113,6 +113,7 @@ pub fn draw_video_section(
     video_service: &mut String,
     video_media_type: &mut String,
     text_split_mode: &mut String,
+    text_split_mode_openrouter: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
     googler_image_priority: &mut Vec<String>,
@@ -222,6 +223,19 @@ pub fn draw_video_section(
                 *video_llm_model = if video_llm_model_codex.is_empty() { "gpt-5.4-mini".to_string() } else { video_llm_model_codex.clone() };
             } else if video_llm_service == "AGY CLI" {
                 *video_llm_model = if video_llm_model_agy.is_empty() { "default".to_string() } else { video_llm_model_agy.clone() };
+            }
+
+            // Зберігаємо/відновлюємо режим нарізки при переключенні між CLI та не-CLI
+            let prev_is_cli = previous_llm_service == "Claude Code" || previous_llm_service == "Gemini CLI"
+                || previous_llm_service == "Codex CLI" || previous_llm_service == "AGY CLI";
+            let new_is_cli = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI"
+                || video_llm_service == "Codex CLI" || video_llm_service == "AGY CLI";
+            if !prev_is_cli && new_is_cli {
+                // Зберігаємо поточний режим перед переходом на CLI
+                *text_split_mode_openrouter = text_split_mode.clone();
+            } else if prev_is_cli && !new_is_cli {
+                // Відновлюємо режим після виходу з CLI
+                *text_split_mode = text_split_mode_openrouter.clone();
             }
         }
 

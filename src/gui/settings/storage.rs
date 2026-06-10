@@ -159,6 +159,9 @@ pub struct AppSettings {
     /// Режим нарізання тексту: "paragraphs" | "sentences" | "char_limit" | "full"
     #[serde(default = "default_text_split_mode")]
     pub text_split_mode: String,
+    /// Збережений режим нарізання для не-CLI сервісів (відновлюється після переключення з агентів)
+    #[serde(default = "default_text_split_mode")]
+    pub text_split_mode_openrouter: String,
     /// Ліміт символів для режиму нарізання "char_limit"
     #[serde(default = "default_text_split_char_limit")]
     pub text_split_char_limit: usize,
@@ -404,6 +407,7 @@ impl Default for AppSettings {
             translation_model_agy: "default".to_string(),
             video_service: "Googler".to_string(),
             text_split_mode: "paragraphs".to_string(),
+            text_split_mode_openrouter: "paragraphs".to_string(),
             text_split_char_limit: 500,
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
@@ -629,6 +633,9 @@ pub struct PipelineTemplate {
     /// Режим нарізання тексту
     #[serde(default = "default_text_split_mode")]
     pub text_split_mode: String,
+    /// Збережений режим нарізання для не-CLI сервісів
+    #[serde(default = "default_text_split_mode")]
+    pub text_split_mode_openrouter: String,
     /// Ліміт символів для режиму нарізання "char_limit"
     #[serde(default = "default_text_split_char_limit")]
     pub text_split_char_limit: usize,
@@ -843,6 +850,7 @@ pub fn save_template(
     translation_model_agy: &str,
     video_service: &str,
     text_split_mode: &str,
+    text_split_mode_openrouter: &str,
     text_split_char_limit: usize,
     translation_temperature: f32,
     translation_service: &str,
@@ -933,6 +941,7 @@ pub fn save_template(
             translation_model_agy: translation_model_agy.to_string(),
             video_service: video_service.to_string(),
             text_split_mode: text_split_mode.to_string(),
+            text_split_mode_openrouter: text_split_mode_openrouter.to_string(),
             text_split_char_limit,
             translation_temperature,
             translation_service: translation_service.to_string(),

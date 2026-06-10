@@ -161,6 +161,8 @@ pub struct VideoMakerApp {
     pub video_media_type: String,
     /// Режим нарізання тексту: "paragraphs" | "sentences" | "char_limit" | "full"
     pub text_split_mode: String,
+    /// Збережений режим нарізання для не-CLI сервісів (відновлюється після переключення з агентів)
+    pub text_split_mode_openrouter: String,
     /// Ліміт символів для режиму char_limit.
     pub text_split_char_limit: usize,
     /// Промт для генерації зображень відеоряду.
@@ -457,6 +459,7 @@ impl Default for VideoMakerApp {
             video_service: "Googler".to_string(),
             video_media_type: "image".to_string(),
             text_split_mode: "paragraphs".to_string(),
+            text_split_mode_openrouter: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
             googler_video_upscale_enabled: default_settings.googler_video_upscale_enabled,
@@ -667,6 +670,7 @@ impl VideoMakerApp {
         let video_service = saved.video_service.clone();
         let video_media_type = saved.video_media_type.clone();
         let text_split_mode = saved.text_split_mode.clone();
+        let text_split_mode_openrouter = saved.text_split_mode_openrouter.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
         let video_agent_prompt = saved.video_agent_prompt.clone();
@@ -835,6 +839,7 @@ impl VideoMakerApp {
             video_service,
             video_media_type,
             text_split_mode,
+            text_split_mode_openrouter,
             text_split_char_limit,
             video_prompt,
             googler_video_upscale_enabled,
@@ -989,6 +994,7 @@ impl VideoMakerApp {
             translation_model_agy: self.translation_model_agy.clone(),
             video_service: self.video_service.clone(),
             text_split_mode: self.text_split_mode.clone(),
+            text_split_mode_openrouter: self.text_split_mode_openrouter.clone(),
             text_split_char_limit: self.text_split_char_limit,
             translation_temperature: self.translation_temperature,
             translation_service: self.translation_service.clone(),
@@ -1082,6 +1088,7 @@ impl VideoMakerApp {
         self.video_service = t.video_service;
         self.video_media_type = t.video_media_type;
         self.text_split_mode = t.text_split_mode;
+        self.text_split_mode_openrouter = t.text_split_mode_openrouter;
         self.text_split_char_limit = t.text_split_char_limit;
         self.video_prompt = t.video_prompt;
         self.googler_video_upscale_enabled = t.googler_video_upscale_enabled;
@@ -1391,6 +1398,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.video_service,
                         &mut self.video_media_type,
                         &mut self.text_split_mode,
+                        &mut self.text_split_mode_openrouter,
                         &mut self.text_split_char_limit,
                         &mut self.video_prompt,
                         &mut self.video_agent_prompt,
@@ -2262,6 +2270,7 @@ impl eframe::App for VideoMakerApp {
                     video_service: self.video_service.clone(),
                     video_media_type: self.video_media_type.clone(),
                     text_split_mode: self.text_split_mode.clone(),
+                    text_split_mode_openrouter: self.text_split_mode_openrouter.clone(),
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
                     video_agent_prompt: self.video_agent_prompt.clone(),
