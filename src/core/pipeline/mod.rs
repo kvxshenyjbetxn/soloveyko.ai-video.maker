@@ -1308,10 +1308,10 @@ fn run_video_branch(
 
             let result = if use_video {
                 crate::api::googler::generate_video_with_priority(&key, &prompt, "16:9", &priority)
-                    .map(|(p, d)| (Some(p), d))
+                    .map(|(p, d)| (p, d))
             } else {
                 crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority)
-                    .map(|d| (None, d))
+                    .map(|(p, d)| (p, d))
             };
 
             sem.release();
@@ -1324,10 +1324,10 @@ fn run_video_branch(
                         Ok(path) => {
                             crate::logger::log_job(
                                 job_id_c, &job_name_c,
-                                &format!("{} {}/{} saved: {}", if use_video { "Video" } else { "Image" }, i + 1, total, path.display()),
+                                &format!("{} {}/{} saved: {} (провайдер: {})", if use_video { "Video" } else { "Image" }, i + 1, total, path.display(), provider_used),
                             );
                             if use_video {
-                                let is_omni = provider_used.as_deref() == Some("flow_omni_flash");
+                                let is_omni = provider_used == "flow_omni_flash";
                                 if let Err(err) = upscale_video_if_needed(
                                     &path,
                                     upscale_enabled,
@@ -2560,12 +2560,18 @@ pub fn animate_single_image(
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
             let data_uri = format!("data:{};base64,{}", mime, b64);
 
-            let prompt = "Animate this image with smooth, natural motion.";
+            let saved_prompt = read_prompt_for_file(&file_path);
+            let prompt = if saved_prompt.is_empty() {
+                "Animate this image with smooth, natural motion.".to_string()
+            } else {
+                saved_prompt
+            };
             crate::logger::log_job(job_id, &job_name, &format!("Animate {}: запуск image-to-video", file_name));
 
             let (anim_provider, api_result) = crate::api::googler::animate_image_with_priority(
-                &googler_key, &data_uri, prompt, &priority,
+                &googler_key, &data_uri, &prompt, &priority,
             )?;
+            crate::logger::log_job(job_id, &job_name, &format!("Animate {}: провайдер — {}", file_name, anim_provider));
 
             // Зберігаємо відео поряд з оригінальним зображенням (.mp4)
             let video_path = file_path.with_extension("mp4");
@@ -2696,10 +2702,8 @@ pub fn regenerate_single_media(
 
         let api_result = if media_type == "video" {
             crate::api::googler::generate_video_with_priority(&googler_key, &prompt, "16:9", &priority)
-                .map(|(p, d)| (Some(p), d))
         } else {
             crate::api::googler::generate_image_with_priority(&googler_key, &prompt, "16:9", &priority)
-                .map(|d| (None, d))
         };
 
         let outcome = match api_result {
@@ -2709,9 +2713,9 @@ pub fn regenerate_single_media(
             }
             Ok((provider_used, data_uri)) => match save_media_bytes(&data_uri, &file_path) {
                 Ok(()) => {
-                    crate::logger::log_job(job_id, &job_name, &format!("Regen {} done.", file_name));
+                    crate::logger::log_job(job_id, &job_name, &format!("Regen {} done (провайдер: {}).", file_name, provider_used));
                     if media_type == "video" {
-                        let is_omni = provider_used.as_deref() == Some("flow_omni_flash");
+                        let is_omni = provider_used == "flow_omni_flash";
                         if let Err(e) = upscale_video_if_needed(
                             &file_path,
                             googler_video_upscale_enabled,
