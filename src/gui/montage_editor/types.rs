@@ -84,6 +84,8 @@ pub struct EditorClip {
     pub zoom_enabled: bool,
     /// Чи застосовувати ефект покачування до цього кліпу у превью.
     pub shake_enabled: bool,
+    /// Чи є кліп плейсхолдером (медіа ще не обрано — чекає вибору стоку).
+    pub is_placeholder: bool,
 }
 
 impl EditorClip {
@@ -119,10 +121,12 @@ pub struct MontageEditorActions {
     pub animate_paths: Vec<PathBuf>,
     /// Дія перегенерації (файл, налаштування, is_custom, job_id, job_name)
     pub regen_action: Option<crate::gui::gallery::RegenAction>,
+    /// Запит на відкриття Stock Picker для вказаного індексу сегмента
+    pub open_stock_picker: Option<usize>,
 }
 
 impl Default for MontageEditorActions {
     fn default() -> Self {
-        Self { animate_paths: vec![], regen_action: None }
+        Self { animate_paths: vec![], regen_action: None, open_stock_picker: None }
     }
 }

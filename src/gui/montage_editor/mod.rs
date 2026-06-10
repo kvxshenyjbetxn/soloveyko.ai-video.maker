@@ -75,6 +75,13 @@ pub fn draw_montage_editor_window(
     editor.pending_animate_paths.clear();
     editor.pending_regen = None;
 
+    // Оновлюємо плейсхолдери якщо підтверджено вибір стоку.
+    // needs_stock_refresh залишається true поки є незавантажені файли.
+    if editor.needs_stock_refresh {
+        let still_pending = state::refresh_placeholder_clips(editor);
+        editor.needs_stock_refresh = still_pending;
+    }
+
     // Після завершення оживлення (.jpg → .mp4): оновлюємо пул та кліпи
     {
         let loading = anim_loading.lock().unwrap();
@@ -296,6 +303,7 @@ pub fn draw_montage_editor_window(
     // Збираємо дії з pending полів editor
     let animate_paths = std::mem::take(&mut editor.pending_animate_paths);
     let regen_opt = editor.pending_regen.take();
+    let open_stock_picker = editor.pending_open_stock_picker.take();
     let regen_action = regen_opt.and_then(|(path, is_custom)| {
         jobs.iter().find(|j| j.id == job_id).map(|job| {
             (path, job.settings.clone(), is_custom, job_id, job.name.clone())
@@ -305,7 +313,7 @@ pub fn draw_montage_editor_window(
     if !is_open || close_after {
         *open_job = None;
         *state = None;
-        return MontageEditorActions { animate_paths, regen_action };
+        return MontageEditorActions { animate_paths, regen_action, open_stock_picker: None };
     }
 
     // Fullscreen preview (подвійний клік на медіа в пулі або кліп у таймлінії)
@@ -358,7 +366,7 @@ pub fn draw_montage_editor_window(
         }
     }
 
-    MontageEditorActions { animate_paths, regen_action }
+    MontageEditorActions { animate_paths, regen_action, open_stock_picker }
 }
 
 /// Завантажує текстуру для fullscreen preview: зображення читає напряму,

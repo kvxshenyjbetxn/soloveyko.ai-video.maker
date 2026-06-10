@@ -1075,6 +1075,14 @@ fn run_video_branch(
         return Ok(());
     }
 
+    // Pexels режим — окрема гілка
+    if settings.video_service == "Pexels" {
+        return run_pexels_branch(
+            job_id, job_name, &settings, translated_text,
+            video_stage, prompts_progress, ctx,
+        );
+    }
+
     let media_label = if settings.video_media_type == "video" { "video" } else { "image" };
     crate::logger::log_job(job_id, &job_name, &format!("Starting video stage ({} generation)...", media_label));
     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
@@ -1387,6 +1395,171 @@ fn run_video_branch(
     }
 }
 
+/// Гілка Pexels Stock: генерує ключові слова → шукає медіа → зберігає stock_cache.json.
+/// Замість генерації медіафайлів одразу, результати чекають вибору користувача.
+fn run_pexels_branch(
+    job_id: u64,
+    job_name: String,
+    settings: &crate::queue::JobSettings,
+    translated_text: Arc<Mutex<Option<String>>>,
+    video_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    ctx: egui::Context,
+) -> Result<(), String> {
+    crate::logger::log_job(job_id, &job_name, "Pexels: starting keyword generation + stock search...");
+    *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+    ctx.request_repaint();
+
+    let save_dir = std::path::Path::new(&settings.save_path);
+
+    // 1. Отримуємо сегменти + ключові слова
+    // Агентний режим (є timeline.json): ключові слова = перші 5 слів кожного сегмента (без LLM)
+    // Звичайний режим: ключові слова через LLM або перші 5 слів
+    let (segments, keywords): (Vec<String>, Vec<String>) = {
+        match read_segments_from_timeline(save_dir) {
+            Ok(segs) if !segs.is_empty() => {
+                crate::logger::log_job(job_id, &job_name,
+                    &format!("Pexels: using {} segments from timeline.json", segs.len()));
+                // Агент написав описи сцен — використовуємо напряму як запит до Pexels
+                let kws = segs.clone();
+                (segs, kws)
+            }
+            _ => {
+                let source_text = if settings.translation_enabled {
+                    translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+                } else {
+                    settings.text.clone()
+                };
+                let segs = crate::core::pipeline::timeline::text_splitter::split_text(
+                    &source_text,
+                    &settings.text_split_mode,
+                    settings.text_split_char_limit,
+                );
+
+                let use_llm = settings.video_llm_service != "None" && !settings.video_llm_service.is_empty();
+                let kws = if use_llm {
+                    crate::logger::log_job(job_id, &job_name,
+                        &format!("Pexels: generating keywords via {}...", settings.video_llm_service));
+                    let kw_instruction = if settings.video_prompt.is_empty() {
+                        "Generate 3-5 short English search keywords for a stock footage website based on this text. Return only keywords separated by space, no explanation.".to_string()
+                    } else {
+                        settings.video_prompt.clone()
+                    };
+                    let total_segs = segs.len();
+                    let mut handles = Vec::with_capacity(total_segs);
+                    for (i, seg) in segs.iter().enumerate() {
+                        let service = settings.video_llm_service.clone();
+                        let model   = settings.video_llm_model.clone();
+                        let key     = settings.openrouter_key.clone();
+                        let temp    = settings.video_llm_temperature;
+                        let instr   = kw_instruction.clone();
+                        let seg_clone = seg.clone();
+                        let video_stage_c = Arc::clone(&video_stage);
+                        let prompts_progress_c = Arc::clone(&prompts_progress);
+                        let ctx_c = ctx.clone();
+                        let jn = job_name.clone();
+                        handles.push(std::thread::spawn(move || {
+                            let kw = crate::core::llm::call_llm(&service, &key, &model, &instr, &seg_clone, temp, Some((job_id, jn.clone())), None, false)
+                                .map(|(text, _)| text)
+                                .unwrap_or_else(|_| seg_clone.split_whitespace().take(5).collect::<Vec<_>>().join(" "));
+                            let kw = kw.trim().to_string();
+                            if let Ok(mut p) = prompts_progress_c.try_lock() {
+                                if let Some((done, t)) = p.as_mut() {
+                                    *done += 1;
+                                    let _ = crate::logger::log_job(job_id, &jn,
+                                        &format!("Pexels keyword {}/{}: \"{}\"", done, t, kw));
+                                }
+                            }
+                            *video_stage_c.lock().unwrap() = crate::queue::StageStatus::Running;
+                            ctx_c.request_repaint();
+                            (i, kw)
+                        }));
+                    }
+                    let mut out = vec![String::new(); total_segs];
+                    for h in handles {
+                        let (i, kw) = h.join().unwrap_or((0, String::new()));
+                        out[i] = kw;
+                    }
+                    out
+                } else {
+                    segs.iter().map(|s| s.split_whitespace().take(5).collect::<Vec<_>>().join(" ")).collect()
+                };
+                (segs, kws)
+            }
+        }
+    };
+
+    let total = segments.len();
+
+    // ─── Пошук у Pexels для кожного ключового слова ─────────────────────────
+    crate::logger::log_job(job_id, &job_name, "Pexels: searching stock media for each segment...");
+    *prompts_progress.lock().unwrap() = Some((0, total));
+    ctx.request_repaint();
+
+    let provider = crate::api::stock::pexels::PexelsProvider;
+    let pexels_key = settings.pexels_key.clone();
+
+    let mut cache: Vec<crate::api::stock::SegmentCache> = Vec::with_capacity(total);
+
+    use crate::api::stock::StockProvider;
+    // Тривалості сегментів з timeline.json (якщо є)
+    let seg_durations: Vec<f32> = read_segment_durations_from_timeline(save_dir)
+        .unwrap_or_else(|| vec![0.0; total]);
+
+    for (i, (seg, kw)) in segments.iter().zip(keywords.iter()).enumerate() {
+        let mut entry = crate::api::stock::SegmentCache {
+            index: i,
+            keyword: kw.clone(),
+            segment_text: seg.clone(),
+            segment_duration: seg_durations.get(i).copied().unwrap_or(0.0),
+            photos: vec![],
+            videos: vec![],
+            selected: None,
+        };
+
+        // Шукаємо і фото і відео щоб користувач міг обрати у пікері
+        match provider.search_photos(&pexels_key, kw, 15) {
+            Ok(photos) => {
+                entry.photos = photos.iter().map(|p| crate::api::stock::CachedPhoto::from(p)).collect();
+                crate::logger::log_job(job_id, &job_name,
+                    &format!("Pexels [{}/{}]: \"{}\" → {} photos", i + 1, total, kw, entry.photos.len()));
+            }
+            Err(e) => {
+                crate::logger::log_job(job_id, &job_name,
+                    &format!("Pexels [{}/{}]: photos error: {}", i + 1, total, e));
+            }
+        }
+        match provider.search_videos(&pexels_key, kw, 15) {
+            Ok(vids) => {
+                entry.videos = vids.iter().map(|v| crate::api::stock::CachedVideo::from(v)).collect();
+                crate::logger::log_job(job_id, &job_name,
+                    &format!("Pexels [{}/{}]: \"{}\" → {} videos", i + 1, total, kw, entry.videos.len()));
+            }
+            Err(e) => {
+                crate::logger::log_job(job_id, &job_name,
+                    &format!("Pexels [{}/{}]: videos error: {}", i + 1, total, e));
+            }
+        }
+
+        cache.push(entry);
+
+        if let Ok(mut p) = prompts_progress.try_lock() {
+            if let Some((done, _)) = p.as_mut() { *done = i + 1; }
+        }
+        ctx.request_repaint();
+    }
+
+    // Зберігаємо кеш на диск
+    crate::api::stock::save_cache(save_dir, &cache)
+        .map_err(|e| format!("Pexels cache save error: {}", e))?;
+
+    crate::logger::log_job(job_id, &job_name,
+        "Pexels: stock_cache.json saved. Waiting for user selection...");
+    *video_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+    ctx.request_repaint();
+    Ok(())
+}
+
 /// Читає сегменти тексту з timeline.json (для агентного режиму).
 fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>, String> {
     let content = std::fs::read_to_string(save_dir.join("timeline.json"))
@@ -1394,6 +1567,18 @@ fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>
     let timeline = serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
         .map_err(|e| format!("Invalid timeline.json: {}", e))?;
     Ok(timeline.segments.into_iter().map(|s| s.text).collect())
+}
+
+/// Читає тривалості сегментів з timeline.json
+fn read_segment_durations_from_timeline(save_dir: &std::path::Path) -> Option<Vec<f32>> {
+    let content = std::fs::read_to_string(save_dir.join("timeline.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let segs = v["segments"].as_array()?;
+    Some(segs.iter().map(|s| {
+        let start = s["start_secs"].as_f64().unwrap_or(0.0);
+        let end = s["end_secs"].as_f64().unwrap_or(0.0);
+        (end - start).max(0.0) as f32
+    }).collect())
 }
 
 /// Запускає агента (Claude Code або Gemini CLI) для створення timeline.json на основі subtitle.srt.
@@ -1795,8 +1980,28 @@ pub fn run_pipeline(
                 return;
             }
 
-            // Патчимо timeline.json фактичними шляхами медіафайлів
             let save_dir_agent = std::path::Path::new(&settings.save_path);
+
+            // В Pexels режимі — чекаємо вибору медіа користувачем перед патчингом
+            if settings.video_service == "Pexels" && settings.video_enabled {
+                crate::logger::log_job(job_id, &job_name,
+                    "Pexels stock search done. Awaiting user stock selection...");
+                *status.lock().unwrap() = crate::queue::JobStatus::AwaitingStockSelection;
+                ctx.request_repaint();
+
+                let (lock, cvar) = &*media_control_resume;
+                let mut resumed = lock.lock().unwrap();
+                while !*resumed {
+                    resumed = cvar.wait(resumed).unwrap();
+                }
+                *resumed = false;
+
+                crate::logger::log_job(job_id, &job_name, "Stock selection confirmed. Resuming pipeline...");
+                *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                ctx.request_repaint();
+            }
+
+            // Патчимо timeline.json фактичними шляхами медіафайлів (після завантаження стоків)
             if let Err(e) = assign_media_to_timeline(save_dir_agent) {
                 crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
             } else {
@@ -1872,8 +2077,30 @@ pub fn run_pipeline(
             // поки гілка AV (озвучка + субтитри) продовжує виконуватись паралельно.
             let video_result = video_handle.map(|h| h.join().unwrap_or_else(|_| Err("Video thread panicked".to_string())));
 
+            // Пауза для вибору стокових медіа (Pexels режим)
+            let is_pexels = settings.video_service == "Pexels" && settings.video_enabled;
+            if is_pexels {
+                if let Some(Ok(())) = &video_result {
+                    crate::logger::log_job(job_id, &job_name,
+                        "Pexels stock search done. Awaiting user stock selection...");
+                    *status.lock().unwrap() = crate::queue::JobStatus::AwaitingStockSelection;
+                    ctx.request_repaint();
+
+                    let (lock, cvar) = &*media_control_resume;
+                    let mut resumed = lock.lock().unwrap();
+                    while !*resumed {
+                        resumed = cvar.wait(resumed).unwrap();
+                    }
+                    *resumed = false;
+
+                    crate::logger::log_job(job_id, &job_name, "Stock selection confirmed. Resuming pipeline...");
+                    *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                    ctx.request_repaint();
+                }
+            }
+
             // Пауза для контролю зображень — AV гілка продовжує виконуватись
-            if settings.media_control_enabled && settings.video_enabled {
+            if settings.media_control_enabled && settings.video_enabled && !is_pexels {
                 if let Some(Ok(())) = &video_result {
                     crate::logger::log_job(job_id, &job_name, "Video done. Awaiting media review by user...");
                     *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMediaControl;
@@ -1909,24 +2136,48 @@ pub fn run_pipeline(
 
             // Генеруємо timeline.json якщо відеоряд увімкнено і є тривалість аудіо
             if settings.video_enabled {
-                let source_text = if settings.translation_enabled {
-                    translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
-                } else {
-                    settings.text.clone()
-                };
-
-                let segments = crate::core::pipeline::timeline::text_splitter::split_text(
-                    &source_text,
-                    &settings.text_split_mode,
-                    settings.text_split_char_limit,
-                );
-
-                let audio_dur = *audio_duration.lock().unwrap();
                 let save_dir = std::path::Path::new(&settings.save_path);
 
-                match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
-                    Ok(_) => crate::logger::log_job(job_id, &job_name, "Timeline saved: timeline.json"),
-                    Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e)),
+                // Pexels: якщо timeline.json ще немає (non-agent) — будуємо з SRT, потім патчимо
+                if settings.video_service == "Pexels" {
+                    if !save_dir.join("timeline.json").exists() {
+                        let source_text = if settings.translation_enabled {
+                            translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+                        } else {
+                            settings.text.clone()
+                        };
+                        let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+                            &source_text, &settings.text_split_mode, settings.text_split_char_limit,
+                        );
+                        let audio_dur = *audio_duration.lock().unwrap();
+                        if let Err(e) = crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
+                            crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e));
+                        }
+                    }
+                    if let Err(e) = assign_media_to_timeline(save_dir) {
+                        crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
+                    } else {
+                        crate::logger::log_job(job_id, &job_name, "Timeline patched with stock media paths.");
+                    }
+                } else {
+                    let source_text = if settings.translation_enabled {
+                        translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+                    } else {
+                        settings.text.clone()
+                    };
+
+                    let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+                        &source_text,
+                        &settings.text_split_mode,
+                        settings.text_split_char_limit,
+                    );
+
+                    let audio_dur = *audio_duration.lock().unwrap();
+
+                    match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
+                        Ok(_) => crate::logger::log_job(job_id, &job_name, "Timeline saved: timeline.json"),
+                        Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e)),
+                    }
                 }
             }
         }

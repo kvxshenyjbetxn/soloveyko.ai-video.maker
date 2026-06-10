@@ -8,6 +8,8 @@ pub enum JobStatus {
     AwaitingControl,
     /// Очікує перегляду згенерованих зображень користувачем
     AwaitingMediaControl,
+    /// Очікує вибору стокових медіа користувачем (Pexels режим)
+    AwaitingStockSelection,
     /// Очікує підтвердження монтажу від користувача
     AwaitingMontageControl,
     Done,
@@ -96,6 +98,7 @@ pub struct JobSettings {
     pub video_media_type: String,
 
     pub assemblyai_key: String,
+    pub pexels_key: String,
     pub subtitles_enabled: bool,
     pub subtitles_service: String,
     pub whisper_language: String,

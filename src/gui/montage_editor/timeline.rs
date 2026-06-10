@@ -180,6 +180,7 @@ pub(super) fn draw_timeline(
                                     pos_y: 0.0,
                                     zoom_enabled: false,
                                     shake_enabled: false,
+                                    is_placeholder: false,
                                 });
                             }
                         }
@@ -201,6 +202,50 @@ pub(super) fn draw_timeline(
                     Pos2::new(cx, track_y + 2.0),
                     Vec2::new(cw, track_h - 4.0),
                 );
+
+                // ─── Плейсхолдер (media ще не обрано) ───────────────────────
+                if clip.is_placeholder {
+                    let seg_idx = clip.media_id.strip_prefix("placeholder_")
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    let accent = Color32::from_rgb(90, 90, 115);
+                    let is_hovered = mouse_pos.map(|p| clip_rect.contains(p)).unwrap_or(false);
+                    let border_color = if is_hovered { Color32::from_rgb(160, 160, 210) } else { accent };
+                    painter.rect(clip_rect, 3.0,
+                        Color32::from_rgba_unmultiplied(35, 35, 50, 140),
+                        Stroke::new(1.5, border_color));
+                    // Штрихована заливка
+                    let dash_step = 10.0_f32;
+                    let num = ((cw / dash_step) as usize).max(1);
+                    for d in 0..num {
+                        if d % 2 == 0 { continue; }
+                        let x0 = clip_rect.left() + d as f32 * dash_step;
+                        let x1 = (x0 + dash_step).min(clip_rect.right());
+                        painter.rect_filled(
+                            Rect::from_min_max(
+                                Pos2::new(x0, clip_rect.top() + 4.0),
+                                Pos2::new(x1, clip_rect.bottom() - 4.0),
+                            ),
+                            0.0, Color32::from_rgba_unmultiplied(80, 80, 100, 40),
+                        );
+                    }
+                    if cw > 28.0 {
+                        let label = format!("+ #{}", seg_idx + 1);
+                        painter.text(
+                            clip_rect.center(), Align2::CENTER_CENTER, &label,
+                            egui::FontId::proportional(10.0), Color32::from_rgb(160, 160, 190),
+                        );
+                    }
+                    let clip_resp = ui.allocate_rect(clip_rect, Sense::click());
+                    if clip_resp.clicked() {
+                        editor.selected_clip_id = Some(clip.id.clone());
+                        editor.pending_open_stock_picker = Some(seg_idx);
+                    }
+                    if is_hovered {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    continue;
+                }
 
                 let is_anim = clip.path.as_ref()
                     .map(|p| anim_loading.lock().unwrap().contains(p) || regen_paths.contains(p))

@@ -696,7 +696,17 @@ pub fn draw_video_section(
             .width(ui.available_width() - 8.0)
             .show_ui(ui, |ui| {
                 ui.selectable_value(video_service, "Googler".to_string(), "Googler");
+                ui.selectable_value(video_service, "Pexels".to_string(), "Pexels Stock");
             });
+
+        if video_service.as_str() == "Pexels" {
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(translate(language, "pexels_service_note"))
+                    .color(ui.visuals().widgets.noninteractive.fg_stroke.color)
+                    .size(11.0)
+            );
+        }
 
         if video_service.as_str() == "Googler" {
             ui.add_space(8.0);

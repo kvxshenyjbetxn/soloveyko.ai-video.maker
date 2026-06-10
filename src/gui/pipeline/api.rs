@@ -21,6 +21,9 @@ pub fn draw_api_section(
     assemblyai_key: &mut String,
     assemblyai_status: &mut Option<String>,
     assemblyai_test_result: &Arc<Mutex<Option<String>>>,
+    pexels_key: &mut String,
+    pexels_status: &mut Option<String>,
+    pexels_test_result: &Arc<Mutex<Option<String>>>,
 ) {
     // Опитуємо результат фонового тесту Voice Bot і переносимо у voicebot_status
     if let Ok(mut guard) = voicebot_test_result.try_lock() {
@@ -40,6 +43,13 @@ pub fn draw_api_section(
     if let Ok(mut guard) = assemblyai_test_result.try_lock() {
         if let Some(result) = guard.take() {
             *assemblyai_status = Some(result);
+        }
+    }
+
+    // Опитуємо результат фонового тесту Pexels і переносимо у pexels_status
+    if let Ok(mut guard) = pexels_test_result.try_lock() {
+        if let Some(result) = guard.take() {
+            *pexels_status = Some(result);
         }
     }
 
@@ -310,6 +320,68 @@ pub fn draw_api_section(
         });
 
         if let Some(status) = assemblyai_status {
+            ui.add_space(4.0);
+            let is_success = status.starts_with('✔');
+            let is_checking = status.starts_with('⏳');
+            let text_color = if is_success || is_checking {
+                egui::Color32::from_rgb(46, 204, 113)
+            } else {
+                egui::Color32::from_rgb(231, 76, 60)
+            };
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
+                ).wrap()
+            );
+        }
+
+        ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(6.0);
+
+        // --- Pexels ---
+        ui.label(egui::RichText::new("Pexels Stock").strong());
+        ui.add_space(4.0);
+
+        let available_width = ui.available_width();
+
+        ui.horizontal(|ui| {
+            let px_response = ui.add(
+                egui::TextEdit::singleline(pexels_key)
+                    .password(true)
+                    .hint_text(translate(language, "pexels_key_hint"))
+                    .desired_width((available_width - 90.0).max(100.0))
+            );
+
+            if px_response.changed() {
+                *pexels_status = None;
+            }
+
+            let test_btn = ui.add_sized(
+                [70.0, 20.0],
+                egui::Button::new(translate(language, "api_check_btn"))
+            );
+
+            if test_btn.clicked() {
+                let trimmed = pexels_key.trim().to_string();
+                if trimmed.is_empty() {
+                    *pexels_status = Some(translate(language, "api_status_empty").to_string());
+                } else {
+                    *pexels_status = Some(translate(language, "pexels_status_checking").to_string());
+
+                    let result_arc = Arc::clone(pexels_test_result);
+                    let ctx = ui.ctx().clone();
+
+                    std::thread::spawn(move || {
+                        let status = crate::api::stock::pexels::check_key(&trimmed);
+                        *result_arc.lock().unwrap() = Some(status);
+                        ctx.request_repaint();
+                    });
+                }
+            }
+        });
+
+        if let Some(status) = pexels_status {
             ui.add_space(4.0);
             let is_success = status.starts_with('✔');
             let is_checking = status.starts_with('⏳');

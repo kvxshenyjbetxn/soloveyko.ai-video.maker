@@ -80,6 +80,9 @@ pub fn draw_pipeline_panel(
     assemblyai_key: &mut String,
     assemblyai_status: &mut Option<String>,
     assemblyai_test_result: &Arc<Mutex<Option<String>>>,
+    pexels_key: &mut String,
+    pexels_status: &mut Option<String>,
+    pexels_test_result: &Arc<Mutex<Option<String>>>,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
@@ -220,6 +223,7 @@ pub fn draw_pipeline_panel(
                             name,
                             openrouter_key,
                             assemblyai_key,
+                            pexels_key,
                             voiceover_provider,
                             voiceover_template_uuid,
                             *pipeline_translation_enabled,
@@ -364,6 +368,7 @@ pub fn draw_pipeline_panel(
                                     openrouter_status,
                                     assemblyai_key,
                                     assemblyai_status,
+                                    pexels_key,
                                     voiceover_provider,
                                     voiceover_template_uuid,
                                     template_status,
@@ -502,6 +507,9 @@ pub fn draw_pipeline_panel(
                                     assemblyai_key,
                                     assemblyai_status,
                                     assemblyai_test_result,
+                                    pexels_key,
+                                    pexels_status,
+                                    pexels_test_result,
                                 );
                             });
                         }
@@ -905,6 +913,7 @@ pub fn draw_pipeline_panel(
                                             googler_video_upscale_resolution,
                                             googler_video_upscale_quality,
                                             assemblyai_key,
+                                            pexels_key,
 
                                             *pipeline_subtitles_enabled,
                                             subtitles_service,
@@ -993,6 +1002,7 @@ pub fn draw_pipeline_panel(
                                         googler_video_upscale_resolution,
                                         googler_video_upscale_quality,
                                         assemblyai_key,
+                                        pexels_key,
                                         *pipeline_subtitles_enabled,
                                         subtitles_service,
                                         whisper_language,
@@ -1082,6 +1092,7 @@ fn build_job_settings(
     googler_video_upscale_resolution: &str,
     googler_video_upscale_quality: &str,
     assemblyai_key: &str,
+    pexels_key: &str,
 
     subtitles_enabled: bool,
     subtitles_service: &str,
@@ -1155,6 +1166,7 @@ fn build_job_settings(
         googler_video_upscale_resolution: googler_video_upscale_resolution.to_string(),
         googler_video_upscale_quality: googler_video_upscale_quality.to_string(),
         assemblyai_key: assemblyai_key.to_string(),
+        pexels_key: pexels_key.to_string(),
 
         subtitles_enabled,
         subtitles_service: subtitles_service.to_string(),
@@ -1242,6 +1254,7 @@ fn validate_and_enqueue(
     googler_video_upscale_resolution: &str,
     googler_video_upscale_quality: &str,
     assemblyai_key: &str,
+    pexels_key: &str,
 
     subtitles_enabled: bool,
     subtitles_service: &str,
@@ -1326,6 +1339,7 @@ fn validate_and_enqueue(
         googler_video_upscale_resolution,
         googler_video_upscale_quality,
         assemblyai_key,
+        pexels_key,
 
         subtitles_enabled,
         subtitles_service,

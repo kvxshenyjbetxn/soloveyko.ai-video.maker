@@ -6,6 +6,7 @@ pub mod montage_editor;
 pub mod pipeline;
 pub mod queue;
 pub mod settings;
+pub mod stock_picker;
 pub mod subtitle_fonts;
 pub mod task_history;
 pub mod topbar;

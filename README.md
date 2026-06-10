@@ -13,7 +13,8 @@
 | [`VideoMakerApp`](#videomakерapp-srcapprs) | ~126 | Центральна структура: UI, панелі черги/балансів/галереї, автозбереження |
 | [Панель историї задач](#панель-историї-задач-srcguitask_historyrs) | ~208 | Ліва панель 190px: список минулих задач, відновлення налаштувань |
 | [Редактор монтажу](#редактор-монтажу-srcguimontage_editor) | ~223 | 5 зон: медіа-пул, прев'ю+транспорт, інспектор, таймлінія, топбар |
-| [Текстовий редактор сценарію](#текстовий-редактор-сценарію-srcguieditorrs) | ~348 | Підрахунок токенів tiktoken, live split-preview, lazy cache |
+| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels-пікер: одиночний і повний режим, завантаження + trim editor з ffmpeg прев'ю |
+| [Текстовий редактор сценарію](#текстовий-редактор-сценарію-srcguieditorrs) | ~373 | Підрахунок токенів tiktoken, live split-preview, lazy cache |
 | [Черга задач (`queue.rs`)](#черга-задач-srcqueuers) | ~361 | `JobSettings`, `JobStatus`, `PipelineJob`, arc-поля стану |
 | [Панель пайплайну](#панель-пайплайну-srcguipipelinemodrs) | ~386 | 9 секцій: Шаблони→Монтаж; `validate_and_enqueue`, `build_job_settings` |
 | [Пайплайн виконання](#пайплайн-виконання-задачі-srccorepipeline) | ~408 | `run_pipeline`, `retry_from_stage`, `run_final_stages`, контроль зображень |
@@ -74,6 +75,9 @@ src/
 │   ├── agy.rs                   — call_agy_new_session_streaming (--model + -p + --dangerously-skip-permissions, Stdio::piped(), on_chunk викликається один раз з trimmed stdout) + call_agy_resume (--continue, без session-id — AGY не підтримує структуровані сесії) + call_agy_cli (простий виклик для перекладу) + AgyLimiter (семафор); моделі: gemini-3.5-flash, gemini-3.1-pro-preview; УВАГА: AGY є TUI-застосунком і пише у Windows Console API напряму — stdout pipe може бути порожнім
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
 │   ├── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
+│   ├── stock/
+│   │   ├── mod.rs               — CachedPhoto, CachedVideo, SelectedMedia, SegmentCache (з `segment_duration: f32`), StockPhoto, StockVideo, StockProvider трейт; load_cache/save_cache (stock_cache.json); download_file_with_progress з прогресом через Arc<Mutex<f32>>
+│   │   └── pexels.rs            — PexelsProvider: search_photos + search_videos (обидва з `orientation=landscape`); custom null_to_string/null_to_u32 serde deserializers — Pexels API може повертати null замість рядка або числа; check_key
 │   └── updater.rs               — check_for_updates (фонова перевірка GitHub releases на нові релізи, порівнює tag_name з APP_VERSION), open_url (крос-платформне відкриття URL: cmd+start на Windows, open на macOS)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
@@ -117,6 +121,7 @@ src/
 │   ├── queue.rs                 — draw_queue_panel: нижня панель черги задач (картки, прогрес, лог-вікно); draw_queue_jobs_list: виокремлений список карток для повторного використання у fullscreen-режимі; приймає open_job_logs/open_job_controls/open_agent_chats як HashMap замість окремих Option-полів — відкриття вікна через entry().or_insert_with() (не скидає вже відкрите вікно при повторному кліку); кнопка 📂 відкриває папку задачі у файловому менеджері ОС
 │   ├── logs.rs                  — draw_job_logs_window (вікно логів конкретної задачі), draw_logs_tab (вкладка системних логів)
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base; encoder ліниво ініціалізується — перший виклик `tiktoken::get_encoding("cl100k_base")` повільний, тому прогрів відбувається у фоновому потоці в `VideoMakerApp::new()`
+│   ├── stock_picker.rs          — StockPickerState + draw_stock_picker: вибір стокового медіа для сегментів пайплайну (режими single_mode і full); VideoDownloadState (прогрес через Arc<Mutex<f32>>); TrimEditState (міні-редактор нарізки з ffmpeg кадровим прев'ю); spawn_frame_extraction у фоновому потоці (8 кадрів → jpeg → TextureHandle)
 │   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
 │   ├── gallery/
 │   │   ├── mod.rs               — реекспорт публічного API + тип RegenAction
@@ -356,6 +361,38 @@ pub struct ClipDragState {
 - **Кінець відтворення:** При `playhead >= total_dur()` програвання зупиняється, а `active_audios` очищується.
 - **Кросплатформеність:** Оскільки `OutputStream` е `!Send` на деяких платформах (зокрема Windows WASAPI/COM), керування плеєрами відбувається виключно на головному UI-потоці програми.
 
+### Stock Picker (`src/gui/stock_picker.rs`)
+
+Вікно вибору стокового медіа (Pexels) для сегментів пайплайну. Відкривається або як **single_mode** (з плейсхолдера в редакторі монтажу — для конкретного сегмента) або як **full mode** (з панелі пайплайну — список усіх сегментів з лівою боковою панеллю).
+
+**Режими відображення:**
+- **Single mode** — відкривається кліком на плейсхолдер-кліп у редакторі монтажу. Показує медіа тільки для одного сегмента, кнопка «Закрити» (без «Підтвердити»).
+- **Full mode** — відкривається через пайплайн. Ліва панель з переліком усіх сегментів (✔ / ○), права — сітка медіа активного сегмента.
+
+**Вибір типу медіа:**
+Кожен сегмент може мати і фото, і відео (Pexels повертає обидва). Перемикач **📷 Фото / 🎬 Відео** над сіткою. Auto-вибір: якщо є відео — показуємо відео, інакше — фото.
+
+**Завантаження та прогрес:**
+При кліку на відео-мініатюру розпочинається завантаження у `{save_path}/media/{:04}.mp4`. Прогрес-бар у верхній частині вікна через `Arc<Mutex<f32>>` (0.0..1.0, -1.0 = помилка). Якщо файл вже існує — одразу відкривається trim editor.
+
+**Trim editor (міні-редактор нарізки):**
+З'являється після успішного завантаження. Рендериться з `Order::Debug` — **вище за будь-яке** інше egui вікно (Foreground → Tooltip → Debug), тому не перекривається вікном пікера.
+- **Великий превью кадр** — показує кадр найближчий до поточної позиції `trim_start`. Поки вантажиться — `⏳`.
+- **Таймлайн-смуга** — підкладка зі `8` рівномірних JPEG-кадрів, поверх — синій напівпрозорий прямокутник виділення (ширина = `segment_duration/video_duration * strip_width`). Drag або клік для позиціонування.
+- **Кадри вилучаються через ffmpeg** у фоновому потоці (`spawn_frame_extraction`): `fps=8/duration,scale=320:-2`, результат — JPEG-байти в `Arc<Mutex<Vec<(f32, Vec<u8>)>>>`. UI-потік декодує через крейт `image` при кожному фреймі (`flush_trim_frames`).
+
+**Modal overlay:**
+`egui::Area` з `Order::Foreground` і `ui.allocate_rect(screen, Sense::click_and_drag())` — блокує всі кліки на вміст за вікном пікера. Без цього кліки у picker-вікні проходили насрізь до редактора монтажу.
+
+**Thumbnail lazy-loading:**
+Мініатюри завантажуються у фонових потоках по URL Pexels через `ureq`. При hover — збільшений preview у `egui::show_tooltip_at_pointer` (4 аргументи: ctx, LayerId, Id, closure).
+
+**Зв'язок з редактором монтажу:**
+- `MontageEditorState.pending_open_stock_picker: Option<usize>` — при кліку на плейсхолдер у таймлінії встановлюється індекс сегмента → `app.rs` відкриває пікер у single_mode.
+- `MontageEditorState.needs_stock_refresh: bool` — після підтвердження вибору → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
+
+---
+
 ### Текстовий редактор сценарію (`src/gui/editor.rs`)
 
 Центральна панель програми з безрамковим редактором сценарію (`frame(false)`), що забезпечує ефект "чистого аркуша" на всю висоту робочої області.
@@ -513,6 +550,15 @@ pub struct ClipDragState {
 - Для Whisper та Whisper AMD karaoke недоступний — немає word-level timestamps.
 
 #### Відеоряд (`timeline/`)
+
+**Pexels Stock режим:**
+
+Якщо у секції Відеоряд обрано `Pexels Stock` — пайплайн виконує `run_pexels_branch`:
+1. Ключові слова для пошуку: якщо є `timeline.json` (агентний режим) — бере `text` кожного сегмента напряму; інакше — розбиває текст через `split_text` і опційно генерує ключові слова через LLM.
+2. Для кожного ключового слова паралельно шукає **і фото, і відео** через Pexels API (обидва з `orientation=landscape`, по 15 результатів кожен).
+3. Зберігає `stock_cache.json` у папку задачі — з `SegmentCache` для кожного сегмента (index, keyword, photos, videos, segment_duration).
+4. Пайплайн **не запускає монтаж** — переходить у `AwaitingMediaControl`, де користувач відкриває **Stock Picker** (вкладка Gallery) і вручну обирає медіа для кожного сегмента.
+5. Після підтвердження — `needs_stock_refresh` запускає `refresh_placeholder_clips`, файли завантажуються → редактор монтажу підхоплює їх.
 
 **Агентний режим (Claude Code, Gemini CLI, Codex CLI або AGY CLI як LLM-сервіс відеоряду):**
 
@@ -1106,6 +1152,16 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Валідація завантажених медіа-даних (`validate_media_bytes`)**: Щоб уникнути випадків, коли через тимчасові збої API, помилки Cloudflare чи авторизації провайдерів Googler замість медіафайлу (зображення чи відео) повертається порожній файл або текстовий HTML/JSON, додано перевірку завантажених байтів. Якщо вміст файлу порожній або є явним текстом помилки, операція завантаження одразу завершується з `Err`, не засмічуючи диск нечитабельними MP4 файлами.
 
 - **Безпечна обробка відео при апскейлі/кропі (`upscale_video_if_needed`)**: Під час виконання етапу "Обробка відео" оригінал файлу перейменовується в тимчасовий (`.upscale_temp.mp4`), після чого запускається FFmpeg. Якщо FFmpeg завершується з помилкою (наприклад, через збій у бінарнику чи пошкодження файлу), програма автоматично повертає оригінальне відео на місце (`restore_original()`), запобігаючи втраті згенерованого контенту та залишенню 0-байтних пошкоджених файлів.
+
+- **Pexels API повертає `null` замість рядка або числа.** Стандартний `#[serde(default)]` допомагає лише для **відсутніх** полів, але не для `null`. Поля `null` у JSON — це `Option::None` при `#[serde(default)]`, але Serde очікує конкретний тип (String/u32), а не Option, і крашиться з `invalid type: null, expected a string`. Рішення: custom deserializers `null_to_string` та `null_to_u32` через `deserialize_with` — вони десеріалізують у `Option<T>` і зводять `None` до дефолту. Без цього `search_videos` падав на кожному запиті де хоч одне поле null.
+
+- **Pexels ландшафтний фільтр — лише через API, не клієнтський.** Раніше відеофайли фільтрувались за `width > height` на рівні Rust — але деякі відео містять лише portrait HD-файли, і весь результат відсіювався. Виправлено: `orientation=landscape` передається у query param до API, клієнтський фільтр видалено. Pexels сам обирає тільки ландшафтний контент.
+
+- **`egui::Order::Debug` — вище за Tooltip.** Ієрархія шарів egui: `Background < Normal < PanelResizeLine < Tooltip < Foreground < Debug`. Stock Picker пікер — `Order::Tooltip`. Trim editor спочатку теж був `Tooltip`, і рендерився **до** пікера (в одному шарі перший-рендер = нижній). Щоб trim editor завжди бував поверх — він змінений на `Order::Debug` і викликається **після** render-виклику пікера в `draw_stock_picker`. Один шар вище + пізніше в порядку рендеру = гарантовано поверх.
+
+- **`segment_duration` у `SegmentCache` — з `#[serde(default)]`.** Поле додалось пізніше і відсутнє у старих `stock_cache.json`. `#[serde(default)]` дозволяє старим файлам завантажуватись без помилки (значення буде `0.0`). При `0.0` trim editor використовує повну тривалість відео як fallback — це коректна поведінка.
+
+- **`frames_raw` — повністю замінюється, не аппендиться.** `spawn_frame_extraction` записує всі 8 кадрів **одночасно** наприкінці (не по одному). `flush_trim_frames` читає через `try_lock()` (без блокування) і робить `take()` — після читання вектор очищається. Це означає що кадри з'являються в UI одним пакетом після завершення ffmpeg (не поступово), що приймливо для 8 кадрів.
 
 ---
 

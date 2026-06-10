@@ -55,6 +55,10 @@ pub struct MontageEditorState {
     pub preview_stale_path: Option<PathBuf>,
     /// Чи максимізовано вікно редактора на весь екран програми
     pub maximized: bool,
+    /// Запит на відкриття Stock Picker для сегмента з вказаним індексом
+    pub pending_open_stock_picker: Option<usize>,
+    /// Прапорець: оновити плейсхолдери з stock_cache.json (встановлюється після підтвердження вибору стоку)
+    pub needs_stock_refresh: bool,
 }
 
 impl MontageEditorState {
@@ -133,6 +137,8 @@ impl MontageEditorState {
             pool_preview_texture: None,
             preview_stale_path: None,
             maximized: false,
+            pending_open_stock_picker: None,
+            needs_stock_refresh: false,
         }
     }
 
@@ -283,6 +289,7 @@ fn clip_from_json_seg(
         pos_y,
         zoom_enabled,
         shake_enabled,
+        is_placeholder: false,
     }
 }
 
@@ -338,6 +345,24 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
 
             if let Some(media) = media_str {
                 clips.push(clip_from_json_seg(seg, &media, save_path, 0));
+            } else if seg["text"].as_str().is_some() {
+                // Сегмент без медіа (media: null) — плейсхолдер для Stock Picker
+                let text = seg["text"].as_str().unwrap_or("").to_string();
+                let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
+                let end   = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+                clips.push(EditorClip {
+                    id: uuid_str(),
+                    media_id: format!("placeholder_{}", i),
+                    path: None,
+                    name: text.chars().take(24).collect::<String>(),
+                    start_secs: start,
+                    duration: (end - start).max(0.5),
+                    track_idx: 0,
+                    kind: ClipKind::Image,
+                    scale: 1.0, pos_x: 0.0, pos_y: 0.0,
+                    zoom_enabled: false, shake_enabled: false,
+                    is_placeholder: true,
+                });
             }
         }
     }
@@ -365,6 +390,64 @@ fn find_audio_file(save_path: &Path) -> Option<PathBuf> {
         if p.exists() { return Some(p); }
     }
     None
+}
+
+/// Після підтвердження вибору стоку — замінює плейсхолдери реальними кліпами.
+/// Повертає true якщо є ще незавантажені файли (треба повторити наступного кадру).
+pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
+    let cache_path = editor.save_path.join("stock_cache.json");
+    let content = match std::fs::read_to_string(&cache_path) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let cache: Vec<crate::api::stock::SegmentCache> = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+
+    let mut replacements: Vec<(String, PathBuf, ClipKind)> = Vec::new();
+    let mut still_pending = false;
+
+    for clip in &editor.clips {
+        if !clip.is_placeholder { continue; }
+        let seg_idx = match clip.media_id.strip_prefix("placeholder_").and_then(|s| s.parse::<usize>().ok()) {
+            Some(i) => i,
+            None => continue,
+        };
+        if let Some(entry) = cache.get(seg_idx) {
+            if let Some(sel) = &entry.selected {
+                let file_path = editor.save_path.join("media").join(&sel.filename);
+                if file_path.exists() {
+                    let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    let kind = if matches!(ext.as_str(), "mp4"|"mov"|"webm") { ClipKind::Video } else { ClipKind::Image };
+                    replacements.push((clip.id.clone(), file_path, kind));
+                } else {
+                    // Файл ще не завантажений — повторимо після наступного repaint
+                    still_pending = true;
+                }
+            }
+        }
+    }
+
+    for (clip_id, file_path, kind) in replacements {
+        if !editor.media_pool.iter().any(|m| m.path == file_path) {
+            editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path));
+        }
+        let media_id = editor.media_pool.iter()
+            .find(|m| m.path == file_path)
+            .map(|m| m.id.clone())
+            .unwrap_or_default();
+        let name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == clip_id) {
+            clip.path = Some(file_path);
+            clip.kind = kind;
+            clip.name = name;
+            clip.is_placeholder = false;
+            clip.media_id = media_id;
+        }
+    }
+
+    still_pending
 }
 
 fn load_media_pool(save_path: &Path) -> Vec<MediaItem> {

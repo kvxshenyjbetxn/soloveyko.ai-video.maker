@@ -17,6 +17,7 @@ pub enum Tab {
     Logs,
 }
 
+
 /// Головна структура нашого GUI додатку, що зберігає його поточний стан.
 pub struct VideoMakerApp {
     /// Поточна активна вкладка програми.
@@ -57,6 +58,12 @@ pub struct VideoMakerApp {
     pub assemblyai_status: Option<String>,
     /// Результат фонового тесту API ключа AssemblyAI.
     pub assemblyai_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Ключ API для Pexels Stock.
+    pub pexels_key: String,
+    /// Статус перевірки Pexels API ключа.
+    pub pexels_status: Option<String>,
+    /// Результат фонового тесту API ключа Pexels.
+    pub pexels_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Результат фонового тесту API ключа Googler.
     pub googler_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Баланс Googler для відображення у топбарі.
@@ -382,6 +389,10 @@ pub struct VideoMakerApp {
     pub queue_panel_fullscreen: bool,
     /// ID задач, для яких вже було авто-перейдено на вкладку Галерея при MediaControl.
     pub media_control_notified: std::collections::HashSet<u64>,
+    /// ID задачі, для якої треба відкрити Stock Picker. None = не відкривати.
+    pub stock_picker_open: Option<u64>,
+    /// Стан відкритого вікна Stock Picker.
+    pub stock_picker_state: Option<crate::gui::stock_picker::StockPickerState>,
 }
 
 impl Default for VideoMakerApp {
@@ -408,6 +419,9 @@ impl Default for VideoMakerApp {
             assemblyai_key: String::new(),
             assemblyai_status: None,
             assemblyai_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pexels_key: String::new(),
+            pexels_status: None,
+            pexels_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -570,6 +584,8 @@ impl Default for VideoMakerApp {
             queue_panel_collapsed: false,
             queue_panel_fullscreen: false,
             media_control_notified: std::collections::HashSet::new(),
+            stock_picker_open: None,
+            stock_picker_state: None,
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -614,6 +630,7 @@ impl VideoMakerApp {
         let voicebot_key = saved.voicebot_key.clone();
         let googler_key = saved.googler_key.clone();
         let assemblyai_key = saved.assemblyai_key.clone();
+        let pexels_key = saved.pexels_key.clone();
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
@@ -789,6 +806,9 @@ impl VideoMakerApp {
             assemblyai_key,
             assemblyai_status: None,
             assemblyai_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pexels_key,
+            pexels_status: None,
+            pexels_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider,
             voiceover_template_uuid,
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -951,6 +971,8 @@ impl VideoMakerApp {
             queue_panel_collapsed: false,
             queue_panel_fullscreen: false,
             media_control_notified: std::collections::HashSet::new(),
+            stock_picker_open: None,
+            stock_picker_state: None,
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
@@ -974,6 +996,7 @@ impl VideoMakerApp {
         crate::gui::settings::storage::PipelineTemplate {
             openrouter_key: self.openrouter_key.clone(),
             assemblyai_key: self.assemblyai_key.clone(),
+            pexels_key: self.pexels_key.clone(),
             voiceover_provider: self.voiceover_provider.clone(),
             voiceover_template_uuid: self.voiceover_template_uuid.clone(),
             pipeline_translation_enabled: self.pipeline_translation_enabled,
@@ -1063,6 +1086,7 @@ impl VideoMakerApp {
         self.openrouter_status = None;
         self.assemblyai_key = t.assemblyai_key;
         self.assemblyai_status = None;
+        self.pexels_key = t.pexels_key;
         self.voiceover_provider = t.voiceover_provider;
         self.voiceover_template_uuid = t.voiceover_template_uuid;
         self.pipeline_translation_enabled = t.pipeline_translation_enabled;
@@ -1362,6 +1386,9 @@ impl eframe::App for VideoMakerApp {
                         &mut self.assemblyai_key,
                         &mut self.assemblyai_status,
                         &self.assemblyai_test_result,
+                        &mut self.pexels_key,
+                        &mut self.pexels_status,
+                        &self.pexels_test_result,
                         &mut self.voiceover_provider,
                         &mut self.voiceover_template_uuid,
                         &self.voicebot_templates,
@@ -1640,6 +1667,7 @@ impl eframe::App for VideoMakerApp {
                             &mut prompt_view_request,
                             &mut image_load_requests,
                             &image_loading_snapshot,
+                            &mut self.stock_picker_open,
                         );
                         if switch_to_main {
                             self.active_tab = Tab::Main;
@@ -1965,6 +1993,42 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Ініціалізація Stock Picker при натисканні кнопки у галереї
+        if let Some(job_id) = self.stock_picker_open.take() {
+            if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                if let Some(state) = crate::gui::stock_picker::StockPickerState::new(
+                    job.id,
+                    job.name.clone(),
+                    job.settings.save_path.clone(),
+                ) {
+                    self.stock_picker_state = Some(state);
+                }
+            }
+        }
+
+        // Відображення та обробка вікна Stock Picker
+        if let Some(ref mut picker_state) = self.stock_picker_state {
+            let action = crate::gui::stock_picker::draw_stock_picker(
+                ctx,
+                self.language,
+                picker_state,
+                &self.jobs,
+            );
+            match action {
+                crate::gui::stock_picker::StockPickerAction::Close => {
+                    self.stock_picker_state = None;
+                }
+                crate::gui::stock_picker::StockPickerAction::Confirmed => {
+                    self.stock_picker_state = None;
+                    // Оновити плейсхолдери в редакторі монтажу якщо він відкритий
+                    if let Some(ref mut editor) = self.montage_editor_state {
+                        editor.needs_stock_refresh = true;
+                    }
+                }
+                crate::gui::stock_picker::StockPickerAction::None => {}
+            }
+        }
+
         // Спливаючі вікна контролю перекладу (по одному на задачу)
         crate::gui::pipeline::translation_control::draw_translation_control_windows(
             ctx,
@@ -2122,6 +2186,23 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Відкриваємо Stock Picker з редактора монтажу (клік на плейсхолдер)
+        if let Some(seg_idx) = montage_actions.open_stock_picker {
+            if let Some(job_id) = self.montage_editor_open_job {
+                if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                    if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
+                        job.id,
+                        job.name.clone(),
+                        job.settings.save_path.clone(),
+                    ) {
+                        state.active_segment = seg_idx;
+                        state.single_mode = true;
+                        self.stock_picker_state = Some(state);
+                    }
+                }
+            }
+        }
+
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
         // Це запобігає надмірному навантаженню на диск та гарантує запис файлу лише після відпускання миші.
@@ -2167,6 +2248,7 @@ impl eframe::App for VideoMakerApp {
                 || self.translation_model_agy != self.last_saved_settings.translation_model_agy
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.assemblyai_key != self.last_saved_settings.assemblyai_key
+                || self.pexels_key != self.last_saved_settings.pexels_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
@@ -2248,6 +2330,7 @@ impl eframe::App for VideoMakerApp {
                     voicebot_key: self.voicebot_key.clone(),
                     googler_key: self.googler_key.clone(),
                     assemblyai_key: self.assemblyai_key.clone(),
+                    pexels_key: self.pexels_key.clone(),
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                     last_template: self.template_name_input.clone(),
