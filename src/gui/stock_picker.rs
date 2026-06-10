@@ -1004,7 +1004,18 @@ fn start_video_download_if_needed(
     let filename = format!("{:04}.mp4", seg_idx + 1);
     let dest = Path::new(&state.save_path).join("media").join(&filename);
 
-    // Якщо файл вже є — одразу відкриваємо trim редактор
+    // Якщо файл є, але належить іншому відео — видаляємо і завантажуємо заново
+    if dest.exists() {
+        let same_video = state.cache.get(seg_idx)
+            .and_then(|s| s.selected.as_ref())
+            .map(|sel| sel.id == vid.id)
+            .unwrap_or(false);
+        if !same_video {
+            let _ = std::fs::remove_file(&dest);
+        }
+    }
+
+    // Якщо файл вже є (і належить потрібному відео) — одразу відкриваємо trim редактор
     if dest.exists() {
         let seg_dur = state.cache.get(seg_idx).map(|s| s.segment_duration).unwrap_or(0.0);
         let video_dur = vid.duration_secs as f32;

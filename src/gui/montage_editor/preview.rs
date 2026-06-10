@@ -612,6 +612,12 @@ fn update_preview_drag(
     sel_rect: Rect,
     corners: &[Pos2],
 ) {
+    // Не обробляємо drag коли поверх відкрито інше вікно (stock picker тощо)
+    if editor.input_blocked {
+        editor.preview_drag = None;
+        return;
+    }
+
     if ctx.input(|i| i.pointer.any_released()) {
         editor.preview_drag = None;
         return;

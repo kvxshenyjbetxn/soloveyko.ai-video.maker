@@ -377,9 +377,12 @@ pub struct ClipDragState {
 
 **Trim editor (міні-редактор нарізки):**
 З'являється після успішного завантаження. Рендериться з `Order::Debug` — **вище за будь-яке** інше egui вікно (Foreground → Tooltip → Debug), тому не перекривається вікном пікера.
-- **Великий превью кадр** — показує кадр найближчий до поточної позиції `trim_start`. Поки вантажиться — `⏳`.
-- **Таймлайн-смуга** — підкладка зі `8` рівномірних JPEG-кадрів, поверх — синій напівпрозорий прямокутник виділення (ширина = `segment_duration/video_duration * strip_width`). Drag або клік для позиціонування.
-- **Кадри вилучаються через ffmpeg** у фоновому потоці (`spawn_frame_extraction`): `fps=8/duration,scale=320:-2`, результат — JPEG-байти в `Arc<Mutex<Vec<(f32, Vec<u8>)>>>`. UI-потік декодує через крейт `image` при кожному фреймі (`flush_trim_frames`).
+- **Великий превью (16:9)** — анімований playback обраного сегменту. Примусовий aspect ratio `9/16`, максимум 280px висота.
+- **Playback кадри** — `spawn_playback_extraction` витягує кадри **з обраного фрагменту** (`-ss trim_start -t segment_duration`) через ffmpeg: `fps=10,scale=640:-2`, `-q:v 2`. До 80 JPEG-кадрів у `Arc<Mutex<Option<Vec<Vec<u8>>>>>`. `flush_playback_frames` декодує їх і кладе у `Vec<egui::TextureHandle>`. Анімація через `request_repaint_after(100ms)` + wall clock (`playback_last_tick: Option<Instant>`). При зупинці drag або кліку на стрічку — `retrigger_playback` запускає новий ffmpeg для оновленого `trim_start`. Поки playback кадри не готові — показується найближчий кадр зі стрічки (fallback).
+- **Таймлайн-смуга** — підкладка зі `8` рівномірних JPEG-кадрів (`spawn_frame_extraction`, `scale=320:-2`), поверх — синій напівпрозорий прямокутник виділення (ширина = `segment_duration/video_duration * strip_width`). Drag або клік для позиціонування. Drag_stopped → `retrigger_playback`.
+
+**Заміна відео при повторному виборі:**
+Відеофайл зберігається за іменем `{seg_idx+1:04}.mp4` — незалежно від того яке саме відео. Перед відкриттям trim editor порівнюється `vid.id` з `cache[seg_idx].selected.id`. Якщо не збігається (або вибору ще не було) — старий файл видаляється і нове відео завантажується заново. Це запобігає ситуації «обрав А, скасував, обрав Б — у редакторі відображається А».
 
 **Modal overlay:**
 `egui::Area` з `Order::Foreground` і `ui.allocate_rect(screen, Sense::click_and_drag())` — блокує всі кліки на вміст за вікном пікера. Без цього кліки у picker-вікні проходили насрізь до редактора монтажу.
@@ -390,6 +393,7 @@ pub struct ClipDragState {
 **Зв'язок з редактором монтажу:**
 - `MontageEditorState.pending_open_stock_picker: Option<usize>` — при кліку на плейсхолдер у таймлінії встановлюється індекс сегмента → `app.rs` відкриває пікер у single_mode.
 - `MontageEditorState.needs_stock_refresh: bool` — після підтвердження вибору → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
+- `MontageEditorState.input_blocked: bool` — виставляється в `app.rs` перед кожним рендером редактора монтажу: `editor.input_blocked = stock_picker_state.is_some()`. `update_preview_drag` перевіряє цей прапор і повертається одразу якщо `true`. Потрібно бо `update_preview_drag` читає сирий `ctx.input()` — він не знає що клік уже «зайнятий» overlay picker'а, тому без цього синій прямокутник трансформу реагував крізь будь-яке вікно поверх.
 
 ---
 
@@ -1162,6 +1166,10 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`segment_duration` у `SegmentCache` — з `#[serde(default)]`.** Поле додалось пізніше і відсутнє у старих `stock_cache.json`. `#[serde(default)]` дозволяє старим файлам завантажуватись без помилки (значення буде `0.0`). При `0.0` trim editor використовує повну тривалість відео як fallback — це коректна поведінка.
 
 - **`frames_raw` — повністю замінюється, не аппендиться.** `spawn_frame_extraction` записує всі 8 кадрів **одночасно** наприкінці (не по одному). `flush_trim_frames` читає через `try_lock()` (без блокування) і робить `take()` — після читання вектор очищається. Це означає що кадри з'являються в UI одним пакетом після завершення ffmpeg (не поступово), що приймливо для 8 кадрів.
+
+- **Два окремих ffmpeg-потоки в trim editor: стрічка і playback.** `spawn_frame_extraction` — 8 кадрів по всій тривалості відео (для таймлайн-смуги), `scale=320:-2`, `-q:v 4`. `spawn_playback_extraction` — до 80 кадрів лише з обраного фрагменту (`-ss trim_start -t duration`), `scale=640:-2`, `-q:v 2`, 10fps. Тека для playback: `soloveyko_play_{hash}`, для стрічки: `soloveyko_trim_{hash}`. При `retrigger_playback` стара `playback_raw` замінюється новим `Arc` — старий фоновий потік (якщо ще не закінчив) пише у застарілий Arc, що тихо відкидається при drop. Гонки немає.
+
+- **`update_preview_drag` читає сирий `ctx.input()` — modal overlay його не блокує.** `egui::Area` з `Sense::click_and_drag()` на весь екран «заявляє» клік у системі egui-відповідей, але `ctx.input(|i| i.pointer.primary_pressed())` повертає **сирий** стан пристрою — він не знає про widget claims. Тому синій прямокутник трансформу у превью реагував крізь відкритий stock picker. Виправлено через `editor.input_blocked: bool` — `app.rs` виставляє його перед рендером редактора (`= stock_picker_state.is_some()`), `update_preview_drag` перевіряє на самому початку.
 
 ---
 

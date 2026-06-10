@@ -59,6 +59,8 @@ pub struct MontageEditorState {
     pub pending_open_stock_picker: Option<usize>,
     /// Прапорець: оновити плейсхолдери з stock_cache.json (встановлюється після підтвердження вибору стоку)
     pub needs_stock_refresh: bool,
+    /// Блокує drag на превью (коли поверх відкрито stock picker або інше вікно)
+    pub input_blocked: bool,
 }
 
 impl MontageEditorState {
@@ -139,6 +141,7 @@ impl MontageEditorState {
             maximized: false,
             pending_open_stock_picker: None,
             needs_stock_refresh: false,
+            input_blocked: false,
         }
     }
 

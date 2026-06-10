@@ -2098,6 +2098,11 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Блокуємо drag у превью редактора коли поверх відкрито stock picker
+        if let Some(ref mut editor) = self.montage_editor_state {
+            editor.input_blocked = self.stock_picker_state.is_some();
+        }
+
         // Редактор монтажу
         let montage_actions = crate::gui::montage_editor::draw_montage_editor_window(
             ctx,
