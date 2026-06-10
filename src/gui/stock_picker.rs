@@ -42,15 +42,23 @@ pub struct TrimEditState {
     pub segment_idx: usize,
     pub video_id: String,
     pub filename: String,
+    pub video_path: PathBuf,
     pub video_duration: f32,
     /// Тривалість фрагменту, який треба вставити
     pub segment_duration: f32,
     /// Поточна позиція початку (перетягується користувачем)
     pub trim_start: f32,
-    /// Декодовані текстури кадрів: (timestamp_secs, texture)
+    /// Кадри стрічки (8 рівномірних по всьому відео)
     pub preview_frames: Vec<(f32, egui::TextureHandle)>,
-    /// Сирі байти кадрів із фонового потоку (t_secs, jpeg_bytes); після читання очищається
     pub frames_raw: Arc<Mutex<Vec<(f32, Vec<u8>)>>>,
+    /// Кадри для відтворення обраного фрагменту (640px, 10fps)
+    pub playback_frames: Vec<egui::TextureHandle>,
+    pub playback_raw: Arc<Mutex<Option<Vec<Vec<u8>>>>>,
+    pub playback_fps: f32,
+    pub playback_frame_idx: usize,
+    pub playback_last_tick: Option<std::time::Instant>,
+    /// trim_start при якому були витягнуті playback_frames
+    pub playback_for_trim: f32,
 }
 
 impl StockPickerState {
@@ -178,15 +186,27 @@ fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
                 dl.dest_path.clone(), dl.video_duration, 8,
                 Arc::clone(&frames_raw), ctx.clone(),
             );
+            let playback_raw = Arc::new(Mutex::new(None));
+            spawn_playback_extraction(
+                dl.dest_path.clone(), 0.0, segment_duration,
+                Arc::clone(&playback_raw), ctx.clone(),
+            );
             state.trim_edit = Some(TrimEditState {
                 segment_idx: dl.segment_idx,
                 video_id: dl.video_id,
                 filename: dl.filename,
+                video_path: dl.dest_path,
                 video_duration: dl.video_duration,
                 segment_duration,
                 trim_start: 0.0,
                 preview_frames: Vec::new(),
                 frames_raw,
+                playback_frames: Vec::new(),
+                playback_raw,
+                playback_fps: 10.0,
+                playback_frame_idx: 0,
+                playback_last_tick: None,
+                playback_for_trim: 0.0,
             });
         }
     }
@@ -256,6 +276,79 @@ fn spawn_frame_extraction(
     });
 }
 
+/// Витягує кадри конкретного фрагменту відео для відтворення (640px, 10fps)
+fn spawn_playback_extraction(
+    video_path: PathBuf,
+    trim_start: f32,
+    duration: f32,
+    out: Arc<Mutex<Option<Vec<Vec<u8>>>>>,
+    ctx: egui::Context,
+) {
+    std::thread::spawn(move || {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut h = DefaultHasher::new();
+        video_path.hash(&mut h);
+        let hash = h.finish();
+
+        let tmp_dir = std::env::temp_dir().join(format!("soloveyko_play_{:x}", hash));
+        let _ = std::fs::create_dir_all(&tmp_dir);
+
+        if let Ok(entries) = std::fs::read_dir(&tmp_dir) {
+            for e in entries.flatten() { let _ = std::fs::remove_file(e.path()); }
+        }
+
+        let fps = 10.0f32;
+        let n_frames = ((duration * fps).ceil() as usize).max(1).min(80);
+        let out_pattern = tmp_dir.join("frame_%03d.jpg");
+
+        let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
+        cmd.arg("-ss").arg(format!("{:.3}", trim_start))
+           .arg("-i").arg(&video_path)
+           .arg("-t").arg(format!("{:.3}", duration))
+           .arg("-vf").arg("fps=10,scale=640:-2")
+           .arg("-q:v").arg("2")
+           .arg("-frames:v").arg(n_frames.to_string())
+           .arg("-y")
+           .arg("-loglevel").arg("error")
+           .arg(&out_pattern);
+        crate::bundle::set_no_window(&mut cmd);
+
+        if cmd.status().map(|s| s.success()).unwrap_or(false) {
+            let mut entries: Vec<_> = std::fs::read_dir(&tmp_dir).ok()
+                .into_iter().flatten()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jpg"))
+                .collect();
+            entries.sort_by_key(|e| e.path());
+
+            let results: Vec<Vec<u8>> = entries.iter()
+                .filter_map(|entry| std::fs::read(entry.path()).ok())
+                .collect();
+
+            *out.lock().unwrap() = Some(results);
+            ctx.request_repaint();
+        }
+    });
+}
+
+/// Запускає нове витягування playback кадрів для поточного trim_start
+fn retrigger_playback(trim: &mut TrimEditState, ctx: &egui::Context) {
+    let raw = Arc::new(Mutex::new(None));
+    spawn_playback_extraction(
+        trim.video_path.clone(),
+        trim.trim_start,
+        trim.segment_duration,
+        Arc::clone(&raw),
+        ctx.clone(),
+    );
+    trim.playback_raw = raw;
+    trim.playback_for_trim = trim.trim_start;
+    trim.playback_frame_idx = 0;
+    trim.playback_last_tick = None;
+}
+
 /// Переносить готові сирі байти кадрів у текстури (викликається кожен кадр UI)
 fn flush_trim_frames(ctx: &egui::Context, trim: &mut TrimEditState) {
     if let Ok(mut guard) = trim.frames_raw.try_lock() {
@@ -278,6 +371,30 @@ fn flush_trim_frames(ctx: &egui::Context, trim: &mut TrimEditState) {
     }
 }
 
+/// Переносить готові playback кадри у текстури (викликається кожен кадр UI)
+fn flush_playback_frames(ctx: &egui::Context, trim: &mut TrimEditState) {
+    if let Ok(mut guard) = trim.playback_raw.try_lock() {
+        if let Some(raw_frames) = guard.take() {
+            trim.playback_frames.clear();
+            trim.playback_frame_idx = 0;
+            trim.playback_last_tick = None;
+            for (i, bytes) in raw_frames.iter().enumerate() {
+                if let Ok(img) = image::load_from_memory(bytes) {
+                    let rgba = img.to_rgba8();
+                    let size = [rgba.width() as usize, rgba.height() as usize];
+                    let ci = egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
+                    let tex = ctx.load_texture(
+                        format!("play_frame_{}", i),
+                        ci,
+                        egui::TextureOptions::LINEAR,
+                    );
+                    trim.playback_frames.push(tex);
+                }
+            }
+        }
+    }
+}
+
 // ─── Міні-редактор нарізки ────────────────────────────────────────────────────
 
 fn draw_trim_editor(
@@ -289,19 +406,36 @@ fn draw_trim_editor(
     let Some(trim) = &mut state.trim_edit else { return };
 
     flush_trim_frames(ctx, trim);
+    flush_playback_frames(ctx, trim);
 
     let max_start = (trim.video_duration - trim.segment_duration).max(0.0);
     trim.trim_start = trim.trim_start.clamp(0.0, max_start);
     let trim_end = trim.trim_start + trim.segment_duration;
 
-    // Кадр найближчий до поточного trim_start
-    let preview_tex = trim.preview_frames.iter()
-        .min_by(|a, b| {
-            (a.0 - trim.trim_start).abs()
-                .partial_cmp(&(b.0 - trim.trim_start).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, tex)| tex.clone());
+    // Анімуємо playback кадри; якщо не готові — використовуємо найближчий кадр стрічки
+    let preview_tex = if !trim.playback_frames.is_empty() {
+        let now = std::time::Instant::now();
+        if let Some(last) = trim.playback_last_tick {
+            let elapsed = now.duration_since(last).as_secs_f32();
+            if elapsed >= 1.0 / trim.playback_fps {
+                let advance = (elapsed * trim.playback_fps) as usize;
+                trim.playback_frame_idx = (trim.playback_frame_idx + advance) % trim.playback_frames.len();
+                trim.playback_last_tick = Some(now);
+            }
+        } else {
+            trim.playback_last_tick = Some(now);
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        trim.playback_frames.get(trim.playback_frame_idx).cloned()
+    } else {
+        trim.preview_frames.iter()
+            .min_by(|a, b| {
+                (a.0 - trim.trim_start).abs()
+                    .partial_cmp(&(b.0 - trim.trim_start).abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(_, tex)| tex.clone())
+    };
 
     // Клонуємо кадри для малювання смуги (уникаємо подвійного borrow)
     let strip_frames: Vec<(f32, egui::TextureHandle)> = trim.preview_frames
@@ -333,13 +467,7 @@ fn draw_trim_editor(
             {
                 let avail_w = ui.available_width();
                 let preview_w = avail_w.min(560.0);
-                let preview_h = if let Some(tex) = &preview_tex {
-                    let (tw, th) = (tex.size()[0] as f32, tex.size()[1] as f32);
-                    if tw > 0.0 { preview_w * th / tw } else { preview_w * 9.0 / 16.0 }
-                } else {
-                    preview_w * 9.0 / 16.0
-                };
-                let preview_h = preview_h.min(220.0);
+                let preview_h = (preview_w * 9.0 / 16.0).min(280.0);
 
                 // Центруємо горизонтально
                 let indent = ((avail_w - preview_w) * 0.5).max(0.0);
@@ -452,12 +580,16 @@ fn draw_trim_editor(
                     let delta_secs = drag_resp.drag_delta().x / w * trim.video_duration;
                     trim.trim_start = (trim.trim_start + delta_secs).clamp(0.0, max_start);
                 }
+                if drag_resp.drag_stopped() {
+                    retrigger_playback(trim, ctx);
+                }
                 if drag_resp.clicked() {
                     if let Some(pos) = drag_resp.interact_pointer_pos() {
                         let clicked_t = ((pos.x - strip_rect.min.x) / w * trim.video_duration)
                             - trim.segment_duration * 0.5;
                         trim.trim_start = clicked_t.clamp(0.0, max_start);
                     }
+                    retrigger_playback(trim, ctx);
                 }
             }
 
@@ -882,15 +1014,27 @@ fn start_video_download_if_needed(
             dest.clone(), video_dur, 8,
             Arc::clone(&frames_raw), ctx.clone(),
         );
+        let playback_raw = Arc::new(Mutex::new(None));
+        spawn_playback_extraction(
+            dest.clone(), 0.0, segment_duration,
+            Arc::clone(&playback_raw), ctx.clone(),
+        );
         state.trim_edit = Some(TrimEditState {
             segment_idx: seg_idx,
             video_id: vid.id.clone(),
             filename,
+            video_path: dest,
             video_duration: video_dur,
             segment_duration,
             trim_start: 0.0,
             preview_frames: Vec::new(),
             frames_raw,
+            playback_frames: Vec::new(),
+            playback_raw,
+            playback_fps: 10.0,
+            playback_frame_idx: 0,
+            playback_last_tick: None,
+            playback_for_trim: 0.0,
         });
         return;
     }
