@@ -448,8 +448,8 @@ fn draw_trim_editor(
     // Order::Debug — вище за все (Foreground → Tooltip → Debug)
     egui::Window::new(title)
         .id(egui::Id::new("stock_trim_editor"))
-        .default_size([580.0, 420.0])
-        .resizable(false)
+        .default_size([860.0, 620.0])
+        .resizable(true)
         .collapsible(false)
         .order(egui::Order::Debug)
         .show(ctx, |ui| {
@@ -466,8 +466,8 @@ fn draw_trim_editor(
             // Великий превью кадр
             {
                 let avail_w = ui.available_width();
-                let preview_w = avail_w.min(560.0);
-                let preview_h = (preview_w * 9.0 / 16.0).min(280.0);
+                let preview_w = avail_w.min(820.0);
+                let preview_h = (preview_w * 9.0 / 16.0).min(420.0);
 
                 // Центруємо горизонтально
                 let indent = ((avail_w - preview_w) * 0.5).max(0.0);
@@ -503,7 +503,7 @@ fn draw_trim_editor(
             ui.add_space(8.0);
 
             // Таймлайн-стрип зі мініатюрами кадрів
-            let strip_height = 60.0;
+            let strip_height = 76.0;
             let (strip_rect, _) = ui.allocate_exact_size(
                 egui::vec2(ui.available_width(), strip_height),
                 egui::Sense::hover(),
