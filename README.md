@@ -13,7 +13,7 @@
 | [`VideoMakerApp`](#videomakерapp-srcapprs) | ~126 | Центральна структура: UI, панелі черги/балансів/галереї, автозбереження |
 | [Панель историї задач](#панель-историї-задач-srcguitask_historyrs) | ~208 | Ліва панель 190px: список минулих задач, відновлення налаштувань |
 | [Редактор монтажу](#редактор-монтажу-srcguimontage_editor) | ~223 | 5 зон: медіа-пул, прев'ю+транспорт, інспектор, таймлінія, топбар |
-| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels-пікер: одиночний і повний режим, завантаження + trim editor з ffmpeg прев'ю |
+| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels-пікер: lazy search по кліку, single/full режим, завантаження + trim editor 860×620 з ffmpeg прев'ю |
 | [Текстовий редактор сценарію](#текстовий-редактор-сценарію-srcguieditorrs) | ~373 | Підрахунок токенів tiktoken, live split-preview, lazy cache |
 | [Черга задач (`queue.rs`)](#черга-задач-srcqueuers) | ~361 | `JobSettings`, `JobStatus`, `PipelineJob`, arc-поля стану |
 | [Панель пайплайну](#панель-пайплайну-srcguipipelinemodrs) | ~386 | 9 секцій: Шаблони→Монтаж; `validate_and_enqueue`, `build_job_settings` |
@@ -121,7 +121,7 @@ src/
 │   ├── queue.rs                 — draw_queue_panel: нижня панель черги задач (картки, прогрес, лог-вікно); draw_queue_jobs_list: виокремлений список карток для повторного використання у fullscreen-режимі; приймає open_job_logs/open_job_controls/open_agent_chats як HashMap замість окремих Option-полів — відкриття вікна через entry().or_insert_with() (не скидає вже відкрите вікно при повторному кліку); кнопка 📂 відкриває папку задачі у файловому менеджері ОС
 │   ├── logs.rs                  — draw_job_logs_window (вікно логів конкретної задачі), draw_logs_tab (вкладка системних логів)
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base; encoder ліниво ініціалізується — перший виклик `tiktoken::get_encoding("cl100k_base")` повільний, тому прогрів відбувається у фоновому потоці в `VideoMakerApp::new()`
-│   ├── stock_picker.rs          — StockPickerState + draw_stock_picker: вибір стокового медіа для сегментів пайплайну (режими single_mode і full); VideoDownloadState (прогрес через Arc<Mutex<f32>>); TrimEditState (міні-редактор нарізки з ffmpeg кадровим прев'ю); spawn_frame_extraction у фоновому потоці (8 кадрів → jpeg → TextureHandle)
+│   ├── stock_picker.rs          — StockPickerState + draw_stock_picker: вибір стокового медіа; lazy search (пошук через Pexels API стартує при кліку на сегмент, а не наперед); VideoDownloadState (прогрес через Arc<Mutex<f32>>); TrimEditState (міні-редактор нарізки 860×620, resizable); spawn_frame_extraction у фоновому потоці (8 кадрів → jpeg → TextureHandle); SegmentSearchArc — Arc результату фонового пошуку; flush_segment_search — переносить готові результати у SegmentCache та зберігає stock_cache.json
 │   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
 │   ├── gallery/
 │   │   ├── mod.rs               — реекспорт публічного API + тип RegenAction
@@ -369,6 +369,14 @@ pub struct ClipDragState {
 - **Single mode** — відкривається кліком на плейсхолдер-кліп у редакторі монтажу. Показує медіа тільки для одного сегмента, кнопка «Закрити» (без «Підтвердити»).
 - **Full mode** — відкривається через пайплайн. Ліва панель з переліком усіх сегментів (✔ / ○), права — сітка медіа активного сегмента.
 
+**Lazy search (пошук по кліку):**
+Пайплайн зберігає тільки skeleton cache (ключові слова, без results). Pexels API запит для сегмента запускається лише коли користувач клікає на нього у пікері. До готовності показується "🔍 Шукаємо…". Після завершення — `flush_segment_search` записує результати у `SegmentCache` та оновлює `stock_cache.json`. Це знижує навантаження на API: замість N запитів при старті пайплайну — тільки для переглянутих сегментів.
+
+- `StockPickerState.pexels_key: String` — передається з `job.settings.pexels_key` при відкритті пікера.
+- `StockPickerState.segment_search: HashMap<usize, SegmentSearchArc>` — поточні фонові пошуки. `None` в Arc = ще виконується, `Some(Ok(...))` = готово.
+- `trigger_segment_search(state, seg_idx, ctx)` — якщо `photos.is_empty() && videos.is_empty()` і пошук ще не стартував → spawn thread.
+- `flush_segment_search(state)` — викликається кожен кадр у `draw_stock_picker`; при зміні `active_segment` у full mode — `show_videos` скидається до `None`.
+
 **Вибір типу медіа:**
 Кожен сегмент може мати і фото, і відео (Pexels повертає обидва). Перемикач **📷 Фото / 🎬 Відео** над сіткою. Auto-вибір: якщо є відео — показуємо відео, інакше — фото.
 
@@ -376,10 +384,10 @@ pub struct ClipDragState {
 При кліку на відео-мініатюру розпочинається завантаження у `{save_path}/media/{:04}.mp4`. Прогрес-бар у верхній частині вікна через `Arc<Mutex<f32>>` (0.0..1.0, -1.0 = помилка). Якщо файл вже існує — одразу відкривається trim editor.
 
 **Trim editor (міні-редактор нарізки):**
-З'являється після успішного завантаження. Рендериться з `Order::Debug` — **вище за будь-яке** інше egui вікно (Foreground → Tooltip → Debug), тому не перекривається вікном пікера.
-- **Великий превью (16:9)** — анімований playback обраного сегменту. Примусовий aspect ratio `9/16`, максимум 280px висота.
+З'являється після успішного завантаження. Рендериться з `Order::Debug` — **вище за будь-яке** інше egui вікно (Foreground → Tooltip → Debug), тому не перекривається вікном пікера. Розмір вікна: `860×620` за замовчуванням, `resizable(true)`.
+- **Великий превью (16:9)** — анімований playback обраного сегменту. Максимальна ширина 820px, висота до 420px.
 - **Playback кадри** — `spawn_playback_extraction` витягує кадри **з обраного фрагменту** (`-ss trim_start -t segment_duration`) через ffmpeg: `fps=10,scale=640:-2`, `-q:v 2`. До 80 JPEG-кадрів у `Arc<Mutex<Option<Vec<Vec<u8>>>>>`. `flush_playback_frames` декодує їх і кладе у `Vec<egui::TextureHandle>`. Анімація через `request_repaint_after(100ms)` + wall clock (`playback_last_tick: Option<Instant>`). При зупинці drag або кліку на стрічку — `retrigger_playback` запускає новий ffmpeg для оновленого `trim_start`. Поки playback кадри не готові — показується найближчий кадр зі стрічки (fallback).
-- **Таймлайн-смуга** — підкладка зі `8` рівномірних JPEG-кадрів (`spawn_frame_extraction`, `scale=320:-2`), поверх — синій напівпрозорий прямокутник виділення (ширина = `segment_duration/video_duration * strip_width`). Drag або клік для позиціонування. Drag_stopped → `retrigger_playback`.
+- **Таймлайн-смуга** — підкладка зі `8` рівномірних JPEG-кадрів (`spawn_frame_extraction`, `scale=320:-2`, висота 76px), поверх — синій напівпрозорий прямокутник виділення (ширина = `segment_duration/video_duration * strip_width`). Drag або клік для позиціонування. Drag_stopped → `retrigger_playback`.
 
 **Заміна відео при повторному виборі:**
 Відеофайл зберігається за іменем `{seg_idx+1:04}.mp4` — незалежно від того яке саме відео. Перед відкриттям trim editor порівнюється `vid.id` з `cache[seg_idx].selected.id`. Якщо не збігається (або вибору ще не було) — старий файл видаляється і нове відео завантажується заново. Це запобігає ситуації «обрав А, скасував, обрав Б — у редакторі відображається А».
@@ -559,9 +567,9 @@ pub struct ClipDragState {
 
 Якщо у секції Відеоряд обрано `Pexels Stock` — пайплайн виконує `run_pexels_branch`:
 1. Ключові слова для пошуку: якщо є `timeline.json` (агентний режим) — бере `text` кожного сегмента напряму; інакше — розбиває текст через `split_text` і опційно генерує ключові слова через LLM.
-2. Для кожного ключового слова паралельно шукає **і фото, і відео** через Pexels API (обидва з `orientation=landscape`, по 15 результатів кожен).
-3. Зберігає `stock_cache.json` у папку задачі — з `SegmentCache` для кожного сегмента (index, keyword, photos, videos, segment_duration).
-4. Пайплайн **не запускає монтаж** — переходить у `AwaitingMediaControl`, де користувач відкриває **Stock Picker** (вкладка Gallery) і вручну обирає медіа для кожного сегмента.
+2. Зберігає **skeleton** `stock_cache.json` — тільки ключові слова (`keyword`), порожні `photos: []` і `videos: []`. Pexels API **не викликається** на цьому етапі.
+3. Пайплайн **не запускає монтаж** — переходить у `AwaitingMediaControl`, де користувач відкриває **Stock Picker** (вкладка Gallery) і вручну обирає медіа для кожного сегмента.
+4. **Lazy search у GUI:** при кліку на сегмент у Stock Picker — якщо `photos` і `videos` порожні — запускається фоновий запит до Pexels (`search_photos` + `search_videos`, по 15 результатів). Показується "🔍 Шукаємо…" до відповіді. Результати записуються у `SegmentCache` і зберігаються в `stock_cache.json`.
 5. Після підтвердження — `needs_stock_refresh` запускає `refresh_placeholder_clips`, файли завантажуються → редактор монтажу підхоплює їх.
 
 **Агентний режим (Claude Code, Gemini CLI, Codex CLI або AGY CLI як LLM-сервіс відеоряду):**

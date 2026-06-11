@@ -2000,6 +2000,7 @@ impl eframe::App for VideoMakerApp {
                     job.id,
                     job.name.clone(),
                     job.settings.save_path.clone(),
+                    job.settings.pexels_key.clone(),
                 ) {
                     self.stock_picker_state = Some(state);
                 }
@@ -2199,6 +2200,7 @@ impl eframe::App for VideoMakerApp {
                         job.id,
                         job.name.clone(),
                         job.settings.save_path.clone(),
+                        job.settings.pexels_key.clone(),
                     ) {
                         state.active_segment = seg_idx;
                         state.single_mode = true;

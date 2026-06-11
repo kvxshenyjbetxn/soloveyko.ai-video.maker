@@ -4,6 +4,14 @@ use crate::api::stock::{SegmentCache, SelectedMedia, load_cache, save_cache};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// Arc на результат фонового Pexels пошуку для одного сегменту.
+/// None = ще виконується; Some(Ok(...)) = готово; Some(Err(...)) = помилка.
+type SegmentSearchArc = Arc<Mutex<Option<Result<
+    (Vec<crate::api::stock::CachedPhoto>, Vec<crate::api::stock::CachedVideo>),
+    String,
+>>>>;
+
+
 // ─── Структури стану ──────────────────────────────────────────────────────────
 
 pub struct StockPickerState {
@@ -24,6 +32,10 @@ pub struct StockPickerState {
     pub video_download: Option<VideoDownloadState>,
     /// Відкритий міні-редактор нарізки (після завантаження)
     pub trim_edit: Option<TrimEditState>,
+    /// API ключ Pexels для lazy search
+    pub pexels_key: String,
+    /// Фоновий пошук для кожного сегмента: seg_idx → arc результату
+    pub segment_search: std::collections::HashMap<usize, SegmentSearchArc>,
 }
 
 /// Стан завантаження відео
@@ -62,7 +74,7 @@ pub struct TrimEditState {
 }
 
 impl StockPickerState {
-    pub fn new(job_id: u64, job_name: String, save_path: String) -> Option<Self> {
+    pub fn new(job_id: u64, job_name: String, save_path: String, pexels_key: String) -> Option<Self> {
         let path = Path::new(&save_path);
         let cache = load_cache(path)
             .or_else(|| build_skeleton_cache_from_timeline(path))?;
@@ -78,6 +90,8 @@ impl StockPickerState {
             thumb_loading: Default::default(),
             video_download: None,
             trim_edit: None,
+            pexels_key,
+            segment_search: Default::default(),
         })
     }
 
@@ -115,6 +129,64 @@ fn build_skeleton_cache_from_timeline(save_dir: &Path) -> Option<Vec<SegmentCach
     if result.is_empty() { None } else { Some(result) }
 }
 
+// ─── Lazy search ──────────────────────────────────────────────────────────────
+
+/// Запускає фоновий Pexels пошук для сегмента якщо він ще не має результатів.
+fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &egui::Context) {
+    if state.segment_search.contains_key(&seg_idx) { return; }
+    let Some(seg) = state.cache.get(seg_idx) else { return };
+    if !seg.photos.is_empty() || !seg.videos.is_empty() { return; }
+    if state.pexels_key.is_empty() { return; }
+
+    let keyword = seg.keyword.clone();
+    let pexels_key = state.pexels_key.clone();
+    let arc: SegmentSearchArc = Arc::new(Mutex::new(None));
+    let arc_c = Arc::clone(&arc);
+    let ctx_c = ctx.clone();
+
+    std::thread::spawn(move || {
+        use crate::api::stock::StockProvider;
+        let provider = crate::api::stock::pexels::PexelsProvider;
+        let photos = provider.search_photos(&pexels_key, &keyword, 15)
+            .map(|v| v.iter().map(|p| crate::api::stock::CachedPhoto::from(p)).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let videos = provider.search_videos(&pexels_key, &keyword, 15)
+            .map(|v| v.iter().map(|v| crate::api::stock::CachedVideo::from(v)).collect::<Vec<_>>())
+            .unwrap_or_default();
+        *arc_c.lock().unwrap() = Some(Ok((photos, videos)));
+        ctx_c.request_repaint();
+    });
+
+    state.segment_search.insert(seg_idx, arc);
+}
+
+/// Переносить готові результати пошуку з фонових тредів у кеш.
+fn flush_segment_search(state: &mut StockPickerState) {
+    let idxs: Vec<usize> = state.segment_search.keys().copied().collect();
+    let mut changed = false;
+    for idx in idxs {
+        let arc = Arc::clone(&state.segment_search[&idx]);
+        let done = arc.try_lock().ok().and_then(|mut g| g.take());
+        match done {
+            Some(Ok((photos, videos))) => {
+                state.segment_search.remove(&idx);
+                if let Some(seg) = state.cache.get_mut(idx) {
+                    seg.photos = photos;
+                    seg.videos = videos;
+                }
+                changed = true;
+            }
+            Some(Err(_)) => {
+                state.segment_search.remove(&idx);
+            }
+            None => {}
+        }
+    }
+    if changed {
+        let _ = save_cache(Path::new(&state.save_path), &state.cache);
+    }
+}
+
 // ─── Головна точка входу ──────────────────────────────────────────────────────
 
 pub enum StockPickerAction {
@@ -133,6 +205,7 @@ pub fn draw_stock_picker(
     let screen = ctx.screen_rect();
 
     flush_thumb_loading(ctx, state);
+    flush_segment_search(state);
 
     // Modal overlay — блокує взаємодію з елементами за вікном пікера
     egui::Area::new(egui::Id::new("stock_picker_modal_bg"))
@@ -650,6 +723,9 @@ fn draw_single_mode(
         "🖼 Stock Picker".to_string()
     };
 
+    // Запускаємо пошук якщо потрібно (перед рендером вікна, щоб уникнути borrow conflicts)
+    trigger_segment_search(state, seg_idx, ctx);
+
     egui::Window::new(title)
         .id(egui::Id::new("stock_picker_single"))
         .default_size([750.0, 520.0])
@@ -704,43 +780,45 @@ fn draw_single_mode(
             }
 
             // Сітка результатів
-            let seg = &state.cache[seg_idx];
-            let photos = seg.photos.clone();
-            let videos = seg.videos.clone();
+            let photos = state.cache[seg_idx].photos.clone();
+            let videos = state.cache[seg_idx].videos.clone();
+            let is_searching = state.segment_search.contains_key(&seg_idx);
 
-            let has_photos = !photos.is_empty();
             let has_videos = !videos.is_empty();
             if state.show_videos.is_none() {
                 state.show_videos = Some(has_videos);
             }
             let is_video_mode = state.show_videos.unwrap_or(has_videos);
 
-            ui.horizontal(|ui| {
-                if ui.selectable_label(!is_video_mode,
-                    egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
-                    state.show_videos = Some(false);
-                }
-                if ui.selectable_label(is_video_mode,
-                    egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
-                    state.show_videos = Some(true);
-                }
-            });
-            let _ = has_photos;
-            ui.add_space(4.0);
-
-            let thumb_size = egui::vec2(160.0, 104.0);
-
-            egui::ScrollArea::vertical()
-                .id_salt("stock_single_scroll")
-                .show(ui, |ui| {
-                    let cols = ((ui.available_width() / (thumb_size.x + 8.0)) as usize).max(1);
-
-                    if is_video_mode {
-                        draw_video_grid(ui, ctx, state, "single_v", seg_idx, &videos, thumb_size, cols, action);
-                    } else {
-                        draw_photo_grid(ui, ctx, state, "single_p", seg_idx, &photos, thumb_size, cols, action);
+            if is_searching && photos.is_empty() && videos.is_empty() {
+                ui.label(egui::RichText::new("🔍 Шукаємо…").weak().size(13.0));
+            } else {
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(!is_video_mode,
+                        egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
+                        state.show_videos = Some(false);
+                    }
+                    if ui.selectable_label(is_video_mode,
+                        egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
+                        state.show_videos = Some(true);
                     }
                 });
+                ui.add_space(4.0);
+
+                let thumb_size = egui::vec2(160.0, 104.0);
+
+                egui::ScrollArea::vertical()
+                    .id_salt("stock_single_scroll")
+                    .show(ui, |ui| {
+                        let cols = ((ui.available_width() / (thumb_size.x + 8.0)) as usize).max(1);
+
+                        if is_video_mode {
+                            draw_video_grid(ui, ctx, state, "single_v", seg_idx, &videos, thumb_size, cols, action);
+                        } else {
+                            draw_photo_grid(ui, ctx, state, "single_p", seg_idx, &photos, thumb_size, cols, action);
+                        }
+                    });
+            }
 
             ui.separator();
             ui.horizontal(|ui| {
@@ -799,11 +877,17 @@ fn draw_full_mode(
                                     egui::RichText::new(label)
                                 };
                                 if ui.selectable_label(is_selected, text).clicked() {
-                                    state.active_segment = i;
+                                    if state.active_segment != i {
+                                        state.active_segment = i;
+                                        state.show_videos = None;
+                                    }
                                 }
                             }
                         });
                 });
+
+            // Запускаємо пошук для активного сегменту якщо потрібно
+            trigger_segment_search(state, seg_idx, ctx);
 
             // Права область
             let Some(seg) = state.cache.get(seg_idx) else { return };
@@ -852,36 +936,41 @@ fn draw_full_mode(
             // Перемикач Фото / Відео
             let photos = seg.photos.clone();
             let videos = seg.videos.clone();
+            let is_searching = state.segment_search.contains_key(&seg_idx);
             let has_videos = !videos.is_empty();
             if state.show_videos.is_none() {
                 state.show_videos = Some(has_videos);
             }
             let is_video_mode = state.show_videos.unwrap_or(has_videos);
 
-            ui.horizontal(|ui| {
-                if ui.selectable_label(!is_video_mode,
-                    egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
-                    state.show_videos = Some(false);
-                }
-                if ui.selectable_label(is_video_mode,
-                    egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
-                    state.show_videos = Some(true);
-                }
-            });
-            ui.add_space(4.0);
-
-            let thumb_size = egui::vec2(140.0, 90.0);
-
-            egui::ScrollArea::vertical()
-                .id_salt("stock_results_scroll")
-                .show(ui, |ui| {
-                    let cols = ((ui.available_width() / (thumb_size.x + 8.0)) as usize).max(1);
-                    if is_video_mode {
-                        draw_video_grid(ui, ctx, state, "full_v", seg_idx, &videos, thumb_size, cols, action);
-                    } else {
-                        draw_photo_grid(ui, ctx, state, "full_p", seg_idx, &photos, thumb_size, cols, action);
+            if is_searching && photos.is_empty() && videos.is_empty() {
+                ui.label(egui::RichText::new("🔍 Шукаємо…").weak().size(13.0));
+            } else {
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(!is_video_mode,
+                        egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
+                        state.show_videos = Some(false);
+                    }
+                    if ui.selectable_label(is_video_mode,
+                        egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
+                        state.show_videos = Some(true);
                     }
                 });
+                ui.add_space(4.0);
+
+                let thumb_size = egui::vec2(140.0, 90.0);
+
+                egui::ScrollArea::vertical()
+                    .id_salt("stock_results_scroll")
+                    .show(ui, |ui| {
+                        let cols = ((ui.available_width() / (thumb_size.x + 8.0)) as usize).max(1);
+                        if is_video_mode {
+                            draw_video_grid(ui, ctx, state, "full_v", seg_idx, &videos, thumb_size, cols, action);
+                        } else {
+                            draw_photo_grid(ui, ctx, state, "full_p", seg_idx, &photos, thumb_size, cols, action);
+                        }
+                    });
+            }
 
             ui.separator();
             ui.horizontal(|ui| {

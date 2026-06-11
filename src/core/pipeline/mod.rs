@@ -1491,70 +1491,32 @@ fn run_pexels_branch(
 
     let total = segments.len();
 
-    // ─── Пошук у Pexels для кожного ключового слова ─────────────────────────
-    crate::logger::log_job(job_id, &job_name, "Pexels: searching stock media for each segment...");
-    *prompts_progress.lock().unwrap() = Some((0, total));
-    ctx.request_repaint();
-
-    let provider = crate::api::stock::pexels::PexelsProvider;
-    let pexels_key = settings.pexels_key.clone();
-
-    let mut cache: Vec<crate::api::stock::SegmentCache> = Vec::with_capacity(total);
-
-    use crate::api::stock::StockProvider;
     // Тривалості сегментів з timeline.json (якщо є)
     let seg_durations: Vec<f32> = read_segment_durations_from_timeline(save_dir)
         .unwrap_or_else(|| vec![0.0; total]);
 
-    for (i, (seg, kw)) in segments.iter().zip(keywords.iter()).enumerate() {
-        let mut entry = crate::api::stock::SegmentCache {
+    // Зберігаємо skeleton cache — ключові слова без результатів пошуку.
+    // Pexels пошук запускається лінивo в GUI при кліку на сегмент.
+    let cache: Vec<crate::api::stock::SegmentCache> = segments.iter()
+        .zip(keywords.iter())
+        .zip(seg_durations.iter())
+        .enumerate()
+        .map(|(i, ((seg, kw), dur))| crate::api::stock::SegmentCache {
             index: i,
             keyword: kw.clone(),
             segment_text: seg.clone(),
-            segment_duration: seg_durations.get(i).copied().unwrap_or(0.0),
+            segment_duration: *dur,
             photos: vec![],
             videos: vec![],
             selected: None,
-        };
+        })
+        .collect();
 
-        // Шукаємо і фото і відео щоб користувач міг обрати у пікері
-        match provider.search_photos(&pexels_key, kw, 15) {
-            Ok(photos) => {
-                entry.photos = photos.iter().map(|p| crate::api::stock::CachedPhoto::from(p)).collect();
-                crate::logger::log_job(job_id, &job_name,
-                    &format!("Pexels [{}/{}]: \"{}\" → {} photos", i + 1, total, kw, entry.photos.len()));
-            }
-            Err(e) => {
-                crate::logger::log_job(job_id, &job_name,
-                    &format!("Pexels [{}/{}]: photos error: {}", i + 1, total, e));
-            }
-        }
-        match provider.search_videos(&pexels_key, kw, 15) {
-            Ok(vids) => {
-                entry.videos = vids.iter().map(|v| crate::api::stock::CachedVideo::from(v)).collect();
-                crate::logger::log_job(job_id, &job_name,
-                    &format!("Pexels [{}/{}]: \"{}\" → {} videos", i + 1, total, kw, entry.videos.len()));
-            }
-            Err(e) => {
-                crate::logger::log_job(job_id, &job_name,
-                    &format!("Pexels [{}/{}]: videos error: {}", i + 1, total, e));
-            }
-        }
-
-        cache.push(entry);
-
-        if let Ok(mut p) = prompts_progress.try_lock() {
-            if let Some((done, _)) = p.as_mut() { *done = i + 1; }
-        }
-        ctx.request_repaint();
-    }
-
-    // Зберігаємо кеш на диск
     crate::api::stock::save_cache(save_dir, &cache)
         .map_err(|e| format!("Pexels cache save error: {}", e))?;
 
     crate::logger::log_job(job_id, &job_name,
-        "Pexels: stock_cache.json saved. Waiting for user selection...");
+        &format!("Pexels: skeleton cache saved ({} segments). Waiting for user selection...", total));
     *video_stage.lock().unwrap() = crate::queue::StageStatus::Done;
     ctx.request_repaint();
     Ok(())
