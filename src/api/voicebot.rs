@@ -157,7 +157,6 @@ pub fn download_task_result(key: &str, task_id: u64, save_dir: &str) -> Result<S
 
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(120))
         .build();
 
     let resp = agent

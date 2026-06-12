@@ -391,16 +391,13 @@ pub struct ClipDragState {
 **Заміна відео при повторному виборі:**
 Відеофайл зберігається за іменем `{seg_idx+1:04}.mp4` — незалежно від того яке саме відео. Перед відкриттям trim editor порівнюється `vid.id` з `cache[seg_idx].selected.id`. Якщо не збігається (або вибору ще не було) — старий файл видаляється і нове відео завантажується заново. Це запобігає ситуації «обрав А, скасував, обрав Б — у редакторі відображається А».
 
-**Modal overlay:**
-`egui::Area` з `Order::Foreground` і `ui.allocate_rect(screen, Sense::click_and_drag())` — блокує всі кліки на вміст за вікном пікера. Без цього кліки у picker-вікні проходили насрізь до редактора монтажу.
-
 **Thumbnail lazy-loading:**
 Мініатюри завантажуються у фонових потоках по URL Pexels через `ureq`. При hover — збільшений preview у `egui::show_tooltip_at_pointer` (4 аргументи: ctx, LayerId, Id, closure).
 
 **Зв'язок з редактором монтажу:**
 - `MontageEditorState.pending_open_stock_picker: Option<usize>` — при кліку на плейсхолдер у таймлінії встановлюється індекс сегмента → `app.rs` відкриває пікер.
 - `MontageEditorState.needs_stock_refresh: bool` — після вибору медіа → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом і копіює `SelectedMedia.trim_start` у `EditorClip.trim_start`. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
-- `MontageEditorState.input_blocked: bool` — виставляється в `app.rs` перед кожним рендером редактора монтажу: `editor.input_blocked = stock_picker_state.is_some()`. `update_preview_drag` перевіряє цей прапор і повертається одразу якщо `true`. Потрібно бо `update_preview_drag` читає сирий `ctx.input()` — він не знає що клік уже «зайнятий» overlay picker'а, тому без цього синій прямокутник трансформу реагував крізь будь-яке вікно поверх.
+- `MontageEditorState.input_blocked: bool` — виставляється в `app.rs` перед кожним рендером редактора монтажу: `editor.input_blocked = stock_picker_state.is_some()`. `update_preview_drag` перевіряє цей прапор і повертається одразу якщо `true`. Модальний overlay навмисно прибраний — щоб редактор (транспорт, скрабінг) залишався доступним під час вибору медіа. Але `input_blocked` залишається щоб заблокувати drag-трансформ синьої обводки: `update_preview_drag` читає сирий `ctx.input()` (без фільтрації egui-widget системи), тому без цього прапора кліки/drag в picker-вікні рухали б позицію кліпу в редакторі.
 
 ---
 

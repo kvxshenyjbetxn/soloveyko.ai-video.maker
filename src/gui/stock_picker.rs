@@ -203,16 +203,6 @@ pub fn draw_stock_picker(
     flush_thumb_loading(ctx, state);
     flush_segment_search(state);
 
-    // Modal overlay — блокує взаємодію з елементами за вікном пікера
-    egui::Area::new(egui::Id::new("stock_picker_modal_bg"))
-        .fixed_pos(screen.min)
-        .order(egui::Order::Foreground)
-        .interactable(true)
-        .show(ctx, |ui| {
-            ui.allocate_rect(screen, egui::Sense::click_and_drag());
-            ui.painter().rect_filled(screen, 0.0, egui::Color32::from_black_alpha(100));
-        });
-
     // Перевіряємо чи завершилось завантаження → переходимо до trim редактора
     check_download_complete(state, ctx);
 

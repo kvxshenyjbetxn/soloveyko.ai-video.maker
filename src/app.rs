@@ -2078,8 +2078,7 @@ impl eframe::App for VideoMakerApp {
                 }
             }
         }
-
-        // Блокуємо drag у превью редактора коли поверх відкрито stock picker
+        // Блокуємо drag кліпів у превью коли поверх відкрито stock picker
         if let Some(ref mut editor) = self.montage_editor_state {
             editor.input_blocked = self.stock_picker_state.is_some();
         }
