@@ -122,66 +122,80 @@ pub fn draw_queue_jobs_list(
                             ui.add_space(3.0);
 
                             // Назва задачі — клікабельна для відкриття логу; ↺ — retry всієї задачі
+                            // Кнопки додаються першими (right_to_left), лейбл займає решту місця ліворуч
                             ui.horizontal(|ui| {
-                                let title = ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(format!("#{} {}", job.id + 1, &job.name))
-                                            .strong().size(15.0)
-                                    ).sense(egui::Sense::click())
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let retry_btn = ui.add_enabled(
+                                    can_retry,
+                                    egui::Button::new(egui::RichText::new("↺").size(11.0)).small(),
                                 );
-                                if title.hovered() {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                if retry_btn.on_hover_text(translate(language, "job_retry_tooltip")).clicked() {
+                                    *retry_request = Some((job.id, crate::queue::RetryStage::Translation));
+                                    retry_clicked = true;
                                 }
-                                if title.clicked() {
-                                    card_clicked = true;
+
+                                let folder_path = job.settings.save_path.clone();
+                                let folder_btn = ui.add_enabled(
+                                    !folder_path.is_empty(),
+                                    egui::Button::new(egui::RichText::new("📂").size(11.0)).small(),
+                                );
+                                if folder_btn.on_hover_text(translate(language, "job_open_folder_tooltip")).clicked() {
+                                    open_folder(&folder_path);
                                 }
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let retry_btn = ui.add_enabled(
-                                        can_retry,
-                                        egui::Button::new(egui::RichText::new("↺").size(11.0)).small(),
+
+                                let is_agent_mode = job.settings.video_enabled
+                                    && (job.settings.video_llm_service == "Claude Code"
+                                        || job.settings.video_llm_service == "Gemini CLI"
+                                        || job.settings.video_llm_service == "Codex CLI"
+                                        || job.settings.video_llm_service == "AGY CLI");
+                                if is_agent_mode {
+                                    let chat_btn = ui.button(
+                                        egui::RichText::new("💬").size(11.0),
                                     );
-                                    if retry_btn.on_hover_text(translate(language, "job_retry_tooltip")).clicked() {
-                                        *retry_request = Some((job.id, crate::queue::RetryStage::Translation));
+                                    if chat_btn.on_hover_text(translate(language, "agent_chat_open_btn")).clicked() {
+                                        open_agent_chats.entry(job.id).or_insert_with(crate::gui::agent_chat_window::AgentChatWindowState::new);
                                         retry_clicked = true;
                                     }
+                                }
 
-                                    let folder_path = job.settings.save_path.clone();
-                                    let folder_btn = ui.add_enabled(
-                                        !folder_path.is_empty(),
-                                        egui::Button::new(egui::RichText::new("📂").size(11.0)).small(),
+                                let is_pexels_job = job.settings.video_service == "Pexels" && job.settings.video_enabled;
+                                let show_editor = job.settings.montage_control_enabled || is_pexels_job;
+                                if show_editor {
+                                    let editor_btn = ui.button(
+                                        egui::RichText::new("✂").size(11.0),
                                     );
-                                    if folder_btn.on_hover_text(translate(language, "job_open_folder_tooltip")).clicked() {
-                                        open_folder(&folder_path);
+                                    if editor_btn.on_hover_text(translate(language, "montage_editor_open_btn")).clicked() {
+                                        *open_montage_editor = Some(job.id);
+                                        retry_clicked = true;
                                     }
+                                }
 
-                                    let is_agent_mode = job.settings.video_enabled
-                                        && (job.settings.video_llm_service == "Claude Code"
-                                            || job.settings.video_llm_service == "Gemini CLI"
-                                            || job.settings.video_llm_service == "Codex CLI"
-                                            || job.settings.video_llm_service == "AGY CLI");
-                                    if is_agent_mode {
-                                        let chat_btn = ui.button(
-                                            egui::RichText::new("💬").size(11.0),
-                                        );
-                                        if chat_btn.on_hover_text(translate(language, "agent_chat_open_btn")).clicked() {
-                                            open_agent_chats.entry(job.id).or_insert_with(crate::gui::agent_chat_window::AgentChatWindowState::new);
-                                            retry_clicked = true;
-                                        }
+                                // Лейбл — останній у right_to_left, вкладений left_to_right для лівого вирівнювання
+                                let n = &job.name;
+                                let display = if n.chars().count() > 20 {
+                                    format!("{}…", n.chars().take(20).collect::<String>())
+                                } else {
+                                    n.clone()
+                                };
+                                let label_text = format!("#{} {}", job.id + 1, display);
+                                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                    let title = ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(label_text).strong().size(15.0)
+                                        )
+                                        .sense(egui::Sense::click())
+                                        .truncate(),
+                                    );
+                                    let title = title.on_hover_text(&job.name);
+                                    if title.hovered() {
+                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                     }
-
-                                    let is_pexels_job = job.settings.video_service == "Pexels" && job.settings.video_enabled;
-                                    let show_editor = job.settings.montage_control_enabled || is_pexels_job;
-                                    if show_editor {
-                                        let editor_btn = ui.button(
-                                            egui::RichText::new("✂").size(11.0),
-                                        );
-                                        if editor_btn.on_hover_text(translate(language, "montage_editor_open_btn")).clicked() {
-                                            *open_montage_editor = Some(job.id);
-                                            retry_clicked = true;
-                                        }
+                                    if title.clicked() {
+                                        card_clicked = true;
                                     }
                                 });
-                            });
+                            }); // right_to_left
+                            }); // horizontal
 
                             ui.add_space(3.0);
 
