@@ -16,13 +16,23 @@ use eframe::egui;
 
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+fn load_icon() -> egui::IconData {
+    let bytes = include_bytes!("../video.maker.png");
+    let img = image::load_from_memory(bytes)
+        .expect("Не вдалося завантажити іконку")
+        .to_rgba8();
+    let (width, height) = img.dimensions();
+    egui::IconData { rgba: img.into_raw(), width, height }
+}
+
 fn main() -> eframe::Result {
     // Конфігуруємо параметри вікна нашого додатку
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1366.0, 768.0])         // Розмір вікна за замовчуванням (1366х768)
             .with_min_inner_size([800.0, 600.0])       // Встановлюємо мінімальний розмір вікна для зручності
-            .with_title(format!("Soloveyko.AI-Video.Maker.v{}", APP_VERSION)),   // Заголовок вікна програми
+            .with_title(format!("Soloveyko.AI-Video.Maker.v{}", APP_VERSION))   // Заголовок вікна програми
+            .with_icon(std::sync::Arc::new(load_icon())),
         ..Default::default()
     };
 

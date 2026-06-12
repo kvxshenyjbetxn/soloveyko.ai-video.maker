@@ -22,6 +22,9 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 rodio = { version = "0.19", default-features = false, features = ["wav", "mp3"] }
 
 
+[build-dependencies]
+winres = "0.1"
+
 [package.metadata.bundle]
 name = "Soloveyko AI Video Maker"
 identifier = "ai.soloveyko.videomaker"
@@ -29,3 +32,4 @@ version = "4.4.1"
 copyright = "Copyright © 2026 Soloveyko.ai. All rights reserved."
 short_description = "Soloveyko.AI-Video.Maker Application"
 long_description = "An amazing cross-platform desktop video maker using Rust and egui."
+icon = ["video.maker.png", "video.maker.ico"]
