@@ -8,8 +8,6 @@ pub enum JobStatus {
     AwaitingControl,
     /// Очікує перегляду згенерованих зображень користувачем
     AwaitingMediaControl,
-    /// Очікує вибору стокових медіа користувачем (Pexels режим)
-    AwaitingStockSelection,
     /// Очікує підтвердження монтажу від користувача
     AwaitingMontageControl,
     Done,

@@ -84,13 +84,6 @@ pub fn draw_queue_jobs_list(
                                 egui::Color32::from_rgb(230, 126, 34),
                             )
                         }
-                        crate::queue::JobStatus::AwaitingStockSelection => {
-                            let (prog, _, _) = job.calculate_progress();
-                            (
-                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_stock"), prog * 100.0),
-                                egui::Color32::from_rgb(52, 152, 219),
-                            )
-                        }
                         crate::queue::JobStatus::AwaitingMontageControl => {
                             let (prog, _, _) = job.calculate_progress();
                             (
@@ -114,7 +107,6 @@ pub fn draw_queue_jobs_list(
                         crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
                             | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingStockSelection
                             | crate::queue::JobStatus::AwaitingMontageControl
                     );
 
@@ -177,8 +169,8 @@ pub fn draw_queue_jobs_list(
                                         }
                                     }
 
-                                    let show_editor = job.settings.montage_control_enabled
-                                        || status == crate::queue::JobStatus::AwaitingStockSelection;
+                                    let is_pexels_job = job.settings.video_service == "Pexels" && job.settings.video_enabled;
+                                    let show_editor = job.settings.montage_control_enabled || is_pexels_job;
                                     if show_editor {
                                         let editor_btn = ui.button(
                                             egui::RichText::new("✂").size(11.0),
@@ -429,8 +421,7 @@ pub fn draw_queue_jobs_list(
                             // Індивідуальний прогрес бар картки задачі
                             let (prog, _, _) = job.calculate_progress();
                             let is_job_running = status == crate::queue::JobStatus::Running
-                                || status == crate::queue::JobStatus::AwaitingMediaControl
-                                || status == crate::queue::JobStatus::AwaitingStockSelection;
+                                || status == crate::queue::JobStatus::AwaitingMediaControl;
 
                             ui.horizontal(|ui| {
                                 let job_cost = *job.total_cost.lock().unwrap();
@@ -488,8 +479,7 @@ pub fn draw_queue_jobs_list(
                                 let text = job.translated_text.lock().unwrap().clone().unwrap_or_default();
                                 crate::gui::pipeline::translation_control::TranslationControlWindowState::new_with_text(text)
                             });
-                        } else if status == crate::queue::JobStatus::AwaitingMediaControl
-                            || status == crate::queue::JobStatus::AwaitingStockSelection {
+                        } else if status == crate::queue::JobStatus::AwaitingMediaControl {
                             *active_tab = Tab::Gallery;
                         } else {
                             open_job_logs.entry(job.id).or_insert_with(|| job.name.clone());
@@ -633,7 +623,6 @@ pub fn draw_queue_panel(
                 crate::queue::JobStatus::Running
                     | crate::queue::JobStatus::AwaitingControl
                     | crate::queue::JobStatus::AwaitingMediaControl
-                    | crate::queue::JobStatus::AwaitingStockSelection
                     | crate::queue::JobStatus::AwaitingMontageControl
             )
         });
@@ -677,8 +666,7 @@ pub fn draw_queue_panel(
                             crate::queue::JobStatus::Done => 1.0,
                             crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingStockSelection => {
+                            | crate::queue::JobStatus::AwaitingMediaControl => {
                                 let (prog, _, _) = j.calculate_progress();
                                 prog
                             }
@@ -694,7 +682,6 @@ pub fn draw_queue_panel(
                     let s = j.status.lock().unwrap().clone();
                     s == crate::queue::JobStatus::Running
                         || s == crate::queue::JobStatus::AwaitingMediaControl
-                        || s == crate::queue::JobStatus::AwaitingStockSelection
                 });
 
                 let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))

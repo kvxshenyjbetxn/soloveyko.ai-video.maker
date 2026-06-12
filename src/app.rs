@@ -389,9 +389,7 @@ pub struct VideoMakerApp {
     pub queue_panel_fullscreen: bool,
     /// ID задач, для яких вже було авто-перейдено на вкладку Галерея при MediaControl.
     pub media_control_notified: std::collections::HashSet<u64>,
-    /// ID задачі, для якої треба відкрити Stock Picker. None = не відкривати.
-    pub stock_picker_open: Option<u64>,
-    /// Стан відкритого вікна Stock Picker.
+    /// Стан відкритого вікна Stock Picker (тільки single mode з редактора монтажу).
     pub stock_picker_state: Option<crate::gui::stock_picker::StockPickerState>,
 }
 
@@ -584,7 +582,6 @@ impl Default for VideoMakerApp {
             queue_panel_collapsed: false,
             queue_panel_fullscreen: false,
             media_control_notified: std::collections::HashSet::new(),
-            stock_picker_open: None,
             stock_picker_state: None,
         };
 
@@ -971,7 +968,6 @@ impl VideoMakerApp {
             queue_panel_collapsed: false,
             queue_panel_fullscreen: false,
             media_control_notified: std::collections::HashSet::new(),
-            stock_picker_open: None,
             stock_picker_state: None,
         };
 
@@ -1667,7 +1663,6 @@ impl eframe::App for VideoMakerApp {
                             &mut prompt_view_request,
                             &mut image_load_requests,
                             &image_loading_snapshot,
-                            &mut self.stock_picker_open,
                         );
                         if switch_to_main {
                             self.active_tab = Tab::Main;
@@ -1993,27 +1988,12 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
-        // Ініціалізація Stock Picker при натисканні кнопки у галереї
-        if let Some(job_id) = self.stock_picker_open.take() {
-            if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
-                if let Some(state) = crate::gui::stock_picker::StockPickerState::new(
-                    job.id,
-                    job.name.clone(),
-                    job.settings.save_path.clone(),
-                    job.settings.pexels_key.clone(),
-                ) {
-                    self.stock_picker_state = Some(state);
-                }
-            }
-        }
-
         // Відображення та обробка вікна Stock Picker
         if let Some(ref mut picker_state) = self.stock_picker_state {
             let action = crate::gui::stock_picker::draw_stock_picker(
                 ctx,
                 self.language,
                 picker_state,
-                &self.jobs,
             );
             match action {
                 crate::gui::stock_picker::StockPickerAction::Close => {
@@ -2197,13 +2177,10 @@ impl eframe::App for VideoMakerApp {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
                     if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
-                        job.id,
-                        job.name.clone(),
                         job.settings.save_path.clone(),
                         job.settings.pexels_key.clone(),
                     ) {
                         state.active_segment = seg_idx;
-                        state.single_mode = true;
                         self.stock_picker_state = Some(state);
                     }
                 }

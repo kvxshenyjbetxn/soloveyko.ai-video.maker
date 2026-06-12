@@ -1892,6 +1892,7 @@ pub fn run_pipeline(
         // AV → Агент → Медіа. В звичайному режимі — паралельно.
         let run_av = settings.voiceover_enabled;
         let run_video = settings.video_enabled;
+        let is_pexels = settings.video_service == "Pexels" && settings.video_enabled;
         let is_agent_mode = run_video &&
             (settings.video_llm_service == "Claude Code"
                 || settings.video_llm_service == "Gemini CLI"
@@ -1942,33 +1943,7 @@ pub fn run_pipeline(
                 return;
             }
 
-            let save_dir_agent = std::path::Path::new(&settings.save_path);
 
-            // В Pexels режимі — чекаємо вибору медіа користувачем перед патчингом
-            if settings.video_service == "Pexels" && settings.video_enabled {
-                crate::logger::log_job(job_id, &job_name,
-                    "Pexels stock search done. Awaiting user stock selection...");
-                *status.lock().unwrap() = crate::queue::JobStatus::AwaitingStockSelection;
-                ctx.request_repaint();
-
-                let (lock, cvar) = &*media_control_resume;
-                let mut resumed = lock.lock().unwrap();
-                while !*resumed {
-                    resumed = cvar.wait(resumed).unwrap();
-                }
-                *resumed = false;
-
-                crate::logger::log_job(job_id, &job_name, "Stock selection confirmed. Resuming pipeline...");
-                *status.lock().unwrap() = crate::queue::JobStatus::Running;
-                ctx.request_repaint();
-            }
-
-            // Патчимо timeline.json фактичними шляхами медіафайлів (після завантаження стоків)
-            if let Err(e) = assign_media_to_timeline(save_dir_agent) {
-                crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
-            } else {
-                crate::logger::log_job(job_id, &job_name, "Timeline patched with media paths.");
-            }
 
         } else {
             // === Звичайний режим: паралельно ===
@@ -2039,29 +2014,7 @@ pub fn run_pipeline(
             // поки гілка AV (озвучка + субтитри) продовжує виконуватись паралельно.
             let video_result = video_handle.map(|h| h.join().unwrap_or_else(|_| Err("Video thread panicked".to_string())));
 
-            // Пауза для вибору стокових медіа (Pexels режим)
-            let is_pexels = settings.video_service == "Pexels" && settings.video_enabled;
-            if is_pexels {
-                if let Some(Ok(())) = &video_result {
-                    crate::logger::log_job(job_id, &job_name,
-                        "Pexels stock search done. Awaiting user stock selection...");
-                    *status.lock().unwrap() = crate::queue::JobStatus::AwaitingStockSelection;
-                    ctx.request_repaint();
-
-                    let (lock, cvar) = &*media_control_resume;
-                    let mut resumed = lock.lock().unwrap();
-                    while !*resumed {
-                        resumed = cvar.wait(resumed).unwrap();
-                    }
-                    *resumed = false;
-
-                    crate::logger::log_job(job_id, &job_name, "Stock selection confirmed. Resuming pipeline...");
-                    *status.lock().unwrap() = crate::queue::JobStatus::Running;
-                    ctx.request_repaint();
-                }
-            }
-
-            // Пауза для контролю зображень — AV гілка продовжує виконуватись
+            // Пауза для контролю зображень — AV гілка продовжує виконуватись (не для Pexels)
             if settings.media_control_enabled && settings.video_enabled && !is_pexels {
                 if let Some(Ok(())) = &video_result {
                     crate::logger::log_job(job_id, &job_name, "Video done. Awaiting media review by user...");
@@ -2116,11 +2069,6 @@ pub fn run_pipeline(
                             crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e));
                         }
                     }
-                    if let Err(e) = assign_media_to_timeline(save_dir) {
-                        crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
-                    } else {
-                        crate::logger::log_job(job_id, &job_name, "Timeline patched with stock media paths.");
-                    }
                 } else {
                     let source_text = if settings.translation_enabled {
                         translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
@@ -2144,8 +2092,8 @@ pub fn run_pipeline(
             }
         }
 
-        // Пауза контролю монтажу перед рендером
-        if settings.montage_control_enabled {
+        // Пауза контролю монтажу перед рендером (примусово при Pexels — вибір медіа в редакторі)
+        if settings.montage_control_enabled || is_pexels {
             crate::logger::log_job(job_id, &job_name, "Awaiting montage control confirmation from user...");
             *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMontageControl;
             ctx.request_repaint();
@@ -2160,6 +2108,16 @@ pub fn run_pipeline(
             crate::logger::log_job(job_id, &job_name, "Montage control confirmed. Resuming pipeline...");
             *status.lock().unwrap() = crate::queue::JobStatus::Running;
             ctx.request_repaint();
+        }
+
+        // Після підтвердження монтажу призначаємо стокові медіа в timeline (Pexels)
+        if is_pexels {
+            let save_dir = std::path::Path::new(&settings.save_path);
+            if let Err(e) = assign_media_to_timeline(save_dir) {
+                crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
+            } else {
+                crate::logger::log_job(job_id, &job_name, "Timeline patched with stock media paths.");
+            }
         }
 
         // Етап 5: Монтаж (FFmpeg або CapCut)

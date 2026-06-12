@@ -1,4 +1,4 @@
-use eframe::egui;
+﻿use eframe::egui;
 use crate::localization::{Language, translate};
 use crate::api::stock::{SegmentCache, SelectedMedia, load_cache, save_cache};
 use std::path::{Path, PathBuf};
@@ -15,13 +15,9 @@ type SegmentSearchArc = Arc<Mutex<Option<Result<
 // ─── Структури стану ──────────────────────────────────────────────────────────
 
 pub struct StockPickerState {
-    pub job_id: u64,
-    pub job_name: String,
     pub save_path: String,
     pub cache: Vec<SegmentCache>,
     pub active_segment: usize,
-    /// Режим одного сегмента (відкривається з плейсхолдера в редакторі)
-    pub single_mode: bool,
     /// Показувати відео (true) чи фото (false); None = auto з кешу
     pub show_videos: Option<bool>,
     /// Текстури мініатюр: preview_url → TextureHandle
@@ -76,17 +72,14 @@ pub struct TrimEditState {
 }
 
 impl StockPickerState {
-    pub fn new(job_id: u64, job_name: String, save_path: String, pexels_key: String) -> Option<Self> {
+    pub fn new(save_path: String, pexels_key: String) -> Option<Self> {
         let path = Path::new(&save_path);
         let cache = load_cache(path)
             .or_else(|| build_skeleton_cache_from_timeline(path))?;
         let edit_keyword = cache.first().map(|s| s.keyword.clone()).unwrap_or_default();
         Some(Self {
-            job_id,
-            job_name,
             save_path,
             active_segment: 0,
-            single_mode: false,
             show_videos: None,
             cache,
             thumbnails: Default::default(),
@@ -203,7 +196,6 @@ pub fn draw_stock_picker(
     ctx: &egui::Context,
     language: Language,
     state: &mut StockPickerState,
-    jobs: &[crate::queue::PipelineJob],
 ) -> StockPickerAction {
     let mut action = StockPickerAction::None;
     let screen = ctx.screen_rect();
@@ -225,11 +217,7 @@ pub fn draw_stock_picker(
     check_download_complete(state, ctx);
 
     // Пікер рендерується першим
-    if state.single_mode {
-        draw_single_mode(ctx, language, state, screen, &mut action);
-    } else {
-        draw_full_mode(ctx, language, state, jobs, screen, &mut action);
-    }
+    draw_single_mode(ctx, language, state, screen, &mut action);
 
     // Trim editor рендерується ПІСЛЯ пікера — поверх нього
     if state.trim_edit.is_some() {
@@ -849,193 +837,6 @@ fn draw_single_mode(
             });
         });
 
-    if retrigger_search {
-        let new_kw = state.edit_keyword.clone();
-        if let Some(seg) = state.cache.get_mut(seg_idx) {
-            seg.keyword = new_kw;
-            seg.photos.clear();
-            seg.videos.clear();
-        }
-        state.segment_search.remove(&seg_idx);
-        state.show_videos = None;
-        let _ = save_cache(Path::new(&state.save_path), &state.cache);
-        trigger_segment_search(state, seg_idx, ctx);
-    }
-}
-
-// ─── Full-mode (всі сегменти) ─────────────────────────────────────────────────
-
-fn draw_full_mode(
-    ctx: &egui::Context,
-    language: Language,
-    state: &mut StockPickerState,
-    jobs: &[crate::queue::PipelineJob],
-    screen: egui::Rect,
-    action: &mut StockPickerAction,
-) {
-    let mut retrigger_search = false;
-    egui::Window::new(format!("🖼 Stock Picker — {}", state.job_name))
-        .id(egui::Id::new("stock_picker_window"))
-        .default_size([screen.width().min(900.0), screen.height().min(600.0)])
-        .min_size([500.0, 360.0])
-        .max_size([screen.width() - 20.0, screen.height() - 20.0])
-        .resizable(true)
-        .collapsible(false)
-        .order(egui::Order::Tooltip)
-        .show(ctx, |ui| {
-            let seg_idx = state.active_segment;
-
-            // Ліва панель сегментів
-            egui::SidePanel::left("stock_seg_panel")
-                .resizable(false)
-                .exact_width(220.0)
-                .show_inside(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt("stock_seg_list")
-                        .show(ui, |ui| {
-                            for (i, seg) in state.cache.iter().enumerate() {
-                                let is_selected = state.active_segment == i;
-                                let has_pick = seg.selected.is_some();
-                                let kw_short: String = seg.keyword.chars().take(30).collect();
-                                let kw_sfx = if seg.keyword.chars().count() > 30 { "…" } else { "" };
-                                let label = format!(
-                                    "{} {}. {}{}",
-                                    if has_pick { "✔" } else { "○" }, i + 1, kw_short, kw_sfx
-                                );
-                                let text = if has_pick {
-                                    egui::RichText::new(label).color(egui::Color32::from_rgb(46, 204, 113))
-                                } else if is_selected {
-                                    egui::RichText::new(label).strong()
-                                } else {
-                                    egui::RichText::new(label)
-                                };
-                                if ui.selectable_label(is_selected, text).clicked() {
-                                    if state.active_segment != i {
-                                        state.active_segment = i;
-                                        state.show_videos = None;
-                                        state.edit_keyword = state.cache.get(i).map(|s| s.keyword.clone()).unwrap_or_default();
-                                    }
-                                }
-                            }
-                        });
-                });
-
-            // Запускаємо пошук для активного сегменту якщо потрібно
-            trigger_segment_search(state, seg_idx, ctx);
-
-            // Права область — клонуємо дані сегмента щоб уникнути borrow conflicts з edit_keyword
-            let (seg_text, selected, photos, videos) = if let Some(seg) = state.cache.get(seg_idx) {
-                (seg.segment_text.clone(), seg.selected.clone(), seg.photos.clone(), seg.videos.clone())
-            } else {
-                return;
-            };
-
-            // Рядок редагування keyword + кнопка перезапуску пошуку
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut state.edit_keyword)
-                    .desired_width(ui.available_width() - 44.0));
-                if ui.button("🔄").on_hover_text(translate(language, "stock_search_retrigger")).clicked() {
-                    retrigger_search = true;
-                }
-            });
-
-            if !seg_text.is_empty() && seg_text != state.edit_keyword {
-                let preview: String = seg_text.chars().take(100).collect();
-                let sfx = if seg_text.chars().count() > 100 { "…" } else { "" };
-                ui.label(egui::RichText::new(format!("{}{}", preview, sfx)).weak().size(11.0));
-            }
-
-            if let Some(sel) = &selected {
-                ui.label(
-                    egui::RichText::new(format!("✔ Обрано: {}", sel.filename))
-                        .color(egui::Color32::from_rgb(46, 204, 113))
-                        .size(12.0)
-                );
-            }
-
-            // Прогрес-бар завантаження
-            if let Some(dl) = &state.video_download {
-                if dl.segment_idx == seg_idx {
-                    let p = *dl.progress.lock().unwrap();
-                    ui.horizontal(|ui| {
-                        if p < 0.0 {
-                            ui.label(egui::RichText::new("❌ Помилка завантаження").color(egui::Color32::RED).size(12.0));
-                        } else {
-                            ui.label(egui::RichText::new(format!("⬇ {:.0}%", p * 100.0)).size(12.0));
-                            let bar_w = 200.0f32;
-                            let (bar_rect, _) = ui.allocate_exact_size(egui::vec2(bar_w, 10.0), egui::Sense::hover());
-                            ui.painter().rect_filled(bar_rect, 5.0, egui::Color32::from_gray(50));
-                            ui.painter().rect_filled(
-                                egui::Rect::from_min_size(bar_rect.min, egui::vec2(bar_w * p.clamp(0.0, 1.0), 10.0)),
-                                5.0, egui::Color32::from_rgb(52, 152, 219),
-                            );
-                        }
-                    });
-                }
-            }
-
-            ui.add_space(4.0);
-
-            // Перемикач Фото / Відео
-            let is_searching = state.segment_search.contains_key(&seg_idx);
-            let has_videos = !videos.is_empty();
-            if state.show_videos.is_none() {
-                state.show_videos = Some(has_videos);
-            }
-            let is_video_mode = state.show_videos.unwrap_or(has_videos);
-
-            if is_searching && photos.is_empty() && videos.is_empty() {
-                ui.label(egui::RichText::new("🔍 Шукаємо…").weak().size(13.0));
-            } else {
-                ui.horizontal(|ui| {
-                    if ui.selectable_label(!is_video_mode,
-                        egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
-                        state.show_videos = Some(false);
-                    }
-                    if ui.selectable_label(is_video_mode,
-                        egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
-                        state.show_videos = Some(true);
-                    }
-                });
-                ui.add_space(4.0);
-
-                let thumb_size = egui::vec2(140.0, 90.0);
-
-                egui::ScrollArea::vertical()
-                    .id_salt("stock_results_scroll")
-                    .show(ui, |ui| {
-                        let cols = ((ui.available_width() / (thumb_size.x + 8.0)) as usize).max(1);
-                        if is_video_mode {
-                            draw_video_grid(ui, ctx, state, "full_v", seg_idx, &videos, thumb_size, cols, action);
-                        } else {
-                            draw_photo_grid(ui, ctx, state, "full_p", seg_idx, &photos, thumb_size, cols, action);
-                        }
-                    });
-            }
-
-            ui.separator();
-            ui.horizontal(|ui| {
-                let selected_count = state.cache.iter().filter(|s| s.selected.is_some()).count();
-                ui.label(format!("{} / {} обрано", selected_count, state.cache.len()));
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(translate(language, "stock_picker_close")).clicked() {
-                        *action = StockPickerAction::Close;
-                    }
-                    ui.add_space(8.0);
-                    if ui.button(egui::RichText::new(translate(language, "stock_picker_confirm")).strong()).clicked() {
-                        if let Some(job) = jobs.iter().find(|j| j.id == state.job_id) {
-                            let (lock, cvar) = &*job.media_control_resume;
-                            *lock.lock().unwrap() = true;
-                            cvar.notify_one();
-                        }
-                        *action = StockPickerAction::Confirmed;
-                    }
-                });
-            });
-        });
-
-    let seg_idx = state.active_segment;
     if retrigger_search {
         let new_kw = state.edit_keyword.clone();
         if let Some(seg) = state.cache.get_mut(seg_idx) {

@@ -23,14 +23,9 @@ pub fn draw_gallery_tab(
     prompt_view_request: &mut Option<std::path::PathBuf>,
     image_load_requests: &mut Vec<std::path::PathBuf>,
     image_loading: &std::collections::HashSet<std::path::PathBuf>,
-    stock_picker_open: &mut Option<u64>,
 ) -> bool {
     let awaiting: Vec<_> = jobs.iter()
         .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl)
-        .collect();
-
-    let awaiting_stock: Vec<_> = jobs.iter()
-        .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingStockSelection)
         .collect();
 
     let mut switch_to_main = false;
@@ -48,14 +43,6 @@ pub fn draw_gallery_tab(
                     cvar.notify_one();
                 }
                 switch_to_main = true;
-            }
-        }
-        if !awaiting_stock.is_empty() {
-            for job in &awaiting_stock {
-                let btn_label = format!("{} {}", translate(language, "stock_picker_open_btn"), &job.name);
-                if ui.button(egui::RichText::new(&btn_label).strong()).clicked() {
-                    *stock_picker_open = Some(job.id);
-                }
             }
         }
     });
