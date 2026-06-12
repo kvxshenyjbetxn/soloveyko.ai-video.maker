@@ -86,6 +86,8 @@ pub struct EditorClip {
     pub shake_enabled: bool,
     /// Чи є кліп плейсхолдером (медіа ще не обрано — чекає вибору стоку).
     pub is_placeholder: bool,
+    /// Початок обрізки у вихідному файлі (секунди). 0.0 = з початку.
+    pub trim_start: f32,
 }
 
 impl EditorClip {

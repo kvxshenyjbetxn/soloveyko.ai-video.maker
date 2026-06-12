@@ -118,6 +118,8 @@ pub fn generate_capcut_project(
         start_secs: f64,
         end_secs: f64,
         media: Option<String>,
+        #[serde(default)]
+        trim_start: f64,
     }
     #[derive(serde::Deserialize)]
     struct OverlaySegTiming {
@@ -395,9 +397,10 @@ pub fn generate_capcut_project(
         mat_colors.push(json!({ "id": color_id, "is_color_clip": false, "is_gradient": false, "solid_color": "", "gradient_colors": [], "gradient_percents": [], "gradient_angle": 90, "width": 0, "height": 0 }));
         mat_vocal_seps.push(json!({ "id": vocal_id, "type": "vocal_separation", "choice": 0, "removed_sounds": [], "time_range": null, "production_path": "", "final_algorithm": "", "enter_from": "" }));
 
+        let src_start = secs_to_us(seg.trim_start);
         video_segments.push(json!({
             "id": seg_id,
-            "source_timerange": { "start": 0, "duration": t_dur },
+            "source_timerange": { "start": src_start, "duration": t_dur },
             "target_timerange": { "start": t_start, "duration": t_dur },
             "render_timerange": { "start": 0, "duration": 0 },
             "desc": "",

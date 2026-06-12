@@ -181,6 +181,7 @@ pub(super) fn draw_timeline(
                                     zoom_enabled: false,
                                     shake_enabled: false,
                                     is_placeholder: false,
+                                    trim_start: 0.0,
                                 });
                             }
                         }

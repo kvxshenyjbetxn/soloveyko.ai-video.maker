@@ -309,6 +309,7 @@ src/
 - `media_id: String` — UUID відповідного `MediaItem` у пулі. Встановлюється при drag-drop. При завантаженні з JSON синхронізується з актуальним UUID пулу в `MontageEditorState::load()`.
 - `scale: f32`, `pos_x: f32`, `pos_y: f32` — трансформ для overlay. Для базової доріжки не застосовується.
 - `zoom_enabled: bool`, `shake_enabled: bool` — чи застосовувати відповідний ефект у прев'ю та в FFmpeg для цього кліпу.
+- `trim_start: f32` — позиція початку обрізки у вихідному медіафайлі (секунди від початку). `0.0` = з початку файлу. Встановлюється з `SelectedMedia.trim_start` через `refresh_placeholder_clips` після вибору у Stock Picker. Зберігається у `timeline.json` та передається у CapCut через `source_timerange.start`.
 
 **Зворотна сумісність:** `clip_from_json_seg` при десеріалізації використовує `unwrap_or(true)` для обох ефектів — старі кліпи без цих полів у `timeline.json` зберігають ефекти увімкненими. Нові кліпи, що додаються drag-drop, отримують `zoom_enabled: false, shake_enabled: false` за замовчуванням. `media_id` зберігається у `timeline.json` — при відсутності поля (старий формат) читається як `""` і синхронізується в `load()` по шляху.
 
@@ -334,7 +335,7 @@ pub struct ClipDragState {
 **`save_to_timeline()`:**
 Перед сигналом `montage_control_resume` — editor записує поточний стан таймлінії у `{save_path}/timeline.json`. Формат JSON:
 - **Загальні поля:** `total_duration_secs` (загальна тривалість відео) та `audio_start_secs` (зсув оригінальної озвучки у секундах, за замовчуванням `0.0`).
-- **Базова доріжка (`segments`):** `{start_secs, end_secs, media, zoom_enabled, shake_enabled}` з відносними шляхами. Враховуються тільки кліпи `track_idx=0` з призначеним файлом (відео, зображення чи аудіо), відсортовані за `start_secs`. Порожні ділянки (gaps) — `"media": null`.
+- **Базова доріжка (`segments`):** `{start_secs, end_secs, media, zoom_enabled, shake_enabled, trim_start}` з відносними шляхами. `trim_start` — позиція початку обрізки у вихідному файлі (секунди); `0.0` для файлів без обрізки. Враховуються тільки кліпи `track_idx=0` з призначеним файлом (відео, зображення чи аудіо), відсортовані за `start_secs`. Порожні ділянки (gaps) — `"media": null`.
 - **Overlay-доріжки (`overlay_tracks`):** масив `{track_idx, segments: [{start_secs, end_secs, media, scale, pos_x, pos_y, zoom_enabled, shake_enabled}]}` для всіх `track_idx≥1`. Лише доріжки з хоча б одним кліпом попадають у масив.
 
 `strip_prefix` використовує canonicalize-fallback для надійності на Windows. `run_montage` читає саме цей файл, розділяє медіафайли на відео/зображення (для відеоряду) та аудіофайли (для мікшування звуку), після чого накладає overlay-доріжки через FFmpeg `overlay` фільтр поверх основного відео.
@@ -398,7 +399,7 @@ pub struct ClipDragState {
 
 **Зв'язок з редактором монтажу:**
 - `MontageEditorState.pending_open_stock_picker: Option<usize>` — при кліку на плейсхолдер у таймлінії встановлюється індекс сегмента → `app.rs` відкриває пікер.
-- `MontageEditorState.needs_stock_refresh: bool` — після вибору медіа → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
+- `MontageEditorState.needs_stock_refresh: bool` — після вибору медіа → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом і копіює `SelectedMedia.trim_start` у `EditorClip.trim_start`. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
 - `MontageEditorState.input_blocked: bool` — виставляється в `app.rs` перед кожним рендером редактора монтажу: `editor.input_blocked = stock_picker_state.is_some()`. `update_preview_drag` перевіряє цей прапор і повертається одразу якщо `true`. Потрібно бо `update_preview_drag` читає сирий `ctx.input()` — він не знає що клік уже «зайнятий» overlay picker'а, тому без цього синій прямокутник трансформу реагував крізь будь-яке вікно поверх.
 
 ---
@@ -796,7 +797,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - `platform.os` / `last_modified_platform.os` — визначається динамічно: `"mac"` на macOS, `"windows"` на Windows. CapCut перевіряє це поле при відкритті проекту.
 - `platform` block, `config` block, `function_assistant_info`, `last_modified_platform` — CapCut відмовляється відкривати проект без цих блоків.
 - `render_index_track_mode_on: true`, `source: "default"`, `draft_type: "video"`.
-- Кожен кліп у треку — об'єкт з 30+ полями: `id`, `material_id`, `target_timerange: {duration, start}`, `source_timerange: {duration, start}`, `roughcut_time_range: {duration: 33333, start: 0}` (НЕ `-1`, інакше CapCut крашиться).
+- Кожен кліп у треку — об'єкт з 30+ полями: `id`, `material_id`, `target_timerange: {duration, start}`, `source_timerange: {duration, start}`, `roughcut_time_range: {duration: 33333, start: 0}` (НЕ `-1`, інакше CapCut крашиться). `source_timerange.start` береться з `seg.trim_start` (зі `SegTiming` з `timeline.json`) — так CapCut починає відтворення відео саме з моменту обраного у Stock Picker trim editor, а не з початку файлу.
 - Матеріали зображень/відео — окремий великий JSON-об'єкт (~100 полів). Будується через `serde_json::Map` (не `json!` макрос — recursion limit).
 - **Overlay-доріжки (track_idx ≥ 1)** з редактора монтажу → окремі `type: "video"` треки у масиві `tracks`. Позиція з редактора (`pos_x`, `pos_y` ∈ [-1, 1], де 0 = центр) конвертується у CapCut-пікселі: `transform.x = pos_x × 960`, `transform.y = pos_y × 540` (для canvas 1920×1080). `scale` → `clip.scale.x/y` напряму.
 
@@ -1176,6 +1177,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`frames_raw` — повністю замінюється, не аппендиться.** `spawn_frame_extraction` записує всі 8 кадрів **одночасно** наприкінці (не по одному). `flush_trim_frames` читає через `try_lock()` (без блокування) і робить `take()` — після читання вектор очищається. Це означає що кадри з'являються в UI одним пакетом після завершення ffmpeg (не поступово), що приймливо для 8 кадрів.
 
 - **Два окремих ffmpeg-потоки в trim editor: стрічка і playback.** `spawn_frame_extraction` — 8 кадрів по всій тривалості відео (для таймлайн-смуги), `scale=320:-2`, `-q:v 4`. `spawn_playback_extraction` — до 80 кадрів лише з обраного фрагменту (`-ss trim_start -t duration`), `scale=640:-2`, `-q:v 2`, 10fps. Тека для playback: `soloveyko_play_{hash}`, для стрічки: `soloveyko_trim_{hash}`. При `retrigger_playback` стара `playback_raw` замінюється новим `Arc` — старий фоновий потік (якщо ще не закінчив) пише у застарілий Arc, що тихо відкидається при drop. Гонки немає.
+
+- **`trim_start` у Stock Picker зберігається у `SelectedMedia`, але в CapCut завжди був 0.** Весь ланцюжок передачі trim_start раніше зупинявся на `stock_cache.json` — `EditorClip` не мав цього поля, `timeline.json` його не зберігав, `SegTiming` не читав, і CapCut завжди отримував `source_timerange.start = 0`. Виправлено в 4.4.1: `EditorClip.trim_start`, збереження у `timeline.json`, `SegTiming.trim_start`, `source_timerange.start = secs_to_us(seg.trim_start)`.
 
 - **`update_preview_drag` читає сирий `ctx.input()` — modal overlay його не блокує.** `egui::Area` з `Sense::click_and_drag()` на весь екран «заявляє» клік у системі egui-відповідей, але `ctx.input(|i| i.pointer.primary_pressed())` повертає **сирий** стан пристрою — він не знає про widget claims. Тому синій прямокутник трансформу у превью реагував крізь відкритий stock picker. Виправлено через `editor.input_blocked: bool` — `app.rs` виставляє його перед рендером редактора (`= stock_picker_state.is_some()`), `update_preview_drag` перевіряє на самому початку.
 

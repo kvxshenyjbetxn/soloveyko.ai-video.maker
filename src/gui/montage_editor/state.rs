@@ -200,6 +200,7 @@ impl MontageEditorState {
                 "media_id": clip.media_id,
                 "zoom_enabled": clip.zoom_enabled,
                 "shake_enabled": clip.shake_enabled,
+                "trim_start": clip.trim_start as f64,
             }));
             cursor = actual_end;
         }
@@ -293,6 +294,7 @@ fn clip_from_json_seg(
         zoom_enabled,
         shake_enabled,
         is_placeholder: false,
+        trim_start: seg["trim_start"].as_f64().unwrap_or(0.0) as f32,
     }
 }
 
@@ -364,7 +366,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     kind: ClipKind::Image,
                     scale: 1.0, pos_x: 0.0, pos_y: 0.0,
                     zoom_enabled: false, shake_enabled: false,
-                    is_placeholder: true,
+                    is_placeholder: true, trim_start: 0.0,
                 });
             }
         }
@@ -408,7 +410,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
         Err(_) => return false,
     };
 
-    let mut replacements: Vec<(String, PathBuf, ClipKind)> = Vec::new();
+    let mut replacements: Vec<(String, PathBuf, ClipKind, f32)> = Vec::new();
     let mut still_pending = false;
 
     for clip in &editor.clips {
@@ -423,7 +425,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
                 if file_path.exists() {
                     let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
                     let kind = if matches!(ext.as_str(), "mp4"|"mov"|"webm") { ClipKind::Video } else { ClipKind::Image };
-                    replacements.push((clip.id.clone(), file_path, kind));
+                    replacements.push((clip.id.clone(), file_path, kind, sel.trim_start));
                 } else {
                     // Файл ще не завантажений — повторимо після наступного repaint
                     still_pending = true;
@@ -432,7 +434,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
         }
     }
 
-    for (clip_id, file_path, kind) in replacements {
+    for (clip_id, file_path, kind, trim_start) in replacements {
         if !editor.media_pool.iter().any(|m| m.path == file_path) {
             editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path));
         }
@@ -447,6 +449,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
             clip.name = name;
             clip.is_placeholder = false;
             clip.media_id = media_id;
+            clip.trim_start = trim_start;
         }
     }
 
