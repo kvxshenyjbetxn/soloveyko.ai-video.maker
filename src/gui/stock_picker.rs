@@ -36,6 +36,8 @@ pub struct StockPickerState {
     pub pexels_key: String,
     /// Фоновий пошук для кожного сегмента: seg_idx → arc результату
     pub segment_search: std::collections::HashMap<usize, SegmentSearchArc>,
+    /// Поточний текст промту для активного сегмента (редагується через TextEdit)
+    pub edit_keyword: String,
 }
 
 /// Стан завантаження відео
@@ -78,6 +80,7 @@ impl StockPickerState {
         let path = Path::new(&save_path);
         let cache = load_cache(path)
             .or_else(|| build_skeleton_cache_from_timeline(path))?;
+        let edit_keyword = cache.first().map(|s| s.keyword.clone()).unwrap_or_default();
         Some(Self {
             job_id,
             job_name,
@@ -90,6 +93,7 @@ impl StockPickerState {
             thumb_loading: Default::default(),
             video_download: None,
             trim_edit: None,
+            edit_keyword,
             pexels_key,
             segment_search: Default::default(),
         })
@@ -726,6 +730,8 @@ fn draw_single_mode(
     // Запускаємо пошук якщо потрібно (перед рендером вікна, щоб уникнути borrow conflicts)
     trigger_segment_search(state, seg_idx, ctx);
 
+    let mut retrigger_search = false;
+
     egui::Window::new(title)
         .id(egui::Id::new("stock_picker_single"))
         .default_size([750.0, 520.0])
@@ -735,12 +741,27 @@ fn draw_single_mode(
         .collapsible(false)
         .order(egui::Order::Tooltip)
         .show(ctx, |ui| {
-            let Some(seg) = state.cache.get(seg_idx) else { return };
+            // Клонуємо дані сегмента щоб уникнути borrow conflicts з edit_keyword
+            let (seg_text, selected, photos, videos) = if let Some(seg) = state.cache.get(seg_idx) {
+                (seg.segment_text.clone(), seg.selected.clone(), seg.photos.clone(), seg.videos.clone())
+            } else {
+                return;
+            };
+
+            // Рядок редагування keyword + кнопка перезапуску пошуку
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut state.edit_keyword)
+                    .desired_width(ui.available_width() - 44.0));
+                if ui.button("🔄").on_hover_text(translate(language, "stock_search_retrigger")).clicked() {
+                    retrigger_search = true;
+                }
+            });
+            ui.add_space(4.0);
 
             // Опис сцени
-            if !seg.segment_text.is_empty() {
-                let preview: String = seg.segment_text.chars().take(120).collect();
-                let sfx = if seg.segment_text.chars().count() > 120 { "…" } else { "" };
+            if !seg_text.is_empty() {
+                let preview: String = seg_text.chars().take(120).collect();
+                let sfx = if seg_text.chars().count() > 120 { "…" } else { "" };
                 ui.label(egui::RichText::new(format!("{}{}", preview, sfx)).weak().size(11.0));
                 ui.add_space(4.0);
             }
@@ -768,7 +789,7 @@ fn draw_single_mode(
             }
 
             // Статус вибору
-            if let Some(sel) = &seg.selected {
+            if let Some(sel) = &selected {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(format!("✔ {}", sel.filename))
@@ -780,8 +801,6 @@ fn draw_single_mode(
             }
 
             // Сітка результатів
-            let photos = state.cache[seg_idx].photos.clone();
-            let videos = state.cache[seg_idx].videos.clone();
             let is_searching = state.segment_search.contains_key(&seg_idx);
 
             let has_videos = !videos.is_empty();
@@ -829,6 +848,19 @@ fn draw_single_mode(
                 });
             });
         });
+
+    if retrigger_search {
+        let new_kw = state.edit_keyword.clone();
+        if let Some(seg) = state.cache.get_mut(seg_idx) {
+            seg.keyword = new_kw;
+            seg.photos.clear();
+            seg.videos.clear();
+        }
+        state.segment_search.remove(&seg_idx);
+        state.show_videos = None;
+        let _ = save_cache(Path::new(&state.save_path), &state.cache);
+        trigger_segment_search(state, seg_idx, ctx);
+    }
 }
 
 // ─── Full-mode (всі сегменти) ─────────────────────────────────────────────────
@@ -841,6 +873,7 @@ fn draw_full_mode(
     screen: egui::Rect,
     action: &mut StockPickerAction,
 ) {
+    let mut retrigger_search = false;
     egui::Window::new(format!("🖼 Stock Picker — {}", state.job_name))
         .id(egui::Id::new("stock_picker_window"))
         .default_size([screen.width().min(900.0), screen.height().min(600.0)])
@@ -880,6 +913,7 @@ fn draw_full_mode(
                                     if state.active_segment != i {
                                         state.active_segment = i;
                                         state.show_videos = None;
+                                        state.edit_keyword = state.cache.get(i).map(|s| s.keyword.clone()).unwrap_or_default();
                                     }
                                 }
                             }
@@ -889,20 +923,29 @@ fn draw_full_mode(
             // Запускаємо пошук для активного сегменту якщо потрібно
             trigger_segment_search(state, seg_idx, ctx);
 
-            // Права область
-            let Some(seg) = state.cache.get(seg_idx) else { return };
+            // Права область — клонуємо дані сегмента щоб уникнути borrow conflicts з edit_keyword
+            let (seg_text, selected, photos, videos) = if let Some(seg) = state.cache.get(seg_idx) {
+                (seg.segment_text.clone(), seg.selected.clone(), seg.photos.clone(), seg.videos.clone())
+            } else {
+                return;
+            };
 
-            let kw_display: String = seg.keyword.chars().take(50).collect();
-            let kw_suffix = if seg.keyword.chars().count() > 50 { "…" } else { "" };
-            ui.label(egui::RichText::new(format!("\"{}{}\"", kw_display, kw_suffix)).strong().size(13.0));
+            // Рядок редагування keyword + кнопка перезапуску пошуку
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut state.edit_keyword)
+                    .desired_width(ui.available_width() - 44.0));
+                if ui.button("🔄").on_hover_text(translate(language, "stock_search_retrigger")).clicked() {
+                    retrigger_search = true;
+                }
+            });
 
-            if !seg.segment_text.is_empty() && seg.segment_text != seg.keyword {
-                let preview: String = seg.segment_text.chars().take(100).collect();
-                let sfx = if seg.segment_text.chars().count() > 100 { "…" } else { "" };
+            if !seg_text.is_empty() && seg_text != state.edit_keyword {
+                let preview: String = seg_text.chars().take(100).collect();
+                let sfx = if seg_text.chars().count() > 100 { "…" } else { "" };
                 ui.label(egui::RichText::new(format!("{}{}", preview, sfx)).weak().size(11.0));
             }
 
-            if let Some(sel) = &seg.selected {
+            if let Some(sel) = &selected {
                 ui.label(
                     egui::RichText::new(format!("✔ Обрано: {}", sel.filename))
                         .color(egui::Color32::from_rgb(46, 204, 113))
@@ -934,8 +977,6 @@ fn draw_full_mode(
             ui.add_space(4.0);
 
             // Перемикач Фото / Відео
-            let photos = seg.photos.clone();
-            let videos = seg.videos.clone();
             let is_searching = state.segment_search.contains_key(&seg_idx);
             let has_videos = !videos.is_empty();
             if state.show_videos.is_none() {
@@ -993,6 +1034,20 @@ fn draw_full_mode(
                 });
             });
         });
+
+    let seg_idx = state.active_segment;
+    if retrigger_search {
+        let new_kw = state.edit_keyword.clone();
+        if let Some(seg) = state.cache.get_mut(seg_idx) {
+            seg.keyword = new_kw;
+            seg.photos.clear();
+            seg.videos.clear();
+        }
+        state.segment_search.remove(&seg_idx);
+        state.show_videos = None;
+        let _ = save_cache(Path::new(&state.save_path), &state.cache);
+        trigger_segment_search(state, seg_idx, ctx);
+    }
 }
 
 // ─── Сітки результатів ────────────────────────────────────────────────────────

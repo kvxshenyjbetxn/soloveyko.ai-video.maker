@@ -225,6 +225,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stock_picker_open_btn" => "Відкрити Stock Picker:",
         "stock_picker_confirm" => "Підтвердити та відновити",
         "stock_picker_close" => "Закрити",
+        "stock_search_retrigger" => "Перешукати з новим промтом",
         "stock_no_results" => "Немає результатів пошуку",
         "stock_trim_label" => "Обрізка відео",
         "stock_trim_start" => "Від:",

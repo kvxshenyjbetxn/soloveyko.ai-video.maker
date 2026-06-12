@@ -225,6 +225,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "stock_picker_open_btn" => "Открыть Stock Picker:",
         "stock_picker_confirm" => "Подтвердить и возобновить",
         "stock_picker_close" => "Закрыть",
+        "stock_search_retrigger" => "Найти заново с новым промтом",
         "stock_no_results" => "Нет результатов поиска",
         "stock_trim_label" => "Обрезка видео",
         "stock_trim_start" => "От:",

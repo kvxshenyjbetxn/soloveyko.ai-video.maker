@@ -225,6 +225,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "stock_picker_open_btn" => "Open Stock Picker:",
         "stock_picker_confirm" => "Confirm & Resume",
         "stock_picker_close" => "Close",
+        "stock_search_retrigger" => "Re-search with new prompt",
         "stock_no_results" => "No search results",
         "stock_trim_label" => "Video trim",
         "stock_trim_start" => "From:",
