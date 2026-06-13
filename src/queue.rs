@@ -143,6 +143,8 @@ pub struct JobSettings {
     pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
     /// Якщо Some — пайплайн стартує з цього етапу замість повного запуску (режим відновлення)
     pub resume_from_stage: Option<RetryStage>,
+    /// Пропустити запуск агента при відновленні (timeline.json вже є)
+    pub skip_agent_on_resume: bool,
 }
 
 /// Одна задача в черзі пайплайну.

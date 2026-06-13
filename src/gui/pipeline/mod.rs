@@ -1203,6 +1203,7 @@ fn build_job_settings(
         overlay_triggers_enabled,
         overlay_triggers,
         resume_from_stage: None,
+        skip_agent_on_resume: false,
     }
 }
 

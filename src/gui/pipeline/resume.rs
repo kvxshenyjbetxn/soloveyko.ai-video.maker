@@ -6,6 +6,8 @@ pub struct FoundFiles {
     pub text_txt: bool,
     pub voice_file: bool,
     pub subtitle_srt: bool,
+    /// Файл таймлайну агента — якщо є, агент вже відпрацював
+    pub timeline_json: bool,
     pub media_images: usize,
     pub media_videos: usize,
     pub output_video: bool,
@@ -21,6 +23,8 @@ pub struct ResumePendingData {
     pub keep_voiceover: bool,
     /// Зберегти наявні субтитри (вимкнено якщо озвучка не зберігається)
     pub keep_subtitles: bool,
+    /// Зберегти timeline.json (пропустити запуск агента)
+    pub keep_timeline: bool,
     /// Зберегти наявні медіафайли
     pub keep_video: bool,
 }
@@ -29,8 +33,9 @@ impl ResumePendingData {
     pub fn new(task_name: String, found: FoundFiles, settings: crate::queue::JobSettings) -> Self {
         let keep_voiceover = found.voice_file;
         let keep_subtitles = found.subtitle_srt;
+        let keep_timeline = found.timeline_json;
         let keep_video = found.media_images > 0 || found.media_videos > 0;
-        Self { task_name, found, settings, keep_voiceover, keep_subtitles, keep_video }
+        Self { task_name, found, settings, keep_voiceover, keep_subtitles, keep_timeline, keep_video }
     }
 
     /// Визначає з якого етапу фактично запустити пайплайн, з урахуванням чекбоксів.
@@ -41,6 +46,10 @@ impl ResumePendingData {
         }
         if self.found.subtitle_srt && !self.keep_subtitles {
             return Some(crate::queue::RetryStage::Subtitles);
+        }
+        // timeline.json знято → перезапустити агента (Video з агентом)
+        if self.found.timeline_json && !self.keep_timeline {
+            return Some(crate::queue::RetryStage::Video);
         }
         if (self.found.media_images > 0 || self.found.media_videos > 0) && !self.keep_video {
             return Some(crate::queue::RetryStage::Video);
@@ -57,6 +66,7 @@ impl FoundFiles {
         let voice_file = task_dir.join("voice.mp3").exists()
             || task_dir.join("voice.wav").exists();
         let subtitle_srt = task_dir.join("subtitle.srt").exists();
+        let timeline_json = task_dir.join("timeline.json").exists();
 
         let media_dir = task_dir.join("media");
         let (media_images, media_videos) = if media_dir.is_dir() {
@@ -87,7 +97,7 @@ impl FoundFiles {
             .join(format!("{}.mp4", safe_name.trim()))
             .exists();
 
-        Self { text_txt, voice_file, subtitle_srt, media_images, media_videos, output_video }
+        Self { text_txt, voice_file, subtitle_srt, timeline_json, media_images, media_videos, output_video }
     }
 
     pub fn has_any(&self) -> bool {
@@ -95,6 +105,7 @@ impl FoundFiles {
         self.text_txt
             || self.voice_file
             || self.subtitle_srt
+            || self.timeline_json
             || self.media_images > 0
             || self.media_videos > 0
     }
@@ -105,6 +116,9 @@ impl FoundFiles {
         // output_video не враховується — навіть якщо є готове відео, визначаємо етап по проміжних файлах
         if self.media_images > 0 || self.media_videos > 0 {
             Some(crate::queue::RetryStage::Montage)
+        } else if self.timeline_json {
+            // Агент вже відпрацював — продовжуємо з пошуку медіа (без агента)
+            Some(crate::queue::RetryStage::Video)
         } else if self.subtitle_srt {
             Some(crate::queue::RetryStage::Video)
         } else if self.voice_file {
@@ -143,15 +157,17 @@ pub fn draw_resume_dialog(
 
         // Копіюємо значення для відображення всередині closure
         let task_name = data.task_name.clone();
-        let text_txt     = data.found.text_txt;
-        let voice_file   = data.found.voice_file;
-        let subtitle_srt = data.found.subtitle_srt;
-        let media_images = data.found.media_images;
-        let media_videos = data.found.media_videos;
-        let output_video = data.found.output_video;
+        let text_txt      = data.found.text_txt;
+        let voice_file    = data.found.voice_file;
+        let subtitle_srt  = data.found.subtitle_srt;
+        let timeline_json = data.found.timeline_json;
+        let media_images  = data.found.media_images;
+        let media_videos  = data.found.media_videos;
+        let output_video  = data.found.output_video;
 
         let mut keep_vo = data.keep_voiceover;
         let mut keep_su = data.keep_subtitles;
+        let mut keep_tl = data.keep_timeline;
         let mut keep_vi = data.keep_video;
 
         // Обчислюємо поточний resume stage для відображення
@@ -159,12 +175,13 @@ pub fn draw_resume_dialog(
             let temp = ResumePendingData {
                 task_name: String::new(),
                 found: FoundFiles {
-                    text_txt, voice_file, subtitle_srt,
+                    text_txt, voice_file, subtitle_srt, timeline_json,
                     media_images, media_videos, output_video,
                 },
                 settings: data.settings.clone(),
                 keep_voiceover: keep_vo,
                 keep_subtitles: keep_su,
+                keep_timeline: keep_tl,
                 keep_video: keep_vi,
             };
             temp.effective_resume_stage()
@@ -238,6 +255,15 @@ pub fn draw_resume_dialog(
                                     .size(10.0),
                             );
                         }
+                    });
+                }
+
+                // Таймлайн агента — з чекбоксом
+                if timeline_json {
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut keep_tl, "");
+                        ui.label(translate(language, "resume_timeline"));
+                        ui.label(egui::RichText::new("timeline.json").color(weak).size(11.0));
                     });
                 }
 
@@ -329,6 +355,7 @@ pub fn draw_resume_dialog(
         // Зберігаємо змінені стани чекбоксів назад
         data.keep_voiceover = keep_vo;
         data.keep_subtitles = keep_su;
+        data.keep_timeline  = keep_tl;
         data.keep_video     = keep_vi;
     } // data borrow ends here
 
@@ -357,6 +384,7 @@ fn enqueue_with_resume(
     let text_txt_exists = data.found.text_txt;
     let keep_vo = data.keep_voiceover;
     let keep_su = data.keep_subtitles;
+    let keep_tl = data.keep_timeline;
     let keep_vi = data.keep_video;
     let save_path = data.settings.save_path.clone();
 
@@ -364,6 +392,8 @@ fn enqueue_with_resume(
     let found = data.found;
     let mut settings = data.settings;
     settings.resume_from_stage = resume_stage;
+    // Якщо timeline.json зберігаємо — пропускаємо агента при Video retry
+    settings.skip_agent_on_resume = keep_tl;
 
     let id = *job_counter;
     *job_counter += 1;
@@ -379,7 +409,7 @@ fn enqueue_with_resume(
     }
 
     // Позначаємо завершені етапи для коректного відображення в черзі
-    pre_mark_stages(&job, &found, keep_vo, keep_su, keep_vi);
+    pre_mark_stages(&job, &found, keep_vo, keep_su, keep_tl, keep_vi);
 
     jobs.push(job);
 }
@@ -402,8 +432,10 @@ fn pre_mark_stages(
     found: &FoundFiles,
     keep_voiceover: bool,
     keep_subtitles: bool,
+    keep_timeline: bool,
     keep_video: bool,
 ) {
+    let _ = keep_timeline; // timeline.json не є окремим етапом в UI — враховується через skip_agent_on_resume
     use crate::queue::StageStatus;
     let s = &job.settings;
 

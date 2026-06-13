@@ -2390,9 +2390,10 @@ pub fn retry_from_stage(
                 *status.lock().unwrap() = crate::queue::JobStatus::Running;
                 ctx.request_repaint();
 
-                let is_agent_mode = settings.video_llm_service == "Claude Code"
-                    || settings.video_llm_service == "Gemini CLI"
-                    || settings.video_llm_service == "Codex CLI";
+                let is_agent_mode = !settings.skip_agent_on_resume
+                    && (settings.video_llm_service == "Claude Code"
+                        || settings.video_llm_service == "Gemini CLI"
+                        || settings.video_llm_service == "Codex CLI");
 
                 // В агентному режимі спочатку запускаємо агента для створення timeline.json
                 if is_agent_mode {
