@@ -1588,6 +1588,7 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&job.montage_file_size),
                     std::sync::Arc::clone(&job.media_control_resume),
                     std::sync::Arc::clone(&job.montage_control_resume),
+                    std::sync::Arc::clone(&job.agent_control_resume),
                     std::sync::Arc::clone(&job.agent_chat),
                     std::sync::Arc::clone(&job.agent_session),
                     ctx.clone(),

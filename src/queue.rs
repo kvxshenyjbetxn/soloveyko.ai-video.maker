@@ -10,6 +10,8 @@ pub enum JobStatus {
     AwaitingMediaControl,
     /// Очікує підтвердження монтажу від користувача
     AwaitingMontageControl,
+    /// Очікує підтвердження агентного кроку від користувача
+    AwaitingAgentControl,
     Done,
     Failed(String),
 }
@@ -179,6 +181,8 @@ pub struct PipelineJob {
     pub media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     /// Condvar для відновлення пайплайну після контролю монтажу
     pub montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Condvar для відновлення пайплайну після підтвердження агентного кроку
+    pub agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     /// Сигнал для перебудови таймлінії в редакторі монтажу після чату з агентом
     pub timeline_rebuild_requested: Arc<Mutex<bool>>,
     /// Повідомлення чату з агентом (зберігається між сесіями)
@@ -208,6 +212,7 @@ impl PipelineJob {
             montage_file_size: Arc::new(Mutex::new(None)),
             media_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
             montage_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            agent_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
             timeline_rebuild_requested: Arc::new(Mutex::new(false)),
             agent_chat: Arc::new(Mutex::new(Vec::new())),
             agent_session: Arc::new(Mutex::new(None)),

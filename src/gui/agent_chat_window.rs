@@ -40,8 +40,10 @@ pub fn draw_agent_chat_windows(
         let job_status = jobs[job_idx].status.lock().unwrap().clone();
         let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
         let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
+        let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
         let timeline_rebuild_arc = std::sync::Arc::clone(&jobs[job_idx].timeline_rebuild_requested);
         let job_settings = jobs[job_idx].settings.clone();
+        let is_awaiting_agent = job_status == crate::queue::JobStatus::AwaitingAgentControl;
 
         let state = open_agent_chats.get_mut(&job_id).unwrap();
 
@@ -69,6 +71,7 @@ pub fn draw_agent_chat_windows(
         let mut is_open = true;
         let mut trigger_send = false;
         let mut trigger_rebuild = false;
+        let mut trigger_confirm = false;
 
         let title = format!(
             "{} — #{} {}",
@@ -181,6 +184,7 @@ pub fn draw_agent_chat_windows(
                             ui.add_space(6.0);
                         }
 
+                        // Кнопка «Надіслати» — доступна коли є сесія і є текст
                         if ui.add_enabled(
                             !is_loading && has_session && !state.input.trim().is_empty(),
                             egui::Button::new(translate(language, "agent_chat_send_btn")),
@@ -189,15 +193,40 @@ pub fn draw_agent_chat_windows(
                         }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let has_session = agent_session_arc.lock().unwrap().is_some();
-                            if has_session {
-                                if ui.add(
-                                    egui::Button::new(
-                                        egui::RichText::new(translate(language, "agent_chat_rebuild_btn")).strong()
-                                    )
-                                ).clicked() {
-                                    trigger_rebuild = true;
-                                }
+                            // Кнопка «Перебудувати таймлінію»
+                            if ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new(translate(language, "agent_chat_rebuild_btn")).strong()
+                                )
+                            ).clicked() {
+                                trigger_rebuild = true;
+                            }
+
+                            ui.add_space(6.0);
+
+                            // Кнопка «Підтвердити» — відновлює пайплайн після паузи на агентному кроці
+                            let confirm_btn = ui.add_enabled(
+                                is_awaiting_agent,
+                                egui::Button::new(
+                                    egui::RichText::new(translate(language, "agent_chat_confirm_btn"))
+                                        .strong()
+                                        .color(if is_awaiting_agent {
+                                            egui::Color32::WHITE
+                                        } else {
+                                            egui::Color32::GRAY
+                                        }),
+                                )
+                                .fill(if is_awaiting_agent {
+                                    egui::Color32::from_rgb(39, 174, 96)
+                                } else {
+                                    egui::Color32::from_rgb(30, 30, 35)
+                                }),
+                            );
+                            if confirm_btn
+                                .on_hover_text(translate(language, "agent_chat_confirm_tooltip"))
+                                .clicked()
+                            {
+                                trigger_confirm = true;
                             }
                         });
                     });
@@ -244,6 +273,13 @@ pub fn draw_agent_chat_windows(
 
         if trigger_rebuild {
             *timeline_rebuild_arc.lock().unwrap() = true;
+        }
+
+        // Відновлюємо пайплайн після паузи AwaitingAgentControl
+        if trigger_confirm {
+            let (lock, cvar) = &*agent_control_resume_arc;
+            *lock.lock().unwrap() = true;
+            cvar.notify_one();
         }
 
         if !is_open {

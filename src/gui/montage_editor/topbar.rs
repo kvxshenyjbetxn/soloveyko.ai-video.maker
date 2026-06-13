@@ -73,6 +73,19 @@ pub(super) fn draw_topbar(
             {
                 editor.maximized = !editor.maximized;
             }
+
+            ui.add_space(4.0);
+
+            // Кнопка перебудови таймлінії (читає зміни агента і перезавантажує редактор)
+            if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
+                let rebuild_arc = std::sync::Arc::clone(&job.timeline_rebuild_requested);
+                if ui.button(egui::RichText::new("🔄").size(13.0))
+                    .on_hover_text(translate(language, "agent_chat_rebuild_btn"))
+                    .clicked()
+                {
+                    *rebuild_arc.lock().unwrap() = true;
+                }
+            }
         });
     });
     continue_clicked

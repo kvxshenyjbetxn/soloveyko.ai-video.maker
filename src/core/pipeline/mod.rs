@@ -1419,14 +1419,18 @@ fn read_segment_durations_from_timeline(save_dir: &std::path::Path) -> Option<Ve
     }).collect())
 }
 
-/// Запускає агента (Claude Code або Gemini CLI) для створення timeline.json на основі subtitle.srt.
-/// Запускає агента для створення timeline.json та зберігає сесію для подальшого чату.
+/// Запускає агента для створення timeline.json.
+/// Після завершення роботи агента (успіх або помилка квоти) пайплайн переходить у стан
+/// AwaitingAgentControl — користувач підтверджує продовження кнопкою «Підтвердити».
+/// Це дозволяє дописати агенту «продовжи» через чат і лише тоді відновити пайплайн.
 fn run_agent_timeline(
     job_id: u64,
     job_name: &str,
     settings: &crate::queue::JobSettings,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
+    agent_control_resume: Arc<(Mutex<bool>, std::sync::Condvar)>,
+    status: Arc<Mutex<crate::queue::JobStatus>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
     let save_dir = std::path::Path::new(&settings.save_path);
@@ -1437,8 +1441,6 @@ fn run_agent_timeline(
     }
 
     let timeline_path = save_dir.join("timeline.json");
-    // Передаємо шлях до SRT файлу — агент читає його сам через Read/Bash.
-    // Це усуває дублювання SRT-контенту в кожному turn агентної сесії.
     let system_instruction = agent_prompts::VIDEO_AGENT_SYSTEM_PROMPT
         .replace("{{srt}}", &srt_path.to_string_lossy())
         .replace("{{path}}", &timeline_path.to_string_lossy());
@@ -1457,25 +1459,19 @@ fn run_agent_timeline(
     let session_id = uuid_v4();
     crate::logger::log_job(job_id, job_name, &format!("Agent session: {}", session_id));
 
-    // Початкове повідомлення з аргументами запуску — chunks додаватимуться після нього
+    // Зберігаємо сесію ДО запуску — чат стає доступним навіть якщо агент завершиться з помилкою
+    *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
+        session_id: session_id.clone(),
+        service: settings.video_llm_service.clone(),
+        model: settings.video_llm_model.clone(),
+    });
+
     let initial_text = if settings.video_llm_service == "Codex CLI" {
-        format!(
-            "Running: codex exec --model {} --json\n\n",
-            settings.video_llm_model
-        )
+        format!("Running: codex exec --model {} --json\n\n", settings.video_llm_model)
     } else if settings.video_llm_service == "Claude Code" {
-        format!(
-            "Running: claude --model {} --session-id {}\n\n",
-            settings.video_llm_model,
-            session_id
-        )
+        format!("Running: claude --model {} --session-id {}\n\n", settings.video_llm_model, session_id)
     } else {
-        format!(
-            "Running: {} --model {} --session-id {}\n\n",
-            settings.video_llm_service,
-            settings.video_llm_model,
-            session_id
-        )
+        format!("Running: {} --model {} --session-id {}\n\n", settings.video_llm_service, settings.video_llm_model, session_id)
     };
     agent_chat.lock().unwrap().push(crate::queue::AgentChatMessage {
         role: "agent".to_string(),
@@ -1486,7 +1482,7 @@ fn run_agent_timeline(
     let agent_chat_for_chunk = Arc::clone(&agent_chat);
     let ctx_for_chunk = ctx.clone();
 
-    let (response, actual_session_id) = call_agent_new_session_streaming(
+    let agent_result = call_agent_new_session_streaming(
         &settings.video_llm_service,
         &settings.video_llm_model,
         &agent_prompt,
@@ -1500,34 +1496,49 @@ fn run_agent_timeline(
             }
             ctx_for_chunk.request_repaint();
         },
-    ).map_err(|e| format!("Agent error: {}", e))?;
+    );
 
     save_agent_chat_to_file(save_dir, &agent_chat.lock().unwrap());
 
-    // Зберігаємо сесію агента завжди — для можливості продовження чату при контролі монтажу
-    *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
-        session_id: actual_session_id.clone(),
-        service: settings.video_llm_service.clone(),
-        model: settings.video_llm_model.clone(),
-    });
-
-    // Оновлюємо заголовок для Codex CLI — підставляємо реальний thread ID
-    if settings.video_llm_service == "Codex CLI" {
-        let mut chat = agent_chat.lock().unwrap();
-        if let Some(first) = chat.first_mut() {
-            let tail = first.content.find('\n')
-                .map(|p| first.content[p..].to_string())
-                .unwrap_or_default();
-            first.content = format!(
-                "Running: codex exec --model {} --json [Thread: {}]{}",
-                settings.video_llm_model,
-                actual_session_id,
-                tail
-            );
+    match &agent_result {
+        Ok((_, actual_session_id)) => {
+            // Оновлюємо session_id на реальний (актуально для Codex CLI)
+            if let Some(ref mut sess) = *agent_session.lock().unwrap() {
+                sess.session_id = actual_session_id.clone();
+            }
+            // Оновлюємо заголовок для Codex CLI — підставляємо реальний thread ID
+            if settings.video_llm_service == "Codex CLI" {
+                let mut chat = agent_chat.lock().unwrap();
+                if let Some(first) = chat.first_mut() {
+                    let tail = first.content.find('\n')
+                        .map(|p| first.content[p..].to_string())
+                        .unwrap_or_default();
+                    first.content = format!(
+                        "Running: codex exec --model {} --json [Thread: {}]{}",
+                        settings.video_llm_model, actual_session_id, tail
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            crate::logger::log_job(job_id, job_name,
+                &format!("Agent error: {} — чат доступний для продовження, очікую підтвердження", e));
         }
     }
 
-    let _ = response;
+    // Пауза — чекаємо поки користувач натисне «Підтвердити» в чаті
+    *status.lock().unwrap() = crate::queue::JobStatus::AwaitingAgentControl;
+    ctx.request_repaint();
+    let (lock, cvar) = &*agent_control_resume;
+    let mut resumed = lock.lock().unwrap();
+    while !*resumed {
+        resumed = cvar.wait(resumed).unwrap();
+    }
+    *resumed = false;
+
+    crate::logger::log_job(job_id, job_name, "Agent confirmed. Resuming pipeline...");
+    *status.lock().unwrap() = crate::queue::JobStatus::Running;
+    ctx.request_repaint();
 
     if !timeline_path.exists() {
         return Err("Agent did not create timeline.json".to_string());
@@ -1538,7 +1549,6 @@ fn run_agent_timeline(
         .map_err(|e| format!("Agent timeline.json is invalid: {}", e))?;
 
     crate::logger::log_job(job_id, job_name, "Agent timeline.json created and validated.");
-
     ctx.request_repaint();
     Ok(())
 }
@@ -1684,6 +1694,7 @@ pub fn run_pipeline(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: egui::Context,
@@ -1799,6 +1810,8 @@ pub fn run_pipeline(
                 job_id, &job_name, &settings,
                 Arc::clone(&agent_chat),
                 Arc::clone(&agent_session),
+                Arc::clone(&agent_control_resume),
+                Arc::clone(&status),
                 &ctx,
             ) {
                 crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2235,6 +2248,7 @@ pub fn retry_from_stage(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: egui::Context,
@@ -2264,7 +2278,7 @@ pub fn retry_from_stage(
                 translation_stage, voiceover_stage, video_stage, subtitles_stage, montage_stage,
                 translated_text, total_cost, audio_duration,
                 prompts_progress, media_progress, montage_progress, montage_file_size,
-                media_control_resume, montage_control_resume,
+                media_control_resume, montage_control_resume, agent_control_resume,
                 agent_chat, agent_session, ctx,
             );
         }
@@ -2314,6 +2328,8 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
+                        Arc::clone(&agent_control_resume),
+                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2387,6 +2403,8 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
+                        Arc::clone(&agent_control_resume),
+                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2489,6 +2507,8 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
+                        Arc::clone(&agent_control_resume),
+                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
