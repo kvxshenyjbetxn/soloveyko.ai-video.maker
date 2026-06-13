@@ -1076,101 +1076,131 @@ impl VideoMakerApp {
         }
     }
 
-    /// Застосовує налаштування з PipelineTemplate до поточного стану app (як при завантаженні шаблону).
-    fn apply_pipeline_template(&mut self, t: crate::gui::settings::storage::PipelineTemplate) {
-        self.openrouter_key = t.openrouter_key;
-        self.openrouter_status = None;
-        self.assemblyai_key = t.assemblyai_key;
-        self.assemblyai_status = None;
-        self.pexels_key = t.pexels_key;
-        self.voiceover_provider = t.voiceover_provider;
-        self.voiceover_template_uuid = t.voiceover_template_uuid;
-        self.pipeline_translation_enabled = t.pipeline_translation_enabled;
-        self.pipeline_translation_control_enabled = t.pipeline_translation_control_enabled;
-        self.pipeline_control_auto_open = t.pipeline_control_auto_open;
-        self.pipeline_media_control_enabled = t.pipeline_media_control_enabled;
-        self.pipeline_montage_control_enabled = t.pipeline_montage_control_enabled;
-        self.pipeline_voiceover_enabled = t.pipeline_voiceover_enabled;
-        self.pipeline_video_enabled = t.pipeline_video_enabled;
-        self.pipeline_subtitles_enabled = t.pipeline_subtitles_enabled;
-        self.pipeline_editing_enabled = t.pipeline_editing_enabled;
-        self.translation_prompt = t.translation_prompt;
-        self.translation_model = t.translation_model.clone();
-        self.translation_model_openrouter = t.translation_model_openrouter.clone();
-        self.translation_model_claude = if t.translation_model_claude.is_empty() { "sonnet".to_string() } else { t.translation_model_claude.clone() };
-        self.translation_model_gemini = if t.translation_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.translation_model_gemini.clone() };
-        self.translation_model_codex = if t.translation_model_codex.is_empty() { "gpt-5.4-mini".to_string() } else { t.translation_model_codex.clone() };
-        if t.translation_service == "OpenRouter" && self.translation_model_openrouter.is_empty() {
-            self.translation_model_openrouter = t.translation_model.clone();
-        }
-        self.translation_temperature = t.translation_temperature;
-        self.translation_service = t.translation_service;
-        self.video_service = t.video_service;
-        self.video_media_type = t.video_media_type;
-        self.text_split_mode = t.text_split_mode;
-        self.text_split_mode_openrouter = t.text_split_mode_openrouter;
-        self.text_split_char_limit = t.text_split_char_limit;
-        self.video_prompt = t.video_prompt;
-        self.googler_video_upscale_enabled = t.googler_video_upscale_enabled;
-        self.googler_video_upscale_resolution = if t.googler_video_upscale_resolution.is_empty() { "1080p".to_string() } else { t.googler_video_upscale_resolution.clone() };
-        self.googler_video_upscale_quality = if t.googler_video_upscale_quality.is_empty() { "balanced".to_string() } else { t.googler_video_upscale_quality.clone() };
-        self.video_agent_prompt = t.video_agent_prompt;
-        self.video_style_enabled = t.video_style_enabled;
-        self.video_style_prompt = t.video_style_prompt;
-        self.video_llm_service = t.video_llm_service.clone();
+    /// Додає задачу з историї безпосередньо в чергу, не змінюючи налаштування панелі.
+    fn enqueue_from_history(&mut self, entry: &crate::gui::settings::storage::TaskHistoryEntry) {
+        use crate::localization::translate;
 
-        self.video_llm_model_openrouter = t.video_llm_model_openrouter.clone();
-        self.video_llm_model_claude = if t.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { t.video_llm_model_claude.clone() };
-        self.video_llm_model_gemini = if t.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.video_llm_model_gemini.clone() };
-        self.video_llm_model_codex = if t.video_llm_model_codex.is_empty() { "gpt-5.4-mini".to_string() } else { t.video_llm_model_codex.clone() };
-        self.video_llm_temperature = t.video_llm_temperature;
-        self.video_llm_model = match self.video_llm_service.as_str() {
-            "OpenRouter" => self.video_llm_model_openrouter.clone(),
-            "Claude Code" => self.video_llm_model_claude.clone(),
-            "Gemini CLI" => self.video_llm_model_gemini.clone(),
-            "Codex CLI" => self.video_llm_model_codex.clone(),
-            _ => t.video_llm_model.clone(),
+        let save_path = if cfg!(target_os = "macos") {
+            &self.save_path_macos
+        } else {
+            &self.save_path_windows
         };
-        self.edge_tts_voice = t.edge_tts_voice;
-        self.edge_tts_rate = t.edge_tts_rate;
-        self.edge_tts_pitch = t.edge_tts_pitch;
-        self.edge_tts_volume = t.edge_tts_volume;
-        self.googler_image_max_threads = t.googler_image_max_threads;
-        self.googler_video_max_threads = t.googler_video_max_threads;
-        self.voiceover_convert_to_wav = t.voiceover_convert_to_wav;
-        self.googler_image_priority = t.googler_image_priority;
-        self.googler_video_priority = t.googler_video_priority;
-        self.googler_video_disabled = t.googler_video_disabled;
-        self.subtitles_service = t.subtitles_service;
-        self.whisper_language = t.whisper_language;
-        self.whisper_model = t.whisper_model;
-        self.whisper_max_line_width = t.whisper_max_line_width;
-        self.subtitle_font_size = t.subtitle_font_size;
-        self.subtitle_color = t.subtitle_color;
-        self.subtitle_margin_v = t.subtitle_margin_v;
-        self.subtitle_karaoke = t.subtitle_karaoke;
-        self.subtitle_karaoke_mode = t.subtitle_karaoke_mode;
-        self.subtitle_karaoke_highlight_color = t.subtitle_karaoke_highlight_color;
-        self.subtitle_karaoke_outline_color = t.subtitle_karaoke_outline_color;
-        self.subtitle_karaoke_bold = t.subtitle_karaoke_bold;
-        self.subtitle_karaoke_scale = t.subtitle_karaoke_scale;
-        self.subtitle_font = t.subtitle_font;
-        self.capcut_enabled = t.capcut_enabled;
-        self.capcut_draft_path = t.capcut_draft_path;
-        self.montage_service = t.montage_service;
-        self.montage_fps = t.montage_fps;
-        self.montage_preset = t.montage_preset;
-        self.montage_bitrate = t.montage_bitrate;
-        self.montage_transition = t.montage_transition;
-        self.montage_transition_duration = t.montage_transition_duration;
-        self.montage_image_zoom_enabled = t.montage_image_zoom_enabled;
-        self.montage_image_zoom_intensity = t.montage_image_zoom_intensity;
-        self.montage_image_zoom_mode = t.montage_image_zoom_mode;
-        self.montage_image_zoom_scale = t.montage_image_zoom_scale;
-        self.montage_image_shake_enabled = t.montage_image_shake_enabled;
-        self.montage_image_shake_intensity = t.montage_image_shake_intensity;
-        self.overlay_triggers_enabled = t.overlay_triggers_enabled;
-        self.overlay_triggers = t.overlay_triggers;
+
+        if save_path.trim().is_empty() {
+            self.queue_error = Some(translate(self.language, "queue_error_no_save_path").to_string());
+            return;
+        }
+
+        let base = save_path.trim_end_matches('/').trim_end_matches('\\');
+        let actual_path = format!("{}/{}", base, entry.name);
+
+        if let Err(e) = std::fs::create_dir_all(&actual_path) {
+            self.queue_error = Some(format!(
+                "{}: {}",
+                translate(self.language, "queue_error_create_dir"),
+                e
+            ));
+            return;
+        }
+
+        let t = &entry.settings;
+        let settings = crate::queue::JobSettings {
+            text: entry.text.clone(),
+            save_path: actual_path,
+            translation_enabled: t.pipeline_translation_enabled,
+            translation_control_enabled: t.pipeline_translation_control_enabled,
+            translation_prompt: t.translation_prompt.clone(),
+            translation_model: t.translation_model.clone(),
+            translation_temperature: t.translation_temperature,
+            translation_service: t.translation_service.clone(),
+            openrouter_key: t.openrouter_key.clone(),
+            voiceover_enabled: t.pipeline_voiceover_enabled,
+            voicebot_key: self.voicebot_key.clone(),
+            voiceover_template_uuid: t.voiceover_template_uuid.clone(),
+            voiceover_provider: t.voiceover_provider.clone(),
+            edge_tts_voice: t.edge_tts_voice.clone(),
+            edge_tts_rate: t.edge_tts_rate.clone(),
+            edge_tts_pitch: t.edge_tts_pitch.clone(),
+            edge_tts_volume: t.edge_tts_volume.clone(),
+            voiceover_convert_to_wav: t.voiceover_convert_to_wav,
+            video_enabled: t.pipeline_video_enabled,
+            video_service: t.video_service.clone(),
+            video_media_type: t.video_media_type.clone(),
+            video_prompt: t.video_prompt.clone(),
+            video_agent_prompt: t.video_agent_prompt.clone(),
+            video_style_enabled: t.video_style_enabled,
+            video_style_prompt: t.video_style_prompt.clone(),
+            video_llm_service: t.video_llm_service.clone(),
+            video_llm_model: t.video_llm_model.clone(),
+            video_llm_temperature: t.video_llm_temperature,
+            text_split_mode: t.text_split_mode.clone(),
+            text_split_char_limit: t.text_split_char_limit,
+            googler_key: self.googler_key.clone(),
+            googler_image_priority: t.googler_image_priority.clone(),
+            googler_video_priority: t.googler_video_priority.iter()
+                .filter(|p| !t.googler_video_disabled.contains(p))
+                .cloned()
+                .collect(),
+            googler_image_max_threads: t.googler_image_max_threads,
+            googler_video_upscale_enabled: t.googler_video_upscale_enabled,
+            googler_video_upscale_resolution: t.googler_video_upscale_resolution.clone(),
+            googler_video_upscale_quality: t.googler_video_upscale_quality.clone(),
+            assemblyai_key: t.assemblyai_key.clone(),
+            pexels_key: t.pexels_key.clone(),
+            subtitles_enabled: t.pipeline_subtitles_enabled,
+            subtitles_service: t.subtitles_service.clone(),
+            whisper_language: t.whisper_language.clone(),
+            whisper_model: t.whisper_model.clone(),
+            whisper_max_line_width: t.whisper_max_line_width,
+            subtitle_font_size: t.subtitle_font_size,
+            subtitle_color: t.subtitle_color,
+            subtitle_margin_v: t.subtitle_margin_v,
+            subtitle_karaoke: t.subtitle_karaoke,
+            subtitle_karaoke_mode: t.subtitle_karaoke_mode,
+            subtitle_karaoke_highlight_color: t.subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color: t.subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold: t.subtitle_karaoke_bold,
+            subtitle_karaoke_scale: t.subtitle_karaoke_scale,
+            subtitle_font: t.subtitle_font.clone(),
+            montage_enabled: t.pipeline_editing_enabled,
+            montage_service: t.montage_service.clone(),
+            capcut_enabled: t.capcut_enabled,
+            capcut_draft_path: t.capcut_draft_path.clone(),
+            montage_fps: t.montage_fps,
+            montage_preset: t.montage_preset.clone(),
+            montage_bitrate: t.montage_bitrate,
+            montage_transition: t.montage_transition.clone(),
+            montage_transition_duration: t.montage_transition_duration,
+            montage_image_zoom_enabled: t.montage_image_zoom_enabled,
+            montage_image_zoom_intensity: t.montage_image_zoom_intensity,
+            montage_image_zoom_mode: t.montage_image_zoom_mode.clone(),
+            montage_image_zoom_scale: t.montage_image_zoom_scale,
+            montage_image_shake_enabled: t.montage_image_shake_enabled,
+            montage_image_shake_intensity: t.montage_image_shake_intensity,
+            media_control_enabled: t.pipeline_media_control_enabled,
+            montage_control_enabled: t.pipeline_montage_control_enabled,
+            overlay_triggers_enabled: t.overlay_triggers_enabled,
+            overlay_triggers: t.overlay_triggers.clone(),
+            resume_from_stage: None,
+        };
+
+        let found = crate::gui::pipeline::resume::FoundFiles::scan(
+            std::path::Path::new(&settings.save_path),
+            &entry.name,
+        );
+
+        if found.has_any() {
+            self.resume_dialog_open = true;
+            self.resume_pending = Some(crate::gui::pipeline::resume::ResumePendingData::new(
+                entry.name.clone(),
+                found,
+                settings,
+            ));
+        } else {
+            let id = self.job_counter;
+            self.job_counter += 1;
+            self.jobs.push(crate::queue::PipelineJob::new(id, entry.name.clone(), settings));
+        }
     }
 
     /// Малює вкладку системних логів роботи додатку.
@@ -1340,9 +1370,8 @@ impl eframe::App for VideoMakerApp {
                         &self.task_history,
                         &mut delete_history_idx,
                     );
-                    if let Some((tmpl, text)) = applied {
-                        self.apply_pipeline_template(tmpl);
-                        self.text_input = text;
+                    if let Some(entry) = applied {
+                        self.enqueue_from_history(&entry);
                     }
                 });
             if let Some(idx) = delete_history_idx {

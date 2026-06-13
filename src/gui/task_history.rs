@@ -52,14 +52,14 @@ fn stage_dots(ui: &mut egui::Ui, language: Language, settings: &PipelineTemplate
 
 /// Малює ліву панель з историчними задачами.
 ///
-/// Повертає `Some((PipelineTemplate, text))` — налаштування і текст для відновлення.
+/// Повертає `Some(entry)` — клонований запис з историї для відновлення задачі.
 pub fn draw_task_history_panel(
     ui: &mut egui::Ui,
     language: Language,
     entries: &[TaskHistoryEntry],
     _delete_idx: &mut Option<usize>,
-) -> Option<(PipelineTemplate, String)> {
-    let mut apply: Option<(PipelineTemplate, String)> = None;
+) -> Option<TaskHistoryEntry> {
+    let mut apply: Option<TaskHistoryEntry> = None;
 
     let panel_width = ui.available_width();
     ui.set_max_width(panel_width);
@@ -154,7 +154,7 @@ pub fn draw_task_history_panel(
                 let preview: String = entry.text.chars().take(300).collect();
                 let card_resp = card_resp.on_hover_text(preview);
                 if card_resp.clicked() {
-                    apply = Some((entry.settings.clone(), entry.text.clone()));
+                    apply = Some(entry.clone());
                 }
 
                 ui.separator();
