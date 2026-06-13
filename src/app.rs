@@ -1371,6 +1371,7 @@ impl eframe::App for VideoMakerApp {
                         &mut delete_history_idx,
                     );
                     if let Some(entry) = applied {
+                        self.text_input = entry.text.clone();
                         self.enqueue_from_history(&entry);
                     }
                 });
