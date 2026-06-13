@@ -45,6 +45,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_animate" => "Оживить",
         "montage_editor_regen_same" => "Перегенерировать",
         "montage_editor_regen_custom" => "Перегенерировать (настройки)",
+        "montage_editor_replace_stock" => "🔄 Заменить стоковое медиа",
         "montage_editor_inspector" => "Инспектор",
         "montage_editor_no_selection" => "Выберите клип на таймлайне",
         "montage_editor_clip_start" => "Старт (с):",

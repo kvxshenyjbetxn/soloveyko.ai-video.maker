@@ -182,6 +182,7 @@ pub(super) fn draw_timeline(
                                     shake_enabled: false,
                                     is_placeholder: false,
                                     trim_start: 0.0,
+                                    stock_seg_idx: None,
                                 });
                             }
                         }
@@ -360,8 +361,16 @@ pub(super) fn draw_timeline(
                 if let Some(ref path) = clip.path {
                     let clip_path = path.clone();
                     let clip_kind = clip.kind.clone();
+                    let clip_stock_seg = clip.stock_seg_idx;
                     let is_animating = anim_loading.lock().unwrap().contains(&clip_path) || regen_paths.contains(&clip_path);
                     clip_resp.context_menu(|ui| {
+                        if let Some(seg_idx) = clip_stock_seg {
+                            if ui.button(translate(language, "montage_editor_replace_stock")).clicked() {
+                                editor.pending_open_stock_picker = Some(seg_idx);
+                                ui.close_menu();
+                            }
+                            ui.separator();
+                        }
                         if matches!(clip_kind, ClipKind::Image) {
                             if is_animating {
                                 ui.add_enabled(false, egui::Button::new(format!("⏳ {}", translate(language, "gallery_regen_loading"))));

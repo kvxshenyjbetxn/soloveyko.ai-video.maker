@@ -201,6 +201,7 @@ impl MontageEditorState {
                 "zoom_enabled": clip.zoom_enabled,
                 "shake_enabled": clip.shake_enabled,
                 "trim_start": clip.trim_start as f64,
+                "stock_seg_idx": clip.stock_seg_idx,
             }));
             cursor = actual_end;
         }
@@ -226,6 +227,7 @@ impl MontageEditorState {
                     "pos_y": clip.pos_y as f64,
                     "zoom_enabled": clip.zoom_enabled,
                     "shake_enabled": clip.shake_enabled,
+                    "stock_seg_idx": clip.stock_seg_idx,
                 })
             }).collect();
             overlay_tracks.push(serde_json::json!({
@@ -295,6 +297,7 @@ fn clip_from_json_seg(
         shake_enabled,
         is_placeholder: false,
         trim_start: seg["trim_start"].as_f64().unwrap_or(0.0) as f32,
+        stock_seg_idx: seg["stock_seg_idx"].as_u64().map(|v| v as usize),
     }
 }
 
@@ -367,6 +370,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     scale: 1.0, pos_x: 0.0, pos_y: 0.0,
                     zoom_enabled: false, shake_enabled: false,
                     is_placeholder: true, trim_start: 0.0,
+                    stock_seg_idx: Some(i),
                 });
             }
         }
@@ -410,7 +414,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
         Err(_) => return false,
     };
 
-    let mut replacements: Vec<(String, PathBuf, ClipKind, f32)> = Vec::new();
+    let mut replacements: Vec<(String, PathBuf, ClipKind, f32, usize)> = Vec::new();
     let mut still_pending = false;
 
     for clip in &editor.clips {
@@ -425,7 +429,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
                 if file_path.exists() {
                     let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
                     let kind = if matches!(ext.as_str(), "mp4"|"mov"|"webm") { ClipKind::Video } else { ClipKind::Image };
-                    replacements.push((clip.id.clone(), file_path, kind, sel.trim_start));
+                    replacements.push((clip.id.clone(), file_path, kind, sel.trim_start, seg_idx));
                 } else {
                     // Файл ще не завантажений — повторимо після наступного repaint
                     still_pending = true;
@@ -434,7 +438,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
         }
     }
 
-    for (clip_id, file_path, kind, trim_start) in replacements {
+    for (clip_id, file_path, kind, trim_start, seg_idx) in replacements {
         if !editor.media_pool.iter().any(|m| m.path == file_path) {
             editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path));
         }
@@ -450,6 +454,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
             clip.is_placeholder = false;
             clip.media_id = media_id;
             clip.trim_start = trim_start;
+            clip.stock_seg_idx = Some(seg_idx);
         }
     }
 

@@ -88,6 +88,8 @@ pub struct EditorClip {
     pub is_placeholder: bool,
     /// Початок обрізки у вихідному файлі (секунди). 0.0 = з початку.
     pub trim_start: f32,
+    /// Індекс сегменту в stock_cache.json (для кліпів обраних зі стоків; None = не стокове медіа).
+    pub stock_seg_idx: Option<usize>,
 }
 
 impl EditorClip {

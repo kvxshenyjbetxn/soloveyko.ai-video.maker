@@ -13,7 +13,7 @@
 | [`VideoMakerApp`](#videomakерapp-srcapprs) | ~126 | Центральна структура: UI, панелі черги/балансів/галереї, автозбереження |
 | [Панель историї задач](#панель-историї-задач-srcguitask_historyrs) | ~208 | Ліва панель 190px: список минулих задач, відновлення налаштувань |
 | [Редактор монтажу](#редактор-монтажу-srcguimontage_editor) | ~223 | 5 зон: медіа-пул, прев'ю+транспорт, інспектор, таймлінія, топбар |
-| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels-пікер: тільки single mode (з редактора монтажу), lazy search по кліку, завантаження + trim editor 860×620 з ffmpeg прев'ю |
+| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels-пікер: тільки single mode (з редактора монтажу), lazy search по кліку, завантаження + trim editor 860×620 з ffmpeg прев'ю; правий клік на вже заповнений кліп → «Замінити стокове медіа» |
 | [Текстовий редактор сценарію](#текстовий-редактор-сценарію-srcguieditorrs) | ~373 | Підрахунок токенів tiktoken, live split-preview, lazy cache |
 | [Черга задач (`queue.rs`)](#черга-задач-srcqueuers) | ~361 | `JobSettings`, `JobStatus`, `PipelineJob`, arc-поля стану |
 | [Панель пайплайну](#панель-пайплайну-srcguipipelinemodrs) | ~386 | 9 секцій: Шаблони→Монтаж; `validate_and_enqueue`, `build_job_settings` |
@@ -103,7 +103,7 @@ src/
 │   ├── agent_chat_window.rs     — AgentChatWindowState (стан одного вікна чату: input, loading Arc, result Arc, error) + draw_agent_chat_windows: рендерить усі відкриті вікна чату з циклу по HashMap<u64, AgentChatWindowState>; кожне вікно має унікальний egui::Id::new(("agent_chat", job_id)) — кілька вікон можуть бути відкриті одночасно для різних задач; render_message_content — рендерить NDJSON-теговані рядки: [->]/[!!] → L-стрілка/×, [STATS] → рядок статистики; всі іконки намальовані вручну через egui::Painter (не Unicode); спінер внизу поруч з кнопкою «Надіслати»; кнопка «✓ Підтвердити» (зелена) видима тільки при AwaitingAgentControl — відновлює пайплайн через condvar; кнопка «Перебудувати таймлінію» видима завжди (незалежно від сесії)
 │   ├── montage_editor/           — повноцінний редактор монтажу, розбитий на 12 модулів:
 │   │   ├── mod.rs               — точка входу: декларації модулів, pub use реекспорти, draw_montage_editor_window, load_preview_texture, draw_montage_media_preview
-│   │   ├── types.rs             — константи (PREVIEW_FPS=15, PREVIEW_WIDTH=640, FRAME_CACHE_SIZE=200) + всі pub типи: ClipKind, DragMode, EditorClip, MontagePreviewSettings, MontageEditorActions, ClipDragState, PreviewDragMode, PreviewDragState
+│   │   ├── types.rs             — константи (PREVIEW_FPS=15, PREVIEW_WIDTH=640, FRAME_CACHE_SIZE=200) + всі pub типи: ClipKind, DragMode, EditorClip, MontagePreviewSettings, MontageEditorActions, ClipDragState, PreviewDragMode, PreviewDragState; `EditorClip.stock_seg_idx: Option<usize>` — індекс у `stock_cache.json` (присутній лише для кліпів обраних зі Stock Picker; None для дропнутих з пулу або неstock-кліпів)
 │   │   ├── utils.rs             — path_hash (стабільний u64 хеш для папок кешу), probe_duration (ffprobe -show_entries), uuid_str (UUID через SystemTime)
 │   │   ├── audio.rs             — AudioPlayer (rodio OutputStream + Sink + skip_duration), PlayingAudio (метадані активного аудіопотоку)
 │   │   ├── media.rs             — MediaItem: pre-extraction кадрів у фоновому потоці (zображення через крейт image, відео через ffmpeg), AtomicBool extraction_complete, маркер .complete на диску
@@ -335,8 +335,8 @@ pub struct ClipDragState {
 **`save_to_timeline()`:**
 Перед сигналом `montage_control_resume` — editor записує поточний стан таймлінії у `{save_path}/timeline.json`. Формат JSON:
 - **Загальні поля:** `total_duration_secs` (загальна тривалість відео) та `audio_start_secs` (зсув оригінальної озвучки у секундах, за замовчуванням `0.0`).
-- **Базова доріжка (`segments`):** `{start_secs, end_secs, media, zoom_enabled, shake_enabled, trim_start}` з відносними шляхами. `trim_start` — позиція початку обрізки у вихідному файлі (секунди); `0.0` для файлів без обрізки. Враховуються тільки кліпи `track_idx=0` з призначеним файлом (відео, зображення чи аудіо), відсортовані за `start_secs`. Порожні ділянки (gaps) — `"media": null`.
-- **Overlay-доріжки (`overlay_tracks`):** масив `{track_idx, segments: [{start_secs, end_secs, media, scale, pos_x, pos_y, zoom_enabled, shake_enabled}]}` для всіх `track_idx≥1`. Лише доріжки з хоча б одним кліпом попадають у масив.
+- **Базова доріжка (`segments`):** `{start_secs, end_secs, media, zoom_enabled, shake_enabled, trim_start, stock_seg_idx}` з відносними шляхами. `trim_start` — позиція початку обрізки у вихідному файлі (секунди); `0.0` для файлів без обрізки. `stock_seg_idx` — числовий індекс у `stock_cache.json` якщо кліп обрано зі Stock Picker, `null` — інакше. Враховуються тільки кліпи `track_idx=0` з призначеним файлом (відео, зображення чи аудіо), відсортовані за `start_secs`. Порожні ділянки (gaps) — `"media": null`.
+- **Overlay-доріжки (`overlay_tracks`):** масив `{track_idx, segments: [{start_secs, end_secs, media, scale, pos_x, pos_y, zoom_enabled, shake_enabled, stock_seg_idx}]}` для всіх `track_idx≥1`. Лише доріжки з хоча б одним кліпом попадають у масив.
 
 `strip_prefix` використовує canonicalize-fallback для надійності на Windows. `run_montage` читає саме цей файл, розділяє медіафайли на відео/зображення (для відеоряду) та аудіофайли (для мікшування звуку), після чого накладає overlay-доріжки через FFmpeg `overlay` фільтр поверх основного відео.
 
@@ -395,9 +395,15 @@ pub struct ClipDragState {
 Мініатюри завантажуються у фонових потоках по URL Pexels через `ureq`. При hover — збільшений preview у `egui::show_tooltip_at_pointer` (4 аргументи: ctx, LayerId, Id, closure).
 
 **Зв'язок з редактором монтажу:**
-- `MontageEditorState.pending_open_stock_picker: Option<usize>` — при кліку на плейсхолдер у таймлінії встановлюється індекс сегмента → `app.rs` відкриває пікер.
-- `MontageEditorState.needs_stock_refresh: bool` — після вибору медіа → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом і копіює `SelectedMedia.trim_start` у `EditorClip.trim_start`. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
+- `MontageEditorState.pending_open_stock_picker: Option<usize>` — при кліку на плейсхолдер у таймлінії встановлюється індекс сегмента → `app.rs` відкриває пікер. Також встановлюється через контекстне меню правого кліку на вже заповнений кліп (якщо `clip.stock_seg_idx.is_some()`).
+- `MontageEditorState.needs_stock_refresh: bool` — після вибору медіа → `refresh_placeholder_clips` замінює плейсхолдер-кліп реальним файлом, копіює `SelectedMedia.trim_start` у `EditorClip.trim_start` та зберігає `seg_idx` у `EditorClip.stock_seg_idx`. Повертає `true` якщо файл ще завантажується (треба повторити наступного кадру).
 - `MontageEditorState.input_blocked: bool` — виставляється в `app.rs` перед кожним рендером редактора монтажу: `editor.input_blocked = stock_picker_state.is_some()`. `update_preview_drag` перевіряє цей прапор і повертається одразу якщо `true`. Модальний overlay навмисно прибраний — щоб редактор (транспорт, скрабінг) залишався доступним під час вибору медіа. Але `input_blocked` залишається щоб заблокувати drag-трансформ синьої обводки: `update_preview_drag` читає сирий `ctx.input()` (без фільтрації egui-widget системи), тому без цього прапора кліки/drag в picker-вікні рухали б позицію кліпу в редакторі.
+
+**Синхронізація `edit_keyword`:**
+`StockPickerState.edit_keyword` — поле для TextEdit у верхній частині пікера. Ініціалізується в `new()` keyword першого сегменту (index 0), але `active_segment` встановлюється пізніше в `app.rs` після `new()`. Тому одразу після `state.active_segment = seg_idx` в `app.rs` синхронізується `state.edit_keyword = cache[seg_idx].keyword.clone()` — без цього поле завжди б показувало keyword сегменту №0 незалежно від того який сегмент відкрито.
+
+**Повторна заміна стокового медіа (контекстне меню):**
+Після того як медіа обрано зі стоку, плейсхолдер замінюється реальним кліпом і `is_placeholder = false` — тобто клік більше не відкриває пікер. Для повторного вибору: правий клік на кліп у таймлінії → «🔄 Замінити стокове медіа» → встановлює `pending_open_stock_picker = Some(stock_seg_idx)`. Пункт меню з'являється тільки якщо `clip.stock_seg_idx.is_some()`. `stock_seg_idx` зберігається у `timeline.json` і відновлюється при перезапуску програми.
 
 ---
 

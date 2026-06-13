@@ -2211,6 +2211,9 @@ impl eframe::App for VideoMakerApp {
                         job.settings.pexels_key.clone(),
                     ) {
                         state.active_segment = seg_idx;
+                        state.edit_keyword = state.cache.get(seg_idx)
+                            .map(|s| s.keyword.clone())
+                            .unwrap_or_default();
                         self.stock_picker_state = Some(state);
                     }
                 }

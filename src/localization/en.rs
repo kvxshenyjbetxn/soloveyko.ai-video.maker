@@ -45,6 +45,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_animate" => "Animate",
         "montage_editor_regen_same" => "Regenerate",
         "montage_editor_regen_custom" => "Regenerate (custom)",
+        "montage_editor_replace_stock" => "🔄 Replace stock media",
         "montage_editor_inspector" => "Inspector",
         "montage_editor_no_selection" => "Select a clip on the timeline",
         "montage_editor_clip_start" => "Start (s):",
