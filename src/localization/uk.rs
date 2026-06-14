@@ -398,6 +398,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "resume_videos"         => "відео",
         "resume_output_video"   => "Готове відео",
         "resume_timeline"       => "Таймлайн",
+        "resume_fill_missing_btn" => "Догенерувати відсутні",
         "task_history_title"          => "Задачі",
         "task_history_empty"          => "Ще немає задач",
         "task_history_delete_tooltip" => "Видалити з історії",

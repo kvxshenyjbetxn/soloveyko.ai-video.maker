@@ -398,6 +398,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "resume_videos"         => "videos",
         "resume_output_video"   => "Final Video",
         "resume_timeline"       => "Timeline",
+        "resume_fill_missing_btn" => "Generate Missing",
         "task_history_title"          => "Tasks",
         "task_history_empty"          => "No tasks yet",
         "task_history_delete_tooltip" => "Remove from history",

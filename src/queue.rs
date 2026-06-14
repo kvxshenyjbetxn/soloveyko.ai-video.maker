@@ -145,6 +145,8 @@ pub struct JobSettings {
     pub resume_from_stage: Option<RetryStage>,
     /// Пропустити запуск агента при відновленні (timeline.json вже є)
     pub skip_agent_on_resume: bool,
+    /// Пропускати сегменти, для яких медіафайл вже існує на диску (режим догенерації)
+    pub skip_existing_media: bool,
 }
 
 /// Одна задача в черзі пайплайну.

@@ -11,6 +11,8 @@ pub struct FoundFiles {
     pub media_images: usize,
     pub media_videos: usize,
     pub output_video: bool,
+    /// Кількість сегментів у timeline.json (очікувана кількість медіафайлів)
+    pub expected_media: Option<usize>,
 }
 
 /// Дані для діалогу відновлення: назва задачі, знайдені файли, знімок налаштувань
@@ -97,7 +99,17 @@ impl FoundFiles {
             .join(format!("{}.mp4", safe_name.trim()))
             .exists();
 
-        Self { text_txt, voice_file, subtitle_srt, timeline_json, media_images, media_videos, output_video }
+        // Рахуємо очікувану кількість медіа з timeline.json (кількість сегментів)
+        let expected_media = if timeline_json {
+            let timeline_path = task_dir.join("timeline.json");
+            std::fs::read_to_string(&timeline_path).ok()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .and_then(|v| v["segments"].as_array().map(|a| a.len()))
+        } else {
+            None
+        };
+
+        Self { text_txt, voice_file, subtitle_srt, timeline_json, media_images, media_videos, output_video, expected_media }
     }
 
     pub fn has_any(&self) -> bool {
@@ -147,6 +159,7 @@ pub fn draw_resume_dialog(
 
     let mut do_continue = false;
     let mut do_fresh = false;
+    let mut do_fill_missing = false;
 
     // Витягуємо дані та оновлюємо чекбокси в окремому скопі щоб уникнути конфліктів позик
     {
@@ -164,6 +177,7 @@ pub fn draw_resume_dialog(
         let media_images  = data.found.media_images;
         let media_videos  = data.found.media_videos;
         let output_video  = data.found.output_video;
+        let expected_media = data.found.expected_media;
 
         let mut keep_vo = data.keep_voiceover;
         let mut keep_su = data.keep_subtitles;
@@ -176,7 +190,7 @@ pub fn draw_resume_dialog(
                 task_name: String::new(),
                 found: FoundFiles {
                     text_txt, voice_file, subtitle_srt, timeline_json,
-                    media_images, media_videos, output_video,
+                    media_images, media_videos, output_video, expected_media,
                 },
                 settings: data.settings.clone(),
                 keep_voiceover: keep_vo,
@@ -276,10 +290,17 @@ pub fn draw_resume_dialog(
                     if media_videos > 0 {
                         parts.push(format!("{} {}", media_videos, translate(language, "resume_videos")));
                     }
+                    // Якщо є timeline.json — показуємо скільки є / скільки очікується
+                    let count_label = if let Some(expected) = expected_media {
+                        let present = media_images + media_videos;
+                        format!("{} ({}/{})", parts.join(", "), present, expected)
+                    } else {
+                        parts.join(", ")
+                    };
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut keep_vi, "");
                         ui.label(translate(language, "video"));
-                        ui.label(egui::RichText::new(parts.join(", ")).color(weak).size(11.0));
+                        ui.label(egui::RichText::new(count_label).color(weak).size(11.0));
                     });
                 }
 
@@ -328,6 +349,25 @@ pub fn draw_resume_dialog(
 
                 ui.add_space(10.0);
 
+                // Кнопка "Догенерувати відсутні" — тільки якщо є timeline.json і медіа неповні
+                let missing_count = expected_media.and_then(|exp| {
+                    let present = media_images + media_videos;
+                    if timeline_json && present < exp { Some(exp - present) } else { None }
+                });
+
+                if let Some(missing) = missing_count {
+                    ui.add_space(4.0);
+                    let fill_label = format!("{} ({})", translate(language, "resume_fill_missing_btn"), missing);
+                    if ui.add_sized(
+                        [ui.available_width(), 26.0],
+                        egui::Button::new(egui::RichText::new(fill_label).strong()),
+                    ).clicked() {
+                        do_fill_missing = true;
+                    }
+                }
+
+                ui.add_space(6.0);
+
                 ui.horizontal(|ui| {
                     if ui.add_sized(
                         [140.0, 26.0],
@@ -367,6 +407,11 @@ pub fn draw_resume_dialog(
     } else if do_fresh {
         if let Some(data) = pending.take() {
             enqueue_fresh(data, jobs, job_counter);
+        }
+        *open = false;
+    } else if do_fill_missing {
+        if let Some(data) = pending.take() {
+            enqueue_fill_missing(data, jobs, job_counter);
         }
         *open = false;
     }
@@ -424,6 +469,50 @@ fn enqueue_fresh(
     let id = *job_counter;
     *job_counter += 1;
     jobs.push(crate::queue::PipelineJob::new(id, data.task_name, data.settings));
+}
+
+/// Додає задачу в чергу для догенерації відсутніх медіафайлів.
+/// Зберігає timeline.json, пропускає агента, пропускає вже наявні файли.
+fn enqueue_fill_missing(
+    data: ResumePendingData,
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    job_counter: &mut u64,
+) {
+    let text_txt_exists = data.found.text_txt;
+    let save_path = data.settings.save_path.clone();
+    let found = data.found;
+
+    let mut settings = data.settings;
+    settings.resume_from_stage = Some(crate::queue::RetryStage::Video);
+    settings.skip_agent_on_resume = true;
+    settings.skip_existing_media = true;
+
+    let id = *job_counter;
+    *job_counter += 1;
+    let job = crate::queue::PipelineJob::new(id, data.task_name, settings);
+
+    if text_txt_exists {
+        if let Ok(text) = std::fs::read_to_string(
+            std::path::Path::new(&save_path).join("text.txt"),
+        ) {
+            *job.translated_text.lock().unwrap() = Some(text);
+        }
+    }
+
+    // Позначаємо завершені етапи (озвучка, субтитри, таймлайн — Done; відео — pending для генерації)
+    use crate::queue::StageStatus;
+    let s = &job.settings;
+    if found.text_txt && s.translation_enabled {
+        *job.translation_stage.lock().unwrap() = StageStatus::Done;
+    }
+    if found.voice_file && s.voiceover_enabled {
+        *job.voiceover_stage.lock().unwrap() = StageStatus::Done;
+    }
+    if found.subtitle_srt && s.voiceover_enabled {
+        *job.subtitles_stage.lock().unwrap() = StageStatus::Done;
+    }
+
+    jobs.push(job);
 }
 
 /// Попередньо позначає завершені етапи в задачі (для UI до запуску).

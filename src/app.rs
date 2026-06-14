@@ -1183,6 +1183,7 @@ impl VideoMakerApp {
             overlay_triggers: t.overlay_triggers.clone(),
             resume_from_stage: None,
             skip_agent_on_resume: false,
+            skip_existing_media: false,
         };
 
         let found = crate::gui::pipeline::resume::FoundFiles::scan(

@@ -274,6 +274,11 @@ fn is_concurrency_exceeded(err: &str) -> bool {
     err.contains("rate_limit.concurrency_exceeded")
 }
 
+/// Перевіряє, чи помилка є перевищенням годинного ліміту.
+fn is_hourly_limit_exceeded(err: &str) -> bool {
+    err.contains("rate_limit.hourly_exceeded")
+}
+
 /// Спроба генерації зображення через конкретного провайдера.
 fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
     let _permit = GooglerImageLimiter::get().acquire();
@@ -418,6 +423,13 @@ pub fn generate_image_with_priority(
                             " Зображення [{}] ліміт потоків, чекаю…",
                             provider
                         ));
+                        std::thread::sleep(DELAY);
+                    } else if is_hourly_limit_exceeded(&e) {
+                        crate::logger::log(&format!(
+                            " Зображення [{}] годинний ліміт, чекаю 5 хв…",
+                            provider
+                        ));
+                        std::thread::sleep(std::time::Duration::from_secs(300));
                     } else {
                         failures += 1;
                         crate::logger::log(&format!(
@@ -427,8 +439,8 @@ pub fn generate_image_with_priority(
                         if failures > RETRIES {
                             break;
                         }
+                        std::thread::sleep(DELAY);
                     }
-                    std::thread::sleep(DELAY);
                 }
             }
         }
@@ -534,6 +546,13 @@ pub fn animate_image_with_priority(
                             " Анімація [{}] ліміт потоків, чекаю…",
                             provider
                         ));
+                        std::thread::sleep(DELAY);
+                    } else if is_hourly_limit_exceeded(&e) {
+                        crate::logger::log(&format!(
+                            " Анімація [{}] годинний ліміт, чекаю 5 хв…",
+                            provider
+                        ));
+                        std::thread::sleep(std::time::Duration::from_secs(300));
                     } else {
                         failures += 1;
                         crate::logger::log(&format!(
@@ -543,8 +562,8 @@ pub fn animate_image_with_priority(
                         if failures > RETRIES {
                             break;
                         }
+                        std::thread::sleep(DELAY);
                     }
-                    std::thread::sleep(DELAY);
                 }
             }
         }
@@ -581,6 +600,13 @@ pub fn generate_video_with_priority(
                             " Відео [{}] ліміт потоків, чекаю…",
                             provider
                         ));
+                        std::thread::sleep(DELAY);
+                    } else if is_hourly_limit_exceeded(&e) {
+                        crate::logger::log(&format!(
+                            " Відео [{}] годинний ліміт, чекаю 5 хв…",
+                            provider
+                        ));
+                        std::thread::sleep(std::time::Duration::from_secs(300));
                     } else {
                         failures += 1;
                         crate::logger::log(&format!(
@@ -590,8 +616,8 @@ pub fn generate_video_with_priority(
                         if failures > RETRIES {
                             break;
                         }
+                        std::thread::sleep(DELAY);
                     }
-                    std::thread::sleep(DELAY);
                 }
             }
         }

@@ -44,6 +44,17 @@ fn get_audio_duration_secs(path: &std::path::Path) -> Option<f64> {
     s.trim().parse::<f64>().ok()
 }
 
+/// Перевіряє, чи є в папці media файл із заданим індексом (будь-яке розширення).
+fn media_file_exists_by_index(media_dir: &std::path::Path, index: usize) -> bool {
+    let stem = format!("{:04}", index);
+    for ext in &["jpg", "jpeg", "png", "webp", "mp4", "webm", "mov"] {
+        if media_dir.join(format!("{}.{}", stem, ext)).exists() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Валідує завантажені або декодовані медіа-байти на порожнечу та текстові помилки.
 fn validate_media_bytes(bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() {
@@ -1173,9 +1184,26 @@ fn run_video_branch(
         let upscale_enabled = settings.googler_video_upscale_enabled;
         let upscale_resolution = settings.googler_video_upscale_resolution.clone();
         let upscale_quality = settings.googler_video_upscale_quality.clone();
+        let skip_existing = settings.skip_existing_media;
 
         let handle = std::thread::spawn(move || -> (usize, Result<(), String>) {
             sem.acquire();
+
+            // Режим догенерації: якщо файл вже є — пропускаємо
+            if skip_existing && media_file_exists_by_index(&media_dir, i + 1) {
+                crate::logger::log_job(
+                    job_id_c, &job_name_c,
+                    &format!("Segment {}/{}: file already exists, skipping.", i + 1, total),
+                );
+                if let Ok(mut pp) = media_progress_c.lock() {
+                    if let Some((ref mut done, _)) = *pp {
+                        *done += 1;
+                    }
+                }
+                ctx_c.request_repaint();
+                sem.release();
+                return (i, Ok(()));
+            }
 
             crate::logger::log_job(
                 job_id_c, &job_name_c,

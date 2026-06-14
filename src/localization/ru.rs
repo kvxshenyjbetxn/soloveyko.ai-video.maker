@@ -398,6 +398,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "resume_videos"         => "видео",
         "resume_output_video"   => "Готовое видео",
         "resume_timeline"       => "Таймлайн",
+        "resume_fill_missing_btn" => "Догенерировать отсутствующие",
         "task_history_title"          => "Задачи",
         "task_history_empty"          => "Задач ещё нет",
         "task_history_delete_tooltip" => "Удалить из истории",
