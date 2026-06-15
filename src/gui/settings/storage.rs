@@ -1054,8 +1054,12 @@ pub struct TaskHistoryEntry {
     pub template_name: Option<String>,
     /// Текст сценарію на момент додавання задачі
     pub text: String,
-    /// Знімок налаштувань пайплайну
-    pub settings: PipelineTemplate,
+    /// Які етапи були увімкнені (для відображення крапок в UI)
+    pub stage_translation: bool,
+    pub stage_voiceover: bool,
+    pub stage_video: bool,
+    pub stage_subtitles: bool,
+    pub stage_editing: bool,
 }
 
 impl Default for TaskHistoryEntry {
@@ -1066,7 +1070,11 @@ impl Default for TaskHistoryEntry {
             created_at: 0,
             template_name: None,
             text: String::new(),
-            settings: PipelineTemplate::default(),
+            stage_translation: false,
+            stage_voiceover: false,
+            stage_video: false,
+            stage_subtitles: false,
+            stage_editing: false,
         }
     }
 }

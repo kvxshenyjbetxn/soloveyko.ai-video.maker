@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
-use crate::gui::settings::storage::{TaskHistoryEntry, PipelineTemplate};
+use crate::gui::settings::storage::TaskHistoryEntry;
 
 fn format_ts(ts: i64) -> String {
     use chrono::{Local, TimeZone};
@@ -12,13 +12,13 @@ fn format_ts(ts: i64) -> String {
 }
 
 /// Малює 5 крапок-індикаторів увімкнених етапів через painter — без тексту.
-fn stage_dots(ui: &mut egui::Ui, language: Language, settings: &PipelineTemplate) {
+fn stage_dots(ui: &mut egui::Ui, language: Language, entry: &TaskHistoryEntry) {
     let stages = [
-        (settings.pipeline_translation_enabled, translate(language, "task_history_stage_t")),
-        (settings.pipeline_voiceover_enabled,   translate(language, "task_history_stage_v")),
-        (settings.pipeline_video_enabled,       translate(language, "task_history_stage_vid")),
-        (settings.pipeline_subtitles_enabled,   translate(language, "task_history_stage_s")),
-        (settings.pipeline_editing_enabled,     translate(language, "task_history_stage_m")),
+        (entry.stage_translation, translate(language, "task_history_stage_t")),
+        (entry.stage_voiceover,   translate(language, "task_history_stage_v")),
+        (entry.stage_video,       translate(language, "task_history_stage_vid")),
+        (entry.stage_subtitles,   translate(language, "task_history_stage_s")),
+        (entry.stage_editing,     translate(language, "task_history_stage_m")),
     ];
 
     let r = 3.5_f32;
@@ -140,7 +140,7 @@ pub fn draw_task_history_panel(
                                     .weak(),
                             ));
                             ui.add_space(4.0);
-                            stage_dots(ui, language, &entry.settings);
+                            stage_dots(ui, language, entry);
                         });
                     });
 

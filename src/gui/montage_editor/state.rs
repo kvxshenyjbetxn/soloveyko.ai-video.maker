@@ -418,10 +418,16 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
     let mut still_pending = false;
 
     for clip in &editor.clips {
-        if !clip.is_placeholder { continue; }
-        let seg_idx = match clip.media_id.strip_prefix("placeholder_").and_then(|s| s.parse::<usize>().ok()) {
-            Some(i) => i,
-            None => continue,
+        // Обробляємо і плейсхолдери (перший вибір), і вже-призначені стокові кліпи (заміна через контекстне меню)
+        let seg_idx = if clip.is_placeholder {
+            match clip.media_id.strip_prefix("placeholder_").and_then(|s| s.parse::<usize>().ok()) {
+                Some(i) => i,
+                None => continue,
+            }
+        } else if let Some(idx) = clip.stock_seg_idx {
+            idx
+        } else {
+            continue
         };
         if let Some(entry) = cache.get(seg_idx) {
             if let Some(sel) = &entry.selected {

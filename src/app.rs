@@ -1103,7 +1103,10 @@ impl VideoMakerApp {
             return;
         }
 
-        let t = &entry.settings;
+        // Якщо задача мала шаблон — беремо з нього, інакше з поточної панелі
+        let t = entry.template_name.as_deref()
+            .and_then(|name| crate::gui::settings::storage::load_template(name))
+            .unwrap_or_else(|| self.current_pipeline_template());
         let settings = crate::queue::JobSettings {
             text: entry.text.clone(),
             save_path: actual_path,
@@ -1551,7 +1554,11 @@ impl eframe::App for VideoMakerApp {
                         created_at: chrono::Utc::now().timestamp(),
                         template_name,
                         text: self.text_input.clone(),
-                        settings: self.current_pipeline_template(),
+                        stage_translation: self.pipeline_translation_enabled,
+                        stage_voiceover: self.pipeline_voiceover_enabled,
+                        stage_video: self.pipeline_video_enabled,
+                        stage_subtitles: self.pipeline_subtitles_enabled,
+                        stage_editing: self.pipeline_editing_enabled,
                     };
                     crate::gui::settings::storage::append_to_task_history(&mut self.task_history, entry);
                 }
