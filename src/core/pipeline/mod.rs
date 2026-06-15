@@ -1725,6 +1725,7 @@ pub fn run_pipeline(
     agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
+    capcut_mode_override: Arc<Mutex<Option<bool>>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -2045,8 +2046,9 @@ pub fn run_pipeline(
 
             let audio_dur = *audio_duration.lock().unwrap();
             let save_dir = std::path::Path::new(&settings.save_path);
+            let use_capcut = capcut_mode_override.lock().unwrap().unwrap_or(settings.capcut_enabled);
 
-            if settings.capcut_enabled {
+            if use_capcut {
                 let job_id_log = job_id;
                 let job_name_log = job_name.clone();
                 let draft_root = std::path::Path::new(&settings.capcut_draft_path);
@@ -2134,6 +2136,7 @@ fn run_final_stages(
     montage_progress: &Arc<Mutex<Option<f32>>>,
     montage_file_size: &Arc<Mutex<Option<u64>>>,
     montage_control_resume: &Arc<(Mutex<bool>, Condvar)>,
+    capcut_mode_override: &Arc<Mutex<Option<bool>>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
     // Timeline — в агентному режимі timeline.json вже створений агентом, не перезаписуємо
@@ -2186,7 +2189,8 @@ fn run_final_stages(
         let job_id_log = job_id;
         let job_name_log = job_name.to_string();
 
-        if settings.capcut_enabled {
+        let use_capcut = capcut_mode_override.lock().unwrap().unwrap_or(settings.capcut_enabled);
+        if use_capcut {
             if settings.capcut_draft_path.is_empty() {
                 let msg = "CapCut: не вказано папку чернеток CapCut";
                 crate::logger::log_job(job_id, job_name, msg);
@@ -2279,6 +2283,7 @@ pub fn retry_from_stage(
     agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
+    capcut_mode_override: Arc<Mutex<Option<bool>>>,
     ctx: egui::Context,
 ) {
     use crate::queue::RetryStage::*;
@@ -2307,7 +2312,7 @@ pub fn retry_from_stage(
                 translated_text, total_cost, audio_duration,
                 prompts_progress, media_progress, montage_progress, montage_file_size,
                 media_control_resume, montage_control_resume, agent_control_resume,
-                agent_chat, agent_session, ctx,
+                agent_chat, agent_session, capcut_mode_override, ctx,
             );
         }
 
@@ -2391,7 +2396,7 @@ pub fn retry_from_stage(
 
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &capcut_mode_override, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -2489,7 +2494,7 @@ pub fn retry_from_stage(
 
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &capcut_mode_override, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -2573,7 +2578,7 @@ pub fn retry_from_stage(
 
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &capcut_mode_override, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -2599,7 +2604,7 @@ pub fn retry_from_stage(
                 crate::logger::log_job(job_id, &job_name, "Retry: montage...");
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &capcut_mode_override, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();

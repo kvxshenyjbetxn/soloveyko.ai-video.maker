@@ -786,6 +786,7 @@ pub fn draw_queue_panel(
                         std::sync::Arc::clone(&job.agent_control_resume),
                         std::sync::Arc::clone(&job.agent_chat),
                         std::sync::Arc::clone(&job.agent_session),
+                        std::sync::Arc::clone(&job.capcut_mode_override),
                         ctx.clone(),
                     );
                 } else {
@@ -811,6 +812,7 @@ pub fn draw_queue_panel(
                         std::sync::Arc::clone(&job.agent_control_resume),
                         std::sync::Arc::clone(&job.agent_chat),
                         std::sync::Arc::clone(&job.agent_session),
+                        std::sync::Arc::clone(&job.capcut_mode_override),
                         ctx.clone(),
                     );
                 }

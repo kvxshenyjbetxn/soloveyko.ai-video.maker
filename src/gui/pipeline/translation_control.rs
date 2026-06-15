@@ -80,6 +80,7 @@ pub fn draw_translation_control_windows(
         let media_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].media_control_resume);
         let montage_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].montage_control_resume);
         let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
+        let capcut_mode_override_arc = std::sync::Arc::clone(&jobs[job_idx].capcut_mode_override);
         let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
         let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
         let job_settings = jobs[job_idx].settings.clone();
@@ -401,6 +402,7 @@ pub fn draw_translation_control_windows(
                 agent_control_resume_arc,
                 agent_chat_arc,
                 agent_session_arc,
+                capcut_mode_override_arc,
                 ctx_clone,
             );
 

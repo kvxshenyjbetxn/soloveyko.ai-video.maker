@@ -27,23 +27,64 @@ pub(super) fn draw_topbar(
         );
 
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-            let btn = ui.add_enabled(
+            // Кнопка CapCut (права)
+            let capcut_btn = ui.add_enabled(
                 is_awaiting,
                 egui::Button::new(
-                    egui::RichText::new(translate(language, "montage_editor_continue"))
+                    egui::RichText::new(translate(language, "montage_render_capcut"))
                         .strong()
                         .color(if is_awaiting { Color32::WHITE } else { Color32::GRAY }),
                 )
-                .fill(if is_awaiting { Color32::from_rgb(39, 174, 96) } else { Color32::from_rgb(30, 30, 35) })
+                .fill(if is_awaiting { Color32::from_rgb(41, 128, 185) } else { Color32::from_rgb(30, 30, 35) })
             );
-            if btn.clicked() {
+            if capcut_btn.clicked() {
+                if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
+                    *job.capcut_mode_override.lock().unwrap() = Some(true);
+                }
                 let job_name = editor.job_name.clone();
                 let save_path_str = editor.save_path.display().to_string();
                 let clip_count = editor.clips.iter().filter(|c| c.track_idx == 0).count();
                 match editor.save_to_timeline() {
                     Ok(_) => crate::logger::log_job(
                         job_id, &job_name,
-                        &format!("Montage editor: timeline saved ({} clips, path: {})", clip_count, save_path_str),
+                        &format!("Montage editor: timeline saved ({} clips, path: {}) → CapCut", clip_count, save_path_str),
+                    ),
+                    Err(e) => crate::logger::log_job(
+                        job_id, &job_name,
+                        &format!("Montage editor: SAVE FAILED: {} (path: {})", e, save_path_str),
+                    ),
+                }
+                if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
+                    let (lock, cvar) = &*job.montage_control_resume;
+                    *lock.lock().unwrap() = true;
+                    cvar.notify_one();
+                }
+                continue_clicked = true;
+            }
+
+            ui.add_space(4.0);
+
+            // Кнопка FFmpeg (ліва від CapCut)
+            let ffmpeg_btn = ui.add_enabled(
+                is_awaiting,
+                egui::Button::new(
+                    egui::RichText::new(translate(language, "montage_render_ffmpeg"))
+                        .strong()
+                        .color(if is_awaiting { Color32::WHITE } else { Color32::GRAY }),
+                )
+                .fill(if is_awaiting { Color32::from_rgb(39, 174, 96) } else { Color32::from_rgb(30, 30, 35) })
+            );
+            if ffmpeg_btn.clicked() {
+                if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
+                    *job.capcut_mode_override.lock().unwrap() = Some(false);
+                }
+                let job_name = editor.job_name.clone();
+                let save_path_str = editor.save_path.display().to_string();
+                let clip_count = editor.clips.iter().filter(|c| c.track_idx == 0).count();
+                match editor.save_to_timeline() {
+                    Ok(_) => crate::logger::log_job(
+                        job_id, &job_name,
+                        &format!("Montage editor: timeline saved ({} clips, path: {}) → FFmpeg", clip_count, save_path_str),
                     ),
                     Err(e) => crate::logger::log_job(
                         job_id, &job_name,
