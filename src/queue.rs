@@ -99,6 +99,7 @@ pub struct JobSettings {
 
     pub assemblyai_key: String,
     pub pexels_key: String,
+    pub pixabay_key: String,
     pub subtitles_enabled: bool,
     pub subtitles_service: String,
     pub whisper_language: String,

@@ -13,7 +13,7 @@
 | [`VideoMakerApp`](#videomakерapp-srcapprs) | ~126 | Центральна структура: UI, панелі черги/балансів/галереї, автозбереження |
 | [Панель историї задач](#панель-историї-задач-srcguitask_historyrs) | ~208 | Ліва панель 190px: список минулих задач, відновлення налаштувань |
 | [Редактор монтажу](#редактор-монтажу-srcguimontage_editor) | ~223 | 5 зон: медіа-пул, прев'ю+транспорт, інспектор, таймлінія, топбар |
-| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels-пікер: тільки single mode (з редактора монтажу), lazy search по кліку, завантаження + trim editor 860×620 з ffmpeg прев'ю; правий клік на вже заповнений кліп → «Замінити стокове медіа» |
+| [Stock Picker (`stock_picker.rs`)](#stock-picker-srcguistock_pickerrs) | ~349 | Pexels/Pixabay-пікер: тільки single mode (з редактора монтажу), lazy search по кліку, завантаження + trim editor 860×620 з ffmpeg прев'ю; правий клік на вже заповнений кліп → «Замінити стокове медіа» |
 | [Текстовий редактор сценарію](#текстовий-редактор-сценарію-srcguieditorrs) | ~373 | Підрахунок токенів tiktoken, live split-preview, lazy cache |
 | [Черга задач (`queue.rs`)](#черга-задач-srcqueuers) | ~361 | `JobSettings`, `JobStatus`, `PipelineJob`, arc-поля стану |
 | [Панель пайплайну](#панель-пайплайну-srcguipipelinemodrs) | ~386 | 9 секцій: Шаблони→Монтаж; `validate_and_enqueue`, `build_job_settings` |
@@ -77,7 +77,8 @@ src/
 │   ├── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
 │   ├── stock/
 │   │   ├── mod.rs               — CachedPhoto, CachedVideo, SelectedMedia, SegmentCache (з `segment_duration: f32`), StockPhoto, StockVideo, StockProvider трейт; load_cache/save_cache (stock_cache.json); download_file_with_progress з прогресом через Arc<Mutex<f32>>
-│   │   └── pexels.rs            — PexelsProvider: search_photos + search_videos (обидва з `orientation=landscape`); custom null_to_string/null_to_u32 serde deserializers — Pexels API може повертати null замість рядка або числа; check_key
+│   │   ├── pexels.rs            — PexelsProvider: search_photos + search_videos (обидва з `orientation=landscape`); custom null_to_string/null_to_u32 serde deserializers — Pexels API може повертати null замість рядка або числа; check_key (400 = невалідний)
+│   │   └── pixabay.rs           — PixabayProvider: search_photos + search_videos; ключ передається як query param `key=` (не Authorization header); для відео обирає `large` (1920×1080) над `medium`; check_key (400 = невалідний ключ, на відміну від Pexels де 401)
 │   └── updater.rs               — check_for_updates (фонова перевірка GitHub releases на нові релізи, порівнює tag_name з APP_VERSION), open_url (крос-платформне відкриття URL: cmd+start на Windows, open на macOS)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
@@ -121,7 +122,7 @@ src/
 │   ├── queue.rs                 — draw_queue_panel: нижня панель черги задач (картки, прогрес, лог-вікно); draw_queue_jobs_list: виокремлений список карток для повторного використання у fullscreen-режимі; приймає open_job_logs/open_job_controls/open_agent_chats як HashMap замість окремих Option-полів — відкриття вікна через entry().or_insert_with() (не скидає вже відкрите вікно при повторному кліку); кнопка 📂 відкриває папку задачі у файловому менеджері ОС
 │   ├── logs.rs                  — draw_job_logs_window (вікно логів конкретної задачі), draw_logs_tab (вкладка системних логів)
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base; encoder ліниво ініціалізується — перший виклик `tiktoken::get_encoding("cl100k_base")` повільний, тому прогрів відбувається у фоновому потоці в `VideoMakerApp::new()`
-│   ├── stock_picker.rs          — StockPickerState + draw_stock_picker: вибір стокового медіа; lazy search (пошук через Pexels API стартує при кліку на сегмент, а не наперед); VideoDownloadState (прогрес через Arc<Mutex<f32>>); TrimEditState (міні-редактор нарізки 860×620, resizable); spawn_frame_extraction у фоновому потоці (8 кадрів → jpeg → TextureHandle); SegmentSearchArc — Arc результату фонового пошуку; flush_segment_search — переносить готові результати у SegmentCache та зберігає stock_cache.json
+│   ├── stock_picker.rs          — StockPickerState + draw_stock_picker: вибір стокового медіа (Pexels або Pixabay); `stock_key: String` + `stock_service: String` — сервіс вибирається у `trigger_segment_search` на основі `stock_service`; lazy search стартує при кліку на сегмент; VideoDownloadState (прогрес через Arc<Mutex<f32>>); TrimEditState (міні-редактор нарізки 860×620, resizable); spawn_frame_extraction у фоновому потоці (8 кадрів → jpeg → TextureHandle); SegmentSearchArc — Arc результату фонового пошуку; flush_segment_search — переносить готові результати у SegmentCache та зберігає stock_cache.json
 │   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
 │   ├── gallery/
 │   │   ├── mod.rs               — реекспорт публічного API + тип RegenAction
@@ -366,20 +367,20 @@ pub struct ClipDragState {
 
 ### Stock Picker (`src/gui/stock_picker.rs`)
 
-Вікно вибору стокового медіа (Pexels) для одного сегмента. Відкривається **тільки з редактора монтажу** — кліком на плейсхолдер-кліп. Показує медіа для конкретного сегмента, кнопка «Закрити» (без «Підтвердити» — підтвердження всього завдання виконується через редактор монтажу).
+Вікно вибору стокового медіа (Pexels або Pixabay) для одного сегмента. Відкривається **тільки з редактора монтажу** — кліком на плейсхолдер-кліп. Показує медіа для конкретного сегмента, кнопка «Закрити» (без «Підтвердити» — підтвердження всього завдання виконується через редактор монтажу).
 
 **Архітектурна зміна (раніше):** до рефакторингу пікер мав два режими — single і full. Full mode відкривався з вкладки Gallery і містив кнопку «Підтвердити та відновити» що будила `media_control_resume` condvar. Тепер пікер є тільки single mode і не взаємодіє з condvar-ами пайплайну напряму — вибір підтверджується через «▶ Продовжити рендер» в редакторі монтажу.
 
 **Lazy search (пошук по кліку):**
-Пайплайн зберігає тільки skeleton cache (ключові слова, без results). Pexels API запит для сегмента запускається лише коли користувач клікає на нього у пікері. До готовності показується "🔍 Шукаємо…". Після завершення — `flush_segment_search` записує результати у `SegmentCache` та оновлює `stock_cache.json`. Це знижує навантаження на API: замість N запитів при старті пайплайну — тільки для переглянутих сегментів.
+Пайплайн зберігає тільки skeleton cache (ключові слова, без results). API запит для сегмента запускається лише коли користувач клікає на нього у пікері. До готовності показується "🔍 Шукаємо…". Після завершення — `flush_segment_search` записує результати у `SegmentCache` та оновлює `stock_cache.json`. Це знижує навантаження на API: замість N запитів при старті пайплайну — тільки для переглянутих сегментів.
 
-- `StockPickerState.pexels_key: String` — передається з `job.settings.pexels_key` при відкритті пікера.
+- `StockPickerState.stock_key: String` + `StockPickerState.stock_service: String` — передаються при відкритті пікера: `pexels_key` якщо `video_service == "Pexels"`, `pixabay_key` якщо `"Pixabay"`. `trigger_segment_search` вибирає провайдера на основі `stock_service`.
 - `StockPickerState.segment_search: HashMap<usize, SegmentSearchArc>` — поточні фонові пошуки. `None` в Arc = ще виконується, `Some(Ok(...))` = готово.
 - `trigger_segment_search(state, seg_idx, ctx)` — якщо `photos.is_empty() && videos.is_empty()` і пошук ще не стартував → spawn thread.
 - `flush_segment_search(state)` — викликається кожен кадр у `draw_stock_picker`; при зміні `active_segment` у full mode — `show_videos` скидається до `None`.
 
 **Вибір типу медіа:**
-Кожен сегмент може мати і фото, і відео (Pexels повертає обидва). Перемикач **📷 Фото / 🎬 Відео** над сіткою. Auto-вибір: якщо є відео — показуємо відео, інакше — фото.
+Кожен сегмент може мати і фото, і відео (Pexels та Pixabay повертають обидва). Перемикач **📷 Фото / 🎬 Відео** над сіткою. Auto-вибір: якщо є відео — показуємо відео, інакше — фото.
 
 **Завантаження та прогрес:**
 При кліку на відео-мініатюру розпочинається завантаження у `{save_path}/media/{:04}.mp4`. Прогрес-бар у верхній частині вікна через `Arc<Mutex<f32>>` (0.0..1.0, -1.0 = помилка). Якщо файл вже існує — одразу відкривається trim editor.
@@ -570,16 +571,16 @@ pub struct ClipDragState {
 
 #### Відеоряд (`timeline/`)
 
-**Pexels Stock режим:**
+**Pexels Stock / Pixabay Stock режим:**
 
-Якщо у секції Відеоряд обрано `Pexels Stock` — пайплайн виконує `run_pexels_branch`:
+Якщо у секції Відеоряд обрано `Pexels Stock` або `Pixabay Stock` — пайплайн виконує `run_pexels_branch` (спільна гілка для обох стокових сервісів):
 1. Ключові слова для пошуку: якщо є `timeline.json` (агентний режим) — бере `text` кожного сегмента напряму; інакше — розбиває текст через `split_text` і опційно генерує ключові слова через LLM.
-2. Зберігає **skeleton** `stock_cache.json` — тільки ключові слова (`keyword`), порожні `photos: []` і `videos: []`. Pexels API **не викликається** на цьому етапі.
+2. Зберігає **skeleton** `stock_cache.json` — тільки ключові слова (`keyword`), порожні `photos: []` і `videos: []`. Стоковий API **не викликається** на цьому етапі.
 3. **Контроль монтажу вмикається примусово** — незалежно від налаштування `montage_control_enabled` пайплайн переходить у `AwaitingMontageControl`. Контроль зображень (`media_control_enabled`) при цьому ігнорується. Редактор монтажу відкривається з плейсхолдерами — користувач клікає на кожен і обирає медіа через Stock Picker.
-4. **Lazy search у GUI:** при кліку на сегмент у Stock Picker — якщо `photos` і `videos` порожні — запускається фоновий запит до Pexels (`search_photos` + `search_videos`, по 15 результатів). Показується "🔍 Шукаємо…" до відповіді. Результати записуються у `SegmentCache` і зберігаються в `stock_cache.json`.
+4. **Lazy search у GUI:** при кліку на сегмент у Stock Picker — якщо `photos` і `videos` порожні — запускається фоновий запит (`search_photos` + `search_videos`, по 15 результатів) до Pexels або Pixabay відповідно до `stock_service`. Показується "🔍 Шукаємо…" до відповіді. Результати записуються у `SegmentCache` і зберігаються в `stock_cache.json`.
 5. Після «▶ Продовжити рендер» у редакторі монтажу — пайплайн пробуджується та викликає `assign_media_to_timeline` (читає `stock_cache.json` → заповнює поле `media` в `timeline.json`), після чого запускає монтаж.
 
-**Важливо:** `assign_media_to_timeline` при Pexels **завжди** викликається після підтвердження монтажного контролю — на відміну від звичайного Googler-режиму, де вона не потрібна (агент пише `timeline.json` сам).
+**Важливо:** `assign_media_to_timeline` при Pexels/Pixabay **завжди** викликається після підтвердження монтажного контролю — на відміну від звичайного Googler-режиму, де вона не потрібна (агент пише `timeline.json` сам).
 
 **Агентний режим (Claude Code, Gemini CLI, Codex CLI або AGY CLI як LLM-сервіс відеоряду):**
 
@@ -885,8 +886,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 Три JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
 - `task_history.json` — `Vec<TaskHistoryEntry>`: список задач що були додані в чергу (максимум 100 записів, старіші обрізаються). Кожен запис містить `{id, name, created_at: i64 (Unix timestamp), template_name: Option<String>, text: String, settings: PipelineTemplate}`. При завантаженні шаблону записується у `template_name`. Текст сценарію зберігається у `text` щоб відновлювати поле редактора разом з налаштуваннями.
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`, `overlay_triggers_enabled`, `overlay_triggers`, `googler_video_disabled`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`), налаштування медіа та монтажу, а також `capcut_enabled` та `capcut_draft_path`. При завантаженні шаблону всі поля відновлюються повністю.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`, `overlay_triggers_enabled`, `overlay_triggers`, `googler_video_disabled`, `pexels_key`, `pixabay_key`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`), налаштування медіа та монтажу, ключі стокових сервісів (`pexels_key`, `pixabay_key`), а також `capcut_enabled` та `capcut_draft_path`. При завантаженні шаблону всі поля відновлюються повністю.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -944,6 +945,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 | **Claude Code** | Локальний AI-агент (через CLI `claude`) | Локальна авторизація в Claude CLI | Не потребує налаштування ключів у додатку |
 | **Codex CLI** | Локальний AI-агент (через CLI `codex`) | Локальна авторизація в Codex CLI | Не потребує налаштування ключів у додатку |
 | **AGY CLI** | Локальний AI-агент на базі Gemini (через CLI `agy`) | Локальна авторизація в AGY CLI | Не потребує налаштування ключів у додатку |
+| **Pexels** | Стоковий пошук фото та відео | `Authorization: <key>` (HTTP header) | Секція АПІ в пайплайні |
+| **Pixabay** | Стоковий пошук фото та відео | `key=<key>` (query param) | Секція АПІ в пайплайні |
 
 Всі ключі зберігаються в `settings.json` у `UserConfigDir` (НЕ в репозиторії).
 

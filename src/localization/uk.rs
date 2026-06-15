@@ -173,6 +173,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "pexels_key_hint" => "Введіть API ключ Pexels...",
         "pexels_status_checking" => "⏳ Перевірка...",
         "pexels_service_note" => "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері.",
+        "pixabay_key_hint" => "Введіть API ключ Pixabay...",
+        "pixabay_service_note" => "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері.",
         "googler_status_checking" => "⏳ Перевірка...",
         "text_split_mode_label"   => "Режим нарізання тексту",
         "text_split_paragraphs"      => "Абзаци",

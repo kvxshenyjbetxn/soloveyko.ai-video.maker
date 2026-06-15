@@ -173,6 +173,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "pexels_key_hint" => "Enter Pexels API key...",
         "pexels_status_checking" => "⏳ Checking...",
         "pexels_service_note" => "Keywords are generated automatically. You pick media manually in the picker.",
+        "pixabay_key_hint" => "Enter Pixabay API key...",
+        "pixabay_service_note" => "Keywords are generated automatically. You pick media manually in the picker.",
         "googler_status_checking" => "⏳ Checking...",
         "text_split_mode_label"   => "Text split mode",
         "text_split_paragraphs"      => "Paragraphs",

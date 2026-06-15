@@ -697,12 +697,22 @@ pub fn draw_video_section(
             .show_ui(ui, |ui| {
                 ui.selectable_value(video_service, "Googler".to_string(), "Googler");
                 ui.selectable_value(video_service, "Pexels".to_string(), "Pexels Stock");
+                ui.selectable_value(video_service, "Pixabay".to_string(), "Pixabay Stock");
             });
 
         if video_service.as_str() == "Pexels" {
             ui.add_space(6.0);
             ui.label(
                 egui::RichText::new(translate(language, "pexels_service_note"))
+                    .color(ui.visuals().widgets.noninteractive.fg_stroke.color)
+                    .size(11.0)
+            );
+        }
+
+        if video_service.as_str() == "Pixabay" {
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(translate(language, "pixabay_service_note"))
                     .color(ui.visuals().widgets.noninteractive.fg_stroke.color)
                     .size(11.0)
             );

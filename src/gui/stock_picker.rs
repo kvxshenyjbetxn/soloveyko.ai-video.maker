@@ -28,8 +28,10 @@ pub struct StockPickerState {
     pub video_download: Option<VideoDownloadState>,
     /// Відкритий міні-редактор нарізки (після завантаження)
     pub trim_edit: Option<TrimEditState>,
-    /// API ключ Pexels для lazy search
-    pub pexels_key: String,
+    /// API ключ для lazy search (Pexels або Pixabay)
+    pub stock_key: String,
+    /// Сервіс стоку: "Pexels" або "Pixabay"
+    pub stock_service: String,
     /// Фоновий пошук для кожного сегмента: seg_idx → arc результату
     pub segment_search: std::collections::HashMap<usize, SegmentSearchArc>,
     /// Поточний текст промту для активного сегмента (редагується через TextEdit)
@@ -72,7 +74,7 @@ pub struct TrimEditState {
 }
 
 impl StockPickerState {
-    pub fn new(save_path: String, pexels_key: String) -> Option<Self> {
+    pub fn new(save_path: String, stock_key: String, stock_service: String) -> Option<Self> {
         let path = Path::new(&save_path);
         let mut cache = load_cache(path)
             .or_else(|| build_skeleton_cache_from_timeline(path))?;
@@ -89,7 +91,8 @@ impl StockPickerState {
             video_download: None,
             trim_edit: None,
             edit_keyword,
-            pexels_key,
+            stock_key,
+            stock_service,
             segment_search: Default::default(),
         })
     }
@@ -157,28 +160,43 @@ fn build_skeleton_cache_from_timeline(save_dir: &Path) -> Option<Vec<SegmentCach
 
 // ─── Lazy search ──────────────────────────────────────────────────────────────
 
-/// Запускає фоновий Pexels пошук для сегмента якщо він ще не має результатів.
+/// Запускає фоновий пошук стоку для сегмента якщо він ще не має результатів.
 fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &egui::Context) {
     if state.segment_search.contains_key(&seg_idx) { return; }
     let Some(seg) = state.cache.get(seg_idx) else { return };
     if !seg.photos.is_empty() || !seg.videos.is_empty() { return; }
-    if state.pexels_key.is_empty() { return; }
+    if state.stock_key.is_empty() { return; }
 
     let keyword = seg.keyword.clone();
-    let pexels_key = state.pexels_key.clone();
+    let stock_key = state.stock_key.clone();
+    let stock_service = state.stock_service.clone();
     let arc: SegmentSearchArc = Arc::new(Mutex::new(None));
     let arc_c = Arc::clone(&arc);
     let ctx_c = ctx.clone();
 
     std::thread::spawn(move || {
         use crate::api::stock::StockProvider;
-        let provider = crate::api::stock::pexels::PexelsProvider;
-        let photos = provider.search_photos(&pexels_key, &keyword, 15)
-            .map(|v| v.iter().map(|p| crate::api::stock::CachedPhoto::from(p)).collect::<Vec<_>>())
-            .unwrap_or_default();
-        let videos = provider.search_videos(&pexels_key, &keyword, 15)
-            .map(|v| v.iter().map(|v| crate::api::stock::CachedVideo::from(v)).collect::<Vec<_>>())
-            .unwrap_or_default();
+
+        let (photos, videos) = if stock_service == "Pixabay" {
+            let provider = crate::api::stock::pixabay::PixabayProvider;
+            let p = provider.search_photos(&stock_key, &keyword, 15)
+                .map(|v| v.iter().map(crate::api::stock::CachedPhoto::from).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let v = provider.search_videos(&stock_key, &keyword, 15)
+                .map(|v| v.iter().map(crate::api::stock::CachedVideo::from).collect::<Vec<_>>())
+                .unwrap_or_default();
+            (p, v)
+        } else {
+            let provider = crate::api::stock::pexels::PexelsProvider;
+            let p = provider.search_photos(&stock_key, &keyword, 15)
+                .map(|v| v.iter().map(crate::api::stock::CachedPhoto::from).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let v = provider.search_videos(&stock_key, &keyword, 15)
+                .map(|v| v.iter().map(crate::api::stock::CachedVideo::from).collect::<Vec<_>>())
+                .unwrap_or_default();
+            (p, v)
+        };
+
         *arc_c.lock().unwrap() = Some(Ok((photos, videos)));
         ctx_c.request_repaint();
     });

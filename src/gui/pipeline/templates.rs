@@ -11,6 +11,7 @@ pub fn draw_templates_section(
     assemblyai_key: &mut String,
     assemblyai_status: &mut Option<String>,
     pexels_key: &mut String,
+    pixabay_key: &mut String,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     template_status: &mut Option<String>,
@@ -122,6 +123,7 @@ pub fn draw_templates_section(
                             *assemblyai_key = template.assemblyai_key;
                             *assemblyai_status = None;
                             *pexels_key = template.pexels_key;
+                            *pixabay_key = template.pixabay_key;
                             *voiceover_provider = template.voiceover_provider;
                             *voiceover_template_uuid = template.voiceover_template_uuid;
                             *template_name_input = template_name.clone();

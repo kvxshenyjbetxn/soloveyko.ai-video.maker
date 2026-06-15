@@ -166,7 +166,7 @@ pub fn draw_queue_jobs_list(
                                     }
                                 }
 
-                                let is_pexels_job = job.settings.video_service == "Pexels" && job.settings.video_enabled;
+                                let is_pexels_job = (job.settings.video_service == "Pexels" || job.settings.video_service == "Pixabay") && job.settings.video_enabled;
                                 let show_editor = job.settings.montage_control_enabled || is_pexels_job;
                                 if show_editor {
                                     let editor_btn = ui.button(

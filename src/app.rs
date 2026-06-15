@@ -64,6 +64,12 @@ pub struct VideoMakerApp {
     pub pexels_status: Option<String>,
     /// Результат фонового тесту API ключа Pexels.
     pub pexels_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Ключ API для Pixabay Stock.
+    pub pixabay_key: String,
+    /// Статус перевірки Pixabay API ключа.
+    pub pixabay_status: Option<String>,
+    /// Результат фонового тесту API ключа Pixabay.
+    pub pixabay_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Результат фонового тесту API ключа Googler.
     pub googler_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Баланс Googler для відображення у топбарі.
@@ -420,6 +426,9 @@ impl Default for VideoMakerApp {
             pexels_key: String::new(),
             pexels_status: None,
             pexels_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pixabay_key: String::new(),
+            pixabay_status: None,
+            pixabay_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -628,6 +637,7 @@ impl VideoMakerApp {
         let googler_key = saved.googler_key.clone();
         let assemblyai_key = saved.assemblyai_key.clone();
         let pexels_key = saved.pexels_key.clone();
+        let pixabay_key = saved.pixabay_key.clone();
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
@@ -806,6 +816,9 @@ impl VideoMakerApp {
             pexels_key,
             pexels_status: None,
             pexels_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pixabay_key,
+            pixabay_status: None,
+            pixabay_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider,
             voiceover_template_uuid,
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -993,6 +1006,7 @@ impl VideoMakerApp {
             openrouter_key: self.openrouter_key.clone(),
             assemblyai_key: self.assemblyai_key.clone(),
             pexels_key: self.pexels_key.clone(),
+            pixabay_key: self.pixabay_key.clone(),
             voiceover_provider: self.voiceover_provider.clone(),
             voiceover_template_uuid: self.voiceover_template_uuid.clone(),
             pipeline_translation_enabled: self.pipeline_translation_enabled,
@@ -1150,6 +1164,7 @@ impl VideoMakerApp {
             googler_video_upscale_quality: t.googler_video_upscale_quality.clone(),
             assemblyai_key: t.assemblyai_key.clone(),
             pexels_key: t.pexels_key.clone(),
+            pixabay_key: t.pixabay_key.clone(),
             subtitles_enabled: t.pipeline_subtitles_enabled,
             subtitles_service: t.subtitles_service.clone(),
             whisper_language: t.whisper_language.clone(),
@@ -1420,6 +1435,9 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pexels_key,
                         &mut self.pexels_status,
                         &self.pexels_test_result,
+                        &mut self.pixabay_key,
+                        &mut self.pixabay_status,
+                        &self.pixabay_test_result,
                         &mut self.voiceover_provider,
                         &mut self.voiceover_template_uuid,
                         &self.voicebot_templates,
@@ -2215,9 +2233,15 @@ impl eframe::App for VideoMakerApp {
         if let Some(seg_idx) = montage_actions.open_stock_picker {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                    let stock_key = if job.settings.video_service == "Pixabay" {
+                        job.settings.pixabay_key.clone()
+                    } else {
+                        job.settings.pexels_key.clone()
+                    };
                     if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
                         job.settings.save_path.clone(),
-                        job.settings.pexels_key.clone(),
+                        stock_key,
+                        job.settings.video_service.clone(),
                     ) {
                         state.active_segment = seg_idx;
                         state.edit_keyword = state.cache.get(seg_idx)
@@ -2275,6 +2299,7 @@ impl eframe::App for VideoMakerApp {
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.assemblyai_key != self.last_saved_settings.assemblyai_key
                 || self.pexels_key != self.last_saved_settings.pexels_key
+                || self.pixabay_key != self.last_saved_settings.pixabay_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
@@ -2357,6 +2382,7 @@ impl eframe::App for VideoMakerApp {
                     googler_key: self.googler_key.clone(),
                     assemblyai_key: self.assemblyai_key.clone(),
                     pexels_key: self.pexels_key.clone(),
+                    pixabay_key: self.pixabay_key.clone(),
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                     last_template: self.template_name_input.clone(),

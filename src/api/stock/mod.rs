@@ -1,4 +1,5 @@
 pub mod pexels;
+pub mod pixabay;
 
 use std::io::Read;
 

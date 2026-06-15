@@ -962,8 +962,8 @@ fn run_video_branch(
         return Ok(());
     }
 
-    // Pexels режим — окрема гілка
-    if settings.video_service == "Pexels" {
+    // Pexels/Pixabay режим — окрема гілка (lazy picker)
+    if settings.video_service == "Pexels" || settings.video_service == "Pixabay" {
         return run_pexels_branch(
             job_id, job_name, &settings, translated_text,
             video_stage, prompts_progress, ctx,
@@ -1807,7 +1807,7 @@ pub fn run_pipeline(
         // AV → Агент → Медіа. В звичайному режимі — паралельно.
         let run_av = settings.voiceover_enabled;
         let run_video = settings.video_enabled;
-        let is_pexels = settings.video_service == "Pexels" && settings.video_enabled;
+        let is_pexels = (settings.video_service == "Pexels" || settings.video_service == "Pixabay") && settings.video_enabled;
         let is_agent_mode = run_video &&
             (settings.video_llm_service == "Claude Code"
                 || settings.video_llm_service == "Gemini CLI"
@@ -1970,8 +1970,8 @@ pub fn run_pipeline(
             if settings.video_enabled {
                 let save_dir = std::path::Path::new(&settings.save_path);
 
-                // Pexels: якщо timeline.json ще немає (non-agent) — будуємо з SRT, потім патчимо
-                if settings.video_service == "Pexels" {
+                // Pexels/Pixabay: якщо timeline.json ще немає (non-agent) — будуємо з SRT, потім патчимо
+                if settings.video_service == "Pexels" || settings.video_service == "Pixabay" {
                     if !save_dir.join("timeline.json").exists() {
                         let source_text = if settings.translation_enabled {
                             translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
@@ -2419,9 +2419,11 @@ pub fn retry_from_stage(
                 ctx.request_repaint();
 
                 let is_agent_mode = !settings.skip_agent_on_resume
+                    && settings.video_enabled
                     && (settings.video_llm_service == "Claude Code"
                         || settings.video_llm_service == "Gemini CLI"
-                        || settings.video_llm_service == "Codex CLI");
+                        || settings.video_llm_service == "Codex CLI"
+                        || settings.video_llm_service == "AGY CLI");
 
                 // В агентному режимі спочатку запускаємо агента для створення timeline.json
                 if is_agent_mode {

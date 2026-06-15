@@ -173,6 +173,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "pexels_key_hint" => "Введите API ключ Pexels...",
         "pexels_status_checking" => "⏳ Проверка...",
         "pexels_service_note" => "Ключевые слова генерируются автоматически. Вы выбираете медиа вручную в пикере.",
+        "pixabay_key_hint" => "Введите API ключ Pixabay...",
+        "pixabay_service_note" => "Ключевые слова генерируются автоматически. Вы выбираете медиа вручную в пикере.",
         "googler_status_checking" => "⏳ Проверка...",
         "text_split_mode_label"   => "Режим нарезки текста",
         "text_split_paragraphs"      => "Абзацы",
