@@ -74,8 +74,10 @@ pub struct TrimEditState {
 impl StockPickerState {
     pub fn new(save_path: String, pexels_key: String) -> Option<Self> {
         let path = Path::new(&save_path);
-        let cache = load_cache(path)
+        let mut cache = load_cache(path)
             .or_else(|| build_skeleton_cache_from_timeline(path))?;
+        // Оновлюємо segment_duration якщо вони були 0.0 (timeline ще не існував при запуску пайплайну)
+        sync_segment_durations_from_timeline(path, &mut cache);
         let edit_keyword = cache.first().map(|s| s.keyword.clone()).unwrap_or_default();
         Some(Self {
             save_path,
@@ -101,6 +103,33 @@ impl StockPickerState {
 }
 
 // ─── Допоміжні функції ────────────────────────────────────────────────────────
+
+/// Якщо у кеші segment_duration == 0.0 (timeline ще не існував при запуску пайплайну),
+/// оновлюємо значення з поточного timeline.json.
+fn sync_segment_durations_from_timeline(save_dir: &Path, cache: &mut Vec<SegmentCache>) {
+    let content = match std::fs::read_to_string(save_dir.join("timeline.json")) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let v: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let segs = match v["segments"].as_array() {
+        Some(s) => s,
+        None => return,
+    };
+    for (entry, seg) in cache.iter_mut().zip(segs.iter()) {
+        if entry.segment_duration <= 0.0 {
+            let start = seg["start_secs"].as_f64().unwrap_or(0.0);
+            let end = seg["end_secs"].as_f64().unwrap_or(0.0);
+            let dur = (end - start).max(0.0) as f32;
+            if dur > 0.0 {
+                entry.segment_duration = dur;
+            }
+        }
+    }
+}
 
 fn build_skeleton_cache_from_timeline(save_dir: &Path) -> Option<Vec<SegmentCache>> {
     let content = std::fs::read_to_string(save_dir.join("timeline.json")).ok()?;

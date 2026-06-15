@@ -49,6 +49,8 @@ pub fn run_montage(
         start_secs: f64,
         end_secs: f64,
         media: Option<String>,
+        #[serde(default)]
+        trim_start: f64,
     }
 
     #[derive(serde::Deserialize)]
@@ -86,6 +88,8 @@ pub fn run_montage(
         path: Option<String>, // None = чорна заставка (gap)
         duration: f64,
         is_video: bool,
+        /// Початок обрізки у вихідному файлі (секунди); 0.0 = з початку
+        trim_start: f64,
     }
 
     fn is_video_ext(path: &str) -> bool {
@@ -163,13 +167,13 @@ pub fn run_montage(
                                 duration: dur,
                             });
                         } else {
-                            clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media) });
+                            clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media), trim_start: seg.trim_start });
                         }
                     } else {
                         if matches!(clips.last(), Some(Clip { path: None, .. })) {
                             clips.last_mut().unwrap().duration += dur;
                         } else {
-                            clips.push(Clip { path: None, duration: dur, is_video: false });
+                            clips.push(Clip { path: None, duration: dur, is_video: false, trim_start: 0.0 });
                         }
                     }
                 }
@@ -219,7 +223,7 @@ pub fn run_montage(
         let clip_dur = total_dur / files.len() as f64;
         for f in files {
             let is_vid = is_video_ext(&f);
-            clips.push(Clip { path: Some(f), duration: clip_dur, is_video: is_vid });
+            clips.push(Clip { path: Some(f), duration: clip_dur, is_video: is_vid, trim_start: 0.0 });
         }
     }
 
@@ -281,8 +285,9 @@ pub fn run_montage(
                 format=yuv420p,setsar=1,settb=AVTB[v{i}_final]"
             ));
         } else if clip.is_video {
+            let ts = clip.trim_start;
             filter_parts.push(format!(
-                "[{file_idx}:v]trim=duration={adj_dur:.6},setpts=PTS-STARTPTS,\
+                "[{file_idx}:v]trim=start={ts:.6}:duration={adj_dur:.6},setpts=PTS-STARTPTS,\
                 scale=1920:1080:force_original_aspect_ratio=increase,\
                 crop=1920:1080,format=yuv420p,setsar=1,fps={fps},settb=AVTB[v{i}_final]"
             ));
