@@ -2233,14 +2233,10 @@ impl eframe::App for VideoMakerApp {
         if let Some(seg_idx) = montage_actions.open_stock_picker {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
-                    let stock_key = if job.settings.video_service == "Pixabay" {
-                        job.settings.pixabay_key.clone()
-                    } else {
-                        job.settings.pexels_key.clone()
-                    };
                     if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
                         job.settings.save_path.clone(),
-                        stock_key,
+                        job.settings.pexels_key.clone(),
+                        job.settings.pixabay_key.clone(),
                         job.settings.video_service.clone(),
                     ) {
                         state.active_segment = seg_idx;

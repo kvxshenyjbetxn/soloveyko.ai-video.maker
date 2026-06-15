@@ -14,6 +14,8 @@ pub struct CachedPhoto {
     pub width: u32,
     pub height: u32,
     pub author: String,
+    #[serde(default)]
+    pub provider: String,
 }
 
 /// Одне стокове відео у кеші
@@ -26,6 +28,8 @@ pub struct CachedVideo {
     pub width: u32,
     pub height: u32,
     pub author: String,
+    #[serde(default)]
+    pub provider: String,
 }
 
 /// Обраний медіафайл для сегмента
@@ -72,6 +76,7 @@ impl From<&StockPhoto> for CachedPhoto {
             width: p.width,
             height: p.height,
             author: p.author.clone(),
+            provider: String::new(),
         }
     }
 }
@@ -86,6 +91,7 @@ impl From<&StockVideo> for CachedVideo {
             width: v.width,
             height: v.height,
             author: v.author.clone(),
+            provider: String::new(),
         }
     }
 }

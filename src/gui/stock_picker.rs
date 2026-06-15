@@ -1,4 +1,4 @@
-﻿use eframe::egui;
+use eframe::egui;
 use crate::localization::{Language, translate};
 use crate::api::stock::{SegmentCache, SelectedMedia, load_cache, save_cache};
 use std::path::{Path, PathBuf};
@@ -23,15 +23,21 @@ pub struct StockPickerState {
     /// Текстури мініатюр: preview_url → TextureHandle
     pub thumbnails: std::collections::HashMap<String, Option<egui::TextureHandle>>,
     /// Завантаження мініатюри у фоні
-    pub thumb_loading: std::collections::HashMap<String, Arc<Mutex<Option<Vec<u8>>>>>,
+    pub thumb_loading: std::collections::HashMap<String, Arc<Mutex<Option<Option<egui::ColorImage>>>>>,
     /// Активне завантаження відео з відстеженням прогресу
     pub video_download: Option<VideoDownloadState>,
     /// Відкритий міні-редактор нарізки (після завантаження)
     pub trim_edit: Option<TrimEditState>,
-    /// API ключ для lazy search (Pexels або Pixabay)
-    pub stock_key: String,
-    /// Сервіс стоку: "Pexels" або "Pixabay"
-    pub stock_service: String,
+    /// Збережений API ключ Pexels
+    pub pexels_key: String,
+    /// Збережений API ключ Pixabay
+    pub pixabay_key: String,
+    /// Чи використовувати Pexels для пошуку
+    pub use_pexels: bool,
+    /// Чи використовувати Pixabay для пошуку
+    pub use_pixabay: bool,
+    /// Чи показувати панель вибору сервісів (фільтри)
+    pub show_services_filter: bool,
     /// Фоновий пошук для кожного сегмента: seg_idx → arc результату
     pub segment_search: std::collections::HashMap<usize, SegmentSearchArc>,
     /// Поточний текст промту для активного сегмента (редагується через TextEdit)
@@ -74,13 +80,28 @@ pub struct TrimEditState {
 }
 
 impl StockPickerState {
-    pub fn new(save_path: String, stock_key: String, stock_service: String) -> Option<Self> {
+    pub fn new(
+        save_path: String,
+        pexels_key: String,
+        pixabay_key: String,
+        stock_service: String,
+    ) -> Option<Self> {
         let path = Path::new(&save_path);
         let mut cache = load_cache(path)
             .or_else(|| build_skeleton_cache_from_timeline(path))?;
         // Оновлюємо segment_duration якщо вони були 0.0 (timeline ще не існував при запуску пайплайну)
         sync_segment_durations_from_timeline(path, &mut cache);
         let edit_keyword = cache.first().map(|s| s.keyword.clone()).unwrap_or_default();
+
+        let has_pexels_key = !pexels_key.is_empty();
+        let has_pixabay_key = !pixabay_key.is_empty();
+
+        let (use_pexels, use_pixabay) = if has_pexels_key || has_pixabay_key {
+            (has_pexels_key, has_pixabay_key)
+        } else {
+            (stock_service != "Pixabay", stock_service == "Pixabay")
+        };
+
         Some(Self {
             save_path,
             active_segment: 0,
@@ -91,8 +112,11 @@ impl StockPickerState {
             video_download: None,
             trim_edit: None,
             edit_keyword,
-            stock_key,
-            stock_service,
+            pexels_key,
+            pixabay_key,
+            use_pexels,
+            use_pixabay,
+            show_services_filter: false,
             segment_search: Default::default(),
         })
     }
@@ -165,11 +189,13 @@ fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &eg
     if state.segment_search.contains_key(&seg_idx) { return; }
     let Some(seg) = state.cache.get(seg_idx) else { return };
     if !seg.photos.is_empty() || !seg.videos.is_empty() { return; }
-    if state.stock_key.is_empty() { return; }
+    if !state.use_pexels && !state.use_pixabay { return; }
 
     let keyword = seg.keyword.clone();
-    let stock_key = state.stock_key.clone();
-    let stock_service = state.stock_service.clone();
+    let pexels_key = state.pexels_key.clone();
+    let pixabay_key = state.pixabay_key.clone();
+    let use_pexels = state.use_pexels;
+    let use_pixabay = state.use_pixabay;
     let arc: SegmentSearchArc = Arc::new(Mutex::new(None));
     let arc_c = Arc::clone(&arc);
     let ctx_c = ctx.clone();
@@ -177,27 +203,48 @@ fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &eg
     std::thread::spawn(move || {
         use crate::api::stock::StockProvider;
 
-        let (photos, videos) = if stock_service == "Pixabay" {
-            let provider = crate::api::stock::pixabay::PixabayProvider;
-            let p = provider.search_photos(&stock_key, &keyword, 15)
-                .map(|v| v.iter().map(crate::api::stock::CachedPhoto::from).collect::<Vec<_>>())
-                .unwrap_or_default();
-            let v = provider.search_videos(&stock_key, &keyword, 15)
-                .map(|v| v.iter().map(crate::api::stock::CachedVideo::from).collect::<Vec<_>>())
-                .unwrap_or_default();
-            (p, v)
-        } else {
-            let provider = crate::api::stock::pexels::PexelsProvider;
-            let p = provider.search_photos(&stock_key, &keyword, 15)
-                .map(|v| v.iter().map(crate::api::stock::CachedPhoto::from).collect::<Vec<_>>())
-                .unwrap_or_default();
-            let v = provider.search_videos(&stock_key, &keyword, 15)
-                .map(|v| v.iter().map(crate::api::stock::CachedVideo::from).collect::<Vec<_>>())
-                .unwrap_or_default();
-            (p, v)
-        };
+        let mut all_photos = Vec::new();
+        let mut all_videos = Vec::new();
 
-        *arc_c.lock().unwrap() = Some(Ok((photos, videos)));
+        // Пошук у Pexels
+        if use_pexels && !pexels_key.is_empty() {
+            let provider = crate::api::stock::pexels::PexelsProvider;
+            if let Ok(p) = provider.search_photos(&pexels_key, &keyword, 15) {
+                all_photos.extend(p.iter().map(|photo| {
+                    let mut cp = crate::api::stock::CachedPhoto::from(photo);
+                    cp.provider = "Pexels".to_string();
+                    cp
+                }));
+            }
+            if let Ok(v) = provider.search_videos(&pexels_key, &keyword, 15) {
+                all_videos.extend(v.iter().map(|video| {
+                    let mut cv = crate::api::stock::CachedVideo::from(video);
+                    cv.provider = "Pexels".to_string();
+                    cv
+                }));
+            }
+        }
+
+        // Пошук у Pixabay
+        if use_pixabay && !pixabay_key.is_empty() {
+            let provider = crate::api::stock::pixabay::PixabayProvider;
+            if let Ok(p) = provider.search_photos(&pixabay_key, &keyword, 15) {
+                all_photos.extend(p.iter().map(|photo| {
+                    let mut cp = crate::api::stock::CachedPhoto::from(photo);
+                    cp.provider = "Pixabay".to_string();
+                    cp
+                }));
+            }
+            if let Ok(v) = provider.search_videos(&pixabay_key, &keyword, 15) {
+                all_videos.extend(v.iter().map(|video| {
+                    let mut cv = crate::api::stock::CachedVideo::from(video);
+                    cv.provider = "Pixabay".to_string();
+                    cv
+                }));
+            }
+        }
+
+        *arc_c.lock().unwrap() = Some(Ok((all_photos, all_videos)));
         ctx_c.request_repaint();
     });
 
@@ -761,10 +808,12 @@ fn draw_single_mode(
         .id(egui::Id::new("stock_picker_single"))
         .default_size([750.0, 520.0])
         .min_size([420.0, 300.0])
-        .max_size([screen.width() - 20.0, screen.height() - 20.0])
+        .max_size([screen.width() - 40.0, screen.height() - 40.0])
         .resizable(true)
         .collapsible(false)
         .order(egui::Order::Tooltip)
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(screen.center())
         .show(ctx, |ui| {
             // Клонуємо дані сегмента щоб уникнути borrow conflicts з edit_keyword
             let (seg_text, selected, photos, videos) = if let Some(seg) = state.cache.get(seg_idx) {
@@ -775,12 +824,48 @@ fn draw_single_mode(
 
             // Рядок редагування keyword + кнопка перезапуску пошуку
             ui.horizontal(|ui| {
+                // Кнопка розгортання фільтрів
+                let filter_btn_text = if state.show_services_filter {
+                    format!("🔽 {}", translate(language, "stock_services_btn"))
+                } else {
+                    format!("▶ {}", translate(language, "stock_services_btn"))
+                };
+                if ui.button(filter_btn_text).clicked() {
+                    state.show_services_filter = !state.show_services_filter;
+                }
+
                 ui.add(egui::TextEdit::singleline(&mut state.edit_keyword)
                     .desired_width(ui.available_width() - 44.0));
                 if ui.button("🔄").on_hover_text(translate(language, "stock_search_retrigger")).clicked() {
                     retrigger_search = true;
                 }
             });
+
+            // Якщо увімкнено показ фільтрів - показуємо чекбокси
+            if state.show_services_filter {
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(translate(language, "stock_search_in"));
+                    let prev_pexels = state.use_pexels;
+                    let prev_pixabay = state.use_pixabay;
+
+                    ui.checkbox(&mut state.use_pexels, "Pexels");
+                    ui.checkbox(&mut state.use_pixabay, "Pixabay");
+
+                    // Запобігаємо вимиканню обох чекбоксів
+                    if !state.use_pexels && !state.use_pixabay {
+                        if !prev_pexels {
+                            state.use_pexels = true;
+                        } else {
+                            state.use_pixabay = true;
+                        }
+                    }
+
+                    if state.use_pexels != prev_pexels || state.use_pixabay != prev_pixabay {
+                        retrigger_search = true;
+                    }
+                });
+            }
             ui.add_space(4.0);
 
             // Опис сцени
@@ -829,22 +914,35 @@ fn draw_single_mode(
             let is_searching = state.segment_search.contains_key(&seg_idx);
 
             let has_videos = !videos.is_empty();
+            let has_photos = !photos.is_empty();
             if state.show_videos.is_none() {
-                state.show_videos = Some(has_videos);
+                state.show_videos = Some(has_videos || !has_photos);
             }
-            let is_video_mode = state.show_videos.unwrap_or(has_videos);
+            let is_video_mode = state.show_videos.unwrap_or(true);
 
-            if is_searching && photos.is_empty() && videos.is_empty() {
+            let has_any_working_key = (state.use_pexels && !state.pexels_key.is_empty())
+                || (state.use_pixabay && !state.pixabay_key.is_empty());
+            let is_any_key_missing = (state.use_pexels && state.pexels_key.is_empty())
+                || (state.use_pixabay && state.pixabay_key.is_empty());
+
+            if is_any_key_missing {
+                ui.colored_label(egui::Color32::KHAKI, translate(language, "stock_key_missing_warning"));
+                ui.add_space(2.0);
+            }
+
+            if !has_any_working_key {
+                ui.label(egui::RichText::new("Потрібно вказати хоча б один API-ключ для активних сервісів").weak());
+            } else if is_searching && photos.is_empty() && videos.is_empty() {
                 ui.label(egui::RichText::new("🔍 Шукаємо…").weak().size(13.0));
             } else {
                 ui.horizontal(|ui| {
-                    if ui.selectable_label(!is_video_mode,
-                        egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
-                        state.show_videos = Some(false);
-                    }
                     if ui.selectable_label(is_video_mode,
                         egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
                         state.show_videos = Some(true);
+                    }
+                    if ui.selectable_label(!is_video_mode,
+                        egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
+                        state.show_videos = Some(false);
                     }
                 });
                 ui.add_space(4.0);
@@ -854,12 +952,48 @@ fn draw_single_mode(
                 egui::ScrollArea::vertical()
                     .id_salt("stock_single_scroll")
                     .show(ui, |ui| {
-                        let cols = ((ui.available_width() / (thumb_size.x + 8.0)) as usize).max(1);
+                        let cols = if screen.width() < 780.0 { 3 } else { 4 };
 
                         if is_video_mode {
-                            draw_video_grid(ui, ctx, state, "single_v", seg_idx, &videos, thumb_size, cols, action);
+                            let pexels_videos: Vec<_> = videos.iter().filter(|v| v.provider == "Pexels" || v.provider.is_empty()).cloned().collect();
+                            let pixabay_videos: Vec<_> = videos.iter().filter(|v| v.provider == "Pixabay").cloned().collect();
+
+                            if !pexels_videos.is_empty() {
+                                ui.label(egui::RichText::new("🎬 Pexels Videos").strong().size(13.0));
+                                ui.add_space(4.0);
+                                draw_video_grid(ui, ctx, state, "pexels_v", seg_idx, &pexels_videos, thumb_size, cols, action);
+                                ui.add_space(12.0);
+                            }
+
+                            if !pixabay_videos.is_empty() {
+                                ui.label(egui::RichText::new("🎬 Pixabay Videos").strong().size(13.0));
+                                ui.add_space(4.0);
+                                draw_video_grid(ui, ctx, state, "pixabay_v", seg_idx, &pixabay_videos, thumb_size, cols, action);
+                            }
+
+                            if pexels_videos.is_empty() && pixabay_videos.is_empty() {
+                                ui.label(egui::RichText::new("Немає результатів").weak());
+                            }
                         } else {
-                            draw_photo_grid(ui, ctx, state, "single_p", seg_idx, &photos, thumb_size, cols, action);
+                            let pexels_photos: Vec<_> = photos.iter().filter(|p| p.provider == "Pexels" || p.provider.is_empty()).cloned().collect();
+                            let pixabay_photos: Vec<_> = photos.iter().filter(|p| p.provider == "Pixabay").cloned().collect();
+
+                            if !pexels_photos.is_empty() {
+                                ui.label(egui::RichText::new("📷 Pexels Photos").strong().size(13.0));
+                                ui.add_space(4.0);
+                                draw_photo_grid(ui, ctx, state, "pexels_p", seg_idx, &pexels_photos, thumb_size, cols, action);
+                                ui.add_space(12.0);
+                            }
+
+                            if !pixabay_photos.is_empty() {
+                                ui.label(egui::RichText::new("📷 Pixabay Photos").strong().size(13.0));
+                                ui.add_space(4.0);
+                                draw_photo_grid(ui, ctx, state, "pixabay_p", seg_idx, &pixabay_photos, thumb_size, cols, action);
+                            }
+
+                            if pexels_photos.is_empty() && pixabay_photos.is_empty() {
+                                ui.label(egui::RichText::new("Немає результатів").weak());
+                            }
                         }
                     });
             }
@@ -1126,16 +1260,32 @@ fn draw_thumb(
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "⏳",
                 egui::FontId::default(), egui::Color32::GRAY);
             if !state.thumb_loading.contains_key(thumb_url) {
-                let arc = Arc::new(Mutex::new(None::<Vec<u8>>));
+                let arc = Arc::new(Mutex::new(None::<Option<egui::ColorImage>>));
                 let arc_c = Arc::clone(&arc);
                 let url_c = thumb_url.to_string();
                 let ctx_c = ctx.clone();
                 std::thread::spawn(move || {
-                    if let Ok(r) = ureq::get(&url_c).call() {
+                    let res = (|| -> Result<egui::ColorImage, String> {
+                        let r = ureq::get(&url_c).call()
+                            .map_err(|e| e.to_string())?;
                         use std::io::Read;
                         let mut bytes = Vec::new();
-                        let _ = r.into_reader().read_to_end(&mut bytes);
-                        *arc_c.lock().unwrap() = Some(bytes);
+                        r.into_reader().read_to_end(&mut bytes)
+                            .map_err(|e| e.to_string())?;
+                        let img = image::load_from_memory(&bytes)
+                            .map_err(|e| e.to_string())?;
+                        let rgba = img.to_rgba8();
+                        let size = [rgba.width() as usize, rgba.height() as usize];
+                        Ok(egui::ColorImage::from_rgba_unmultiplied(size, &rgba))
+                    })();
+
+                    match res {
+                        Ok(ci) => {
+                            *arc_c.lock().unwrap() = Some(Some(ci));
+                        }
+                        Err(_) => {
+                            *arc_c.lock().unwrap() = Some(None);
+                        }
                     }
                     ctx_c.request_repaint();
                 });
@@ -1160,16 +1310,17 @@ fn draw_thumb(
 }
 
 fn flush_thumb_loading(ctx: &egui::Context, state: &mut StockPickerState) {
-    let ready: Vec<(String, Vec<u8>)> = state.thumb_loading.iter()
-        .filter_map(|(url, arc)| arc.try_lock().ok()?.take().map(|b| (url.clone(), b)))
+    let ready: Vec<(String, Option<egui::ColorImage>)> = state.thumb_loading.iter()
+        .filter_map(|(url, arc)| {
+            let mut guard = arc.try_lock().ok()?;
+            let opt = guard.take()?;
+            Some((url.clone(), opt))
+        })
         .collect();
-    for (url, bytes) in ready {
+    for (url, opt_ci) in ready {
         state.thumb_loading.remove(&url);
-        if let Ok(img) = image::load_from_memory(&bytes) {
-            let rgba = img.to_rgba8();
-            let size = [rgba.width() as usize, rgba.height() as usize];
-            let pixels = egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
-            let tex = ctx.load_texture(&url, pixels, egui::TextureOptions::default());
+        if let Some(ci) = opt_ci {
+            let tex = ctx.load_texture(&url, ci, egui::TextureOptions::default());
             state.thumbnails.insert(url, Some(tex));
         } else {
             state.thumbnails.insert(url, None);
