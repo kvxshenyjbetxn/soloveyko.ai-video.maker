@@ -593,13 +593,17 @@ fn draw_trim_editor(
     let title = format!("✂ {}", trim.filename);
     let mut confirmed = false;
     let mut cancelled = false;
+    let screen = ctx.screen_rect();
 
     // Order::Debug — вище за все (Foreground → Tooltip → Debug)
     egui::Window::new(title)
         .id(egui::Id::new("stock_trim_editor"))
         .default_size([860.0, 620.0])
+        .min_size([420.0, 300.0])
+        .max_size([screen.width() - 40.0, screen.height() - 40.0])
         .resizable(true)
         .collapsible(false)
+        .constrain(true)
         .order(egui::Order::Debug)
         .show(ctx, |ui| {
             // Рядок інформації
@@ -615,8 +619,11 @@ fn draw_trim_editor(
             // Великий превью кадр
             {
                 let avail_w = ui.available_width();
-                let preview_w = avail_w.min(820.0);
-                let preview_h = (preview_w * 9.0 / 16.0).min(420.0);
+                let avail_h = ui.available_height();
+                // Залишаємо щонайменше 180 пікселів для інших елементів (інфо-рядок, таймлайн-стрип, мітки, кнопки)
+                let max_h = (avail_h - 180.0).max(100.0);
+                let preview_w = avail_w.min(820.0).min(max_h * 16.0 / 9.0);
+                let preview_h = (preview_w * 9.0 / 16.0).min(max_h);
 
                 // Центруємо горизонтально
                 let indent = ((avail_w - preview_w) * 0.5).max(0.0);
@@ -811,6 +818,7 @@ fn draw_single_mode(
         .max_size([screen.width() - 40.0, screen.height() - 40.0])
         .resizable(true)
         .collapsible(false)
+        .constrain(true)
         .order(egui::Order::Tooltip)
         .pivot(egui::Align2::CENTER_CENTER)
         .default_pos(screen.center())
@@ -948,11 +956,16 @@ fn draw_single_mode(
                 ui.add_space(4.0);
 
                 let thumb_size = egui::vec2(160.0, 104.0);
+                let max_scroll_h = (screen.height() - 200.0).max(150.0);
 
                 egui::ScrollArea::vertical()
                     .id_salt("stock_single_scroll")
+                    .max_height(max_scroll_h)
                     .show(ui, |ui| {
-                        let cols = if screen.width() < 780.0 { 3 } else { 4 };
+                        let avail_w = ui.available_width();
+                        let spacing = 8.0;
+                        let col_w = thumb_size.x + spacing;
+                        let cols = ((avail_w / col_w).floor() as usize).max(1);
 
                         if is_video_mode {
                             let pexels_videos: Vec<_> = videos.iter().filter(|v| v.provider == "Pexels" || v.provider.is_empty()).cloned().collect();
