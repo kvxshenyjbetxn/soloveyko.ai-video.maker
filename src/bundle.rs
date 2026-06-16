@@ -10,8 +10,19 @@ const FFPROBE_NAME: &str = "ffprobe.exe";
 #[cfg(not(target_os = "windows"))]
 const FFPROBE_NAME: &str = "ffprobe";
 
+/// На Windows whisper розпаковується у підпапку whisper.win/ (як whisperx та whisper-amd).
 #[cfg(target_os = "windows")]
-const WHISPER_NAME: &str = "whisper.exe";
+const WHISPER_WIN_DIR: &str = "whisper.win";
+#[cfg(target_os = "windows")]
+const WHISPER_WIN_CLI: &str = "whisper-cli.exe";
+/// Легасі-назви для тих у кого ще є старіші бінарники.
+#[cfg(target_os = "windows")]
+const WHISPER_NAME_LEGACY: &str = "main.exe";
+#[cfg(target_os = "windows")]
+const WHISPER_NAME_LEGACY2: &str = "whisper-whisper.exe";
+#[cfg(target_os = "windows")]
+const WHISPER_NAME_LEGACY3: &str = "whisper.exe";
+/// Не Windows — один файл у bin_dir.
 #[cfg(not(target_os = "windows"))]
 const WHISPER_NAME: &str = "whisper";
 
@@ -85,18 +96,45 @@ pub fn ffprobe_path() -> String {
     FFPROBE_NAME.to_string()
 }
 
-/// Шлях до whisper: спочатку bin_dir, потім системний PATH.
+/// Шлях до whisper.
+/// Windows: bin/whisper.win/whisper-cli.exe → bin/whisper.win/main.exe → bin/whisper-whisper.exe → bin/whisper.exe → PATH.
+/// Non-Windows: bin/whisper → PATH.
 pub fn whisper_path() -> String {
-    let local = bin_dir().join(WHISPER_NAME);
-    if local.exists() {
-        return local.to_string_lossy().into_owned();
+    let dir = bin_dir();
+    #[cfg(target_os = "windows")]
+    {
+        let folder_bin = dir.join(WHISPER_WIN_DIR).join(WHISPER_WIN_CLI);
+        if folder_bin.exists() { return folder_bin.to_string_lossy().into_owned(); }
+        let legacy1 = dir.join(WHISPER_WIN_DIR).join(WHISPER_NAME_LEGACY);
+        if legacy1.exists() { return legacy1.to_string_lossy().into_owned(); }
+        let legacy2 = dir.join(WHISPER_NAME_LEGACY2);
+        if legacy2.exists() { return legacy2.to_string_lossy().into_owned(); }
+        let legacy3 = dir.join(WHISPER_NAME_LEGACY3);
+        if legacy3.exists() { return legacy3.to_string_lossy().into_owned(); }
+        return WHISPER_WIN_CLI.to_string();
     }
-    WHISPER_NAME.to_string()
+    #[cfg(not(target_os = "windows"))]
+    {
+        let local = dir.join(WHISPER_NAME);
+        if local.exists() { return local.to_string_lossy().into_owned(); }
+        WHISPER_NAME.to_string()
+    }
 }
 
 /// Перевіряє, чи є whisper у локальному bin_dir.
 pub fn whisper_local_exists() -> bool {
-    bin_dir().join(WHISPER_NAME).exists()
+    let dir = bin_dir();
+    #[cfg(target_os = "windows")]
+    {
+        dir.join(WHISPER_WIN_DIR).join(WHISPER_WIN_CLI).exists()
+            || dir.join(WHISPER_WIN_DIR).join(WHISPER_NAME_LEGACY).exists()
+            || dir.join(WHISPER_NAME_LEGACY2).exists()
+            || dir.join(WHISPER_NAME_LEGACY3).exists()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        dir.join(WHISPER_NAME).exists()
+    }
 }
 
 /// Перевіряє, чи є папка whisperx у локальному bin_dir.
@@ -230,55 +268,34 @@ pub fn download_all(mut on_progress: impl FnMut(String)) -> Result<(), String> {
 }
 
 /// Завантажує whisper у bin_dir (пропускає якщо вже є).
-/// На Windows — розпаковує zip і витягує main.exe.
+/// Windows: розпаковує zip → папка whisper.win/ з whisper-cli.exe всередині (як whisperx/whisper-amd).
+/// Non-Windows: завантажує одиночний бінарник.
 pub fn download_whisper(mut on_progress: impl FnMut(String)) -> Result<(), String> {
     let dir = bin_dir();
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
 
-    let dest = dir.join(WHISPER_NAME);
-    if dest.exists() {
+    #[cfg(target_os = "windows")]
+    {
+        let target = dir.join(WHISPER_WIN_DIR).join(WHISPER_WIN_CLI);
+        if target.exists() { return Ok(()); }
+        let bytes = download_to_bytes(WHISPER_URL, "whisper", &mut on_progress)?;
+        extract_folder_from_zip(&bytes, &dir)?;
         return Ok(());
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(not(target_os = "windows"))]
     {
-        let bytes = download_to_bytes(WHISPER_URL, "whisper", &mut on_progress)?;
-        extract_main_exe_from_zip(&bytes, &dest)?;
+        let dest = dir.join(WHISPER_NAME);
+        if dest.exists() { return Ok(()); }
+        download_file(WHISPER_URL, &dest, "whisper", &mut on_progress)?;
+        return Ok(());
     }
 
-    #[cfg(not(target_os = "windows"))]
-    download_file(WHISPER_URL, &dest, "whisper", &mut on_progress)?;
-
+    #[allow(unreachable_code)]
     Ok(())
 }
 
-/// Розпаковує main.exe з zip-архіву (шукає в будь-якій підпапці).
-#[cfg(target_os = "windows")]
-fn extract_main_exe_from_zip(bytes: &[u8], dest: &PathBuf) -> Result<(), String> {
-    use std::io::Read;
-
-    let cursor = std::io::Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("Помилка відкриття zip: {}", e))?;
-
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
-            .map_err(|e| format!("Помилка читання запису zip: {}", e))?;
-
-        let name = entry.name().to_string();
-        if name.ends_with("main.exe") {
-            let mut contents = Vec::new();
-            entry.read_to_end(&mut contents)
-                .map_err(|e| format!("Помилка розпакування main.exe: {}", e))?;
-            std::fs::write(dest, &contents)
-                .map_err(|e| format!("Помилка запису whisper.exe: {}", e))?;
-            return Ok(());
-        }
-    }
-
-    Err("main.exe не знайдено в архіві".to_string())
-}
 
 /// Завантажує URL у пам'ять з відображенням прогресу.
 fn download_to_bytes(

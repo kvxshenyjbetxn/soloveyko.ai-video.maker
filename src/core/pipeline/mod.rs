@@ -202,13 +202,23 @@ fn run_whisperx(
                 Ok(json_str) => {
                     match serde_json::from_str::<serde_json::Value>(&json_str) {
                         Ok(json) => {
-                            let words = json.get("words")
+                            let raw_words: Vec<serde_json::Value> = json.get("words")
                                 .and_then(|w| w.as_array())
-                                .map(|v| v.as_slice())
-                                .unwrap_or(&[]);
+                                .cloned()
+                                .unwrap_or_default();
+
+                            // Відрізаємо слова що виходять за межі реального аудіо (WhisperX галюцинує в кінці)
+                            let audio_max_secs = get_audio_duration_secs(&audio_path);
+                            let words_trimmed: Vec<serde_json::Value> = if let Some(max) = audio_max_secs {
+                                raw_words.into_iter()
+                                    .filter(|w| w.get("start").and_then(|s| s.as_f64()).map_or(true, |t| t < max))
+                                    .collect()
+                            } else {
+                                raw_words
+                            };
 
                             let srt = crate::api::assemblyai::whisperx_words_to_srt(
-                                words,
+                                &words_trimmed,
                                 settings.whisper_max_line_width,
                             );
                             if let Err(e) = std::fs::write(&output_srt, &srt) {
@@ -225,7 +235,7 @@ fn run_whisperx(
                             // Зберігаємо тільки words + language (без segments)
                             let filtered = serde_json::json!({
                                 "language": json.get("language").cloned().unwrap_or(serde_json::Value::Null),
-                                "words": json.get("words").cloned().unwrap_or(serde_json::Value::Array(vec![])),
+                                "words": words_trimmed,
                             });
                             if let Ok(s) = serde_json::to_string_pretty(&filtered) {
                                 let _ = std::fs::write(&output_json, s);
@@ -410,7 +420,6 @@ fn run_whisper_amd(
         args.push("-ml".to_string());
         args.push(settings.whisper_max_line_width.to_string());
     }
-
     crate::logger::log_job(job_id, job_name, &format!("Running: {} {}", whisper_amd_cmd.display(), args.join(" ")));
 
     let mut whisper_amd_proc = std::process::Command::new(&whisper_amd_cmd);
@@ -420,7 +429,6 @@ fn run_whisper_amd(
         Ok(out) if out.status.success() => {
             let srt_path = save_dir.join("subtitle.srt");
 
-            // Перейменовуємо voice.srt → subtitle.srt
             if generated_srt.exists() && generated_srt != srt_path {
                 if let Err(e) = std::fs::rename(&generated_srt, &srt_path) {
                     crate::logger::log_job(job_id, job_name, &format!("Whisper AMD: failed to rename SRT: {}", e));
@@ -503,13 +511,32 @@ fn run_subtitles_only(
             return Err(msg);
         };
 
-        let output_stem = save_dir.join("subtitle");
+        // whisper-cli.exe (C runtime, ANSI argv) не розуміє Unicode-шляхи на Windows —
+        // копіюємо аудіо у тимчасову папку з гарантовано ASCII-шляхом.
+        #[cfg(target_os = "windows")]
+        let (whisper_audio, whisper_out_stem, whisper_temp) = {
+            let tmp = std::env::temp_dir().join("soloveyko_whisper");
+            let _ = std::fs::create_dir_all(&tmp);
+            let ext = audio_path.extension().and_then(|e| e.to_str()).unwrap_or("wav");
+            let tmp_audio = tmp.join(format!("voice.{}", ext));
+            if let Err(e) = std::fs::copy(&audio_path, &tmp_audio) {
+                crate::logger::log_job(job_id, job_name, &format!("Whisper: не вдалося скопіювати аудіо у temp: {}", e));
+            }
+            let tmp_stem = tmp.join("subtitle");
+            (tmp_audio, tmp_stem, Some(tmp))
+        };
+        #[cfg(not(target_os = "windows"))]
+        let (whisper_audio, whisper_out_stem, whisper_temp) = {
+            let stem = save_dir.join("subtitle");
+            (audio_path.clone(), stem, None::<std::path::PathBuf>)
+        };
+
         let whisper_cmd = crate::bundle::whisper_path();
         let mut args: Vec<String> = vec![
-            audio_path.to_str().unwrap_or("voice.wav").to_string(),
+            whisper_audio.to_str().unwrap_or("voice.wav").to_string(),
             "-m".to_string(), model_path.to_str().unwrap().to_string(),
             "--output-srt".to_string(),
-            "-of".to_string(), output_stem.to_str().unwrap().to_string(),
+            "-of".to_string(), whisper_out_stem.to_str().unwrap().to_string(),
         ];
         if settings.whisper_language != "auto" {
             args.push("-l".to_string());
@@ -528,6 +555,15 @@ fn run_subtitles_only(
         crate::bundle::set_no_window(&mut whisper_proc);
         match whisper_proc.output() {
             Ok(out) if out.status.success() => {
+                // На Windows переносимо результат з temp-папки назад у save_dir
+                #[cfg(target_os = "windows")]
+                if let Some(ref tmp) = whisper_temp {
+                    let tmp_srt = tmp.join("subtitle.srt");
+                    if tmp_srt.exists() {
+                        let _ = std::fs::copy(&tmp_srt, save_dir.join("subtitle.srt"));
+                    }
+                    let _ = std::fs::remove_dir_all(tmp);
+                }
                 crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt");
                 let srt_path = save_dir.join("subtitle.srt");
                 if let Ok(srt) = std::fs::read_to_string(&srt_path) {
@@ -538,6 +574,10 @@ fn run_subtitles_only(
                 ctx.request_repaint();
             }
             Ok(out) => {
+                #[cfg(target_os = "windows")]
+                if let Some(ref tmp) = whisper_temp {
+                    let _ = std::fs::remove_dir_all(tmp);
+                }
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 let stdout = String::from_utf8_lossy(&out.stdout);
                 let msg = if !stderr.is_empty() { stderr.to_string() } else { stdout.to_string() };
@@ -547,6 +587,10 @@ fn run_subtitles_only(
                 return Err(short);
             }
             Err(e) => {
+                #[cfg(target_os = "windows")]
+                if let Some(ref tmp) = whisper_temp {
+                    let _ = std::fs::remove_dir_all(tmp);
+                }
                 let msg = format!("Whisper launch error: {}", e);
                 crate::logger::log_job(job_id, job_name, &format!("Whisper not found or failed to start: {}", e));
                 *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
@@ -944,6 +988,7 @@ fn srt_time_to_ass(srt: &str) -> String {
     let cs: u32    = parts[1].trim().parse::<u32>().unwrap_or(0) / 10;
     format!("{}:{:02}:{:02}.{:02}", hours, mins, secs, cs)
 }
+
 
 /// Гілка Відеоряд (виконується паралельно з озвучкою та субтитрами).
 /// Повертає Ok(()) або Err з описом першої помилки.

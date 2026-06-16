@@ -550,14 +550,16 @@ pub struct ClipDragState {
 - **Джерело аудіо:** спочатку шукає `voice.wav`, потім `voice.mp3`. Якщо нічого — задача провалюється.
 
 **Whisper (whisper.cpp):**
-- Аргументи: `-m <ggml-шлях>`, `--output-srt`, `-of {save_dir}/subtitle`, `-l <код>` (без для авто), `--max-len N --split-on-word` якщо `whisper_max_line_width > 0`.
+- Бінарник на Windows: `bin/whisper.win/whisper-cli.exe`. Ланцюжок пошуку `whisper_path()`: `whisper.win/whisper-cli.exe` → `whisper.win/main.exe` (легасі) → `whisper-whisper.exe` → `whisper.exe` → системний PATH. `whisper.cpp` починаючи з певної версії перейменував CLI: `main.exe` → стаб-редирект, реальний бінарник — `whisper-cli.exe`.
+- Аргументи: `<audio>`, `-m <ggml-шлях>`, `--output-srt`, `-of {tmp}/subtitle`, `-l <код>` (без для авто), `--max-len N --split-on-word` якщо `whisper_max_line_width > 0`.
+- **Unicode-шлях (Windows):** `whisper-cli.exe` використовує ANSI `main(argc, argv)` — C runtime конвертує аргументи через системну кодову сторінку, тому кирилиця в шляху до аудіо перетворюється на `?`. Рішення: аудіо копіюється у `%TEMP%\soloveyko_whisper\voice.{ext}` (ASCII-шлях), `subtitle.srt` після завершення копіюється назад у `save_dir`, тимчасова папка видаляється. macOS не зачіпається.
 - Вихід: `subtitle.srt` → потім Rust генерує `subtitle.ass`.
-- Перевірка моделі перед запуском: кнопка «▶ Запустити» блокується якщо модель не завантажена.
 
 **WhisperX (`run_whisperx`):**
 - CLI: `--audio <file> --model <model> --output {save_dir}/subtitle --ffmpeg-path <ffmpeg>`. `--output subtitle` → CLI зберігає `subtitle.json` з word-мітками.
 - **Власна генерація SRT:** Rust зчитує `subtitle.json`, викликає `whisperx_words_to_srt(words, max_line_width)` і записує `subtitle.srt` (CLI-версія SRT ігнорується — CLI не підтримує `max_line_width`).
-- **`subtitle.json` фільтрується:** зберігаються тільки `language` + `words`. Поля `words`: `{word, start, end, score}` в **секундах**.
+- **Фільтрація слів за тривалістю аудіо:** WhisperX іноді галюцинує слова з `start` > реальної тривалості аудіо. Перед побудовою SRT Rust зчитує тривалість через `ffprobe` і відкидає всі слова де `start >= audio_duration_secs`. Без цього `subtitle.srt` міг бути довшим за аудіо → `total_duration_secs` у `timeline.json` завищувався → таймлінія редактора ставала довшою за аудіо-доріжку.
+- **`subtitle.json` фільтрується:** зберігаються тільки `language` + `words` (вже відфільтровані). Поля `words`: `{word, start, end, score}` в **секундах**.
 - `whisperx_words_to_srt` (`src/api/assemblyai.rs`) — читає поле `word` (не `text`), конвертує секунди → мілісекунди `× 1000`.
 - Після `subtitle.srt` генерується `subtitle.ass`.
 
@@ -854,11 +856,11 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **`bin_dir()`** — повертає `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/` (той самий `config_dir`, що й для `settings.json`).
 - **`ffmpeg_path()` / `ffprobe_path()`** — завжди повертають бандлований бінарник у `bin_dir()` якщо він є, інакше просто `"ffmpeg"` / `"ffprobe"` як запасний варіант. Системний PATH більше не перевіряється — бо системний FFmpeg може не мати `libass`, потрібного для burn-in субтитрів (`ass=filename=...` фільтр).
-- **`whisper_path()`** — пріоритет: бандлований → системний. whisper.cpp і openai-whisper мають різний CLI, тому краще зафіксувати конкретний бандлований бінарник.
+- **`whisper_path()`** — Windows: `bin/whisper.win/whisper-cli.exe` → `bin/whisper.win/main.exe` → `bin/whisper-whisper.exe` → `bin/whisper.exe` → PATH. macOS: `bin/whisper` → PATH. Довгий ланцюжок легасі-fallback — whisper.cpp кілька разів перейменовував CLI (`main.exe` → `whisper-cli.exe`), старі завантаження мали різні назви.
 - **`set_no_window(cmd: &mut Command)`** — приховує консольне вікно дочірнього процесу на Windows. Застосовується до **всіх** `Command::new()` викликів у коді (ffmpeg, ffprobe, whisper, whisper-amd, whisperx, claude, gemini, codex, cmd /c start). На macOS та Linux — no-op. Без цього прапора `CREATE_NO_WINDOW (0x08000000)` кожен spawn консольного інструменту з GUI-застосунку відкриває коротке чорне вікно терміналу.
 - Решта коду просто викликає `Command::new(ffmpeg_path())` і не знає звідки бінарник.
 - **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
-- **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник (той самий механізм що й ffmpeg). На Windows: завантажує `whisper.win.zip`, розпаковує через крейт `zip`, шукає `main.exe` у будь-якій підпапці архіву та зберігає як `whisper.exe`. Перевіряє наявність файлу перед завантаженням — повторного скачування не відбувається.
+- **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник. На Windows: завантажує `whisper.win.zip`, розпаковує **папку** `whisper.win/` через `extract_folder_from_zip` (той самий патерн що й whisperx/whisper-amd). Цільовий файл — `bin/whisper.win/whisper-cli.exe`. Пропускає якщо файл вже існує.
 - **`whisper_local_exists()`** — перевіряє чи є whisper у `bin_dir()` (без fallback на PATH). Використовується `check_whisper` у welcome.rs щоб не запускати бінарник — досить перевірки файлу.
 - **`download_whisperx(on_progress)`** — завантажує zip-архів WhisperX та розпаковує папку у `bin_dir()` зберігаючи всю внутрішню структуру. Підтримується на macOS (`whisperx_mac.zip` → папка `whisperx_mac/`) та Windows (`whisperx_win.zip` → папка `whisperx_win/`). Рекурсивне розпакування через `extract_folder_from_zip` (#[cfg(any(target_os = "macos", target_os = "windows"))]): ітерує по всіх записах zip, зберігає права виконання з unix_mode архіву (`unix_mode & 0o111 != 0` → chmod 755). **Symlink-підтримка:** unix mode `0o170000 & entry_mode == 0o120000` → замість запису байтів створюється реальний symlink через `std::os::unix::fs::symlink`. Це критично для PyInstaller-бандлів де `_internal/Python` є симлінком на `Python.framework/Versions/3.11/Python` — без цього PyInstaller падав з "slice is not valid mach-o file". На Windows права виконання не встановлюються (`.exe` не потребує). Захист від path traversal: записи з `..` пропускаються.
 - **`whisperx_local_exists()`** — перевіряє наявність папки `whisperx_win/` (Windows) або `whisperx_mac/` (macOS) у `bin_dir()` через `is_dir()`. Константа `WHISPERX_DIR_NAME` є платформозалежною через `#[cfg]`.
