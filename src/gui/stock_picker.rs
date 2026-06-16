@@ -1068,7 +1068,7 @@ fn draw_video_grid(
                         ui.painter().text(tp, egui::Align2::RIGHT_BOTTOM, &dur_text,
                             egui::FontId::proportional(11.0), egui::Color32::WHITE);
                     }
-                    if resp.clicked() && state.video_download.is_none() && state.trim_edit.is_none() {
+                    if resp.clicked() && state.video_download.is_none() {
                         start_video_download_if_needed(ctx, state, seg_idx, vid, action);
                     }
                     let author: String = vid.author.chars().take(18).collect();
@@ -1178,6 +1178,9 @@ fn start_video_download_if_needed(
         });
         return;
     }
+
+    // Закриваємо попередній trim редактор якщо він був відкритий
+    state.trim_edit = None;
 
     // Починаємо завантаження
     let progress = Arc::new(Mutex::new(0.0f32));

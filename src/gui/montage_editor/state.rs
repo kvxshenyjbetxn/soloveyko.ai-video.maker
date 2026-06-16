@@ -8,7 +8,7 @@ use super::types::{
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
 use super::audio::PlayingAudio;
-use super::utils::{probe_duration, uuid_str};
+use super::utils::{probe_duration, uuid_str, path_hash};
 
 // ─── Стан редактора ───────────────────────────────────────────────────────────
 
@@ -445,9 +445,11 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
     }
 
     for (clip_id, file_path, kind, trim_start, seg_idx) in replacements {
-        if !editor.media_pool.iter().any(|m| m.path == file_path) {
-            editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path));
-        }
+        // Видаляємо старий запис і кеш кадрів щоб thumbnail перегенерувався з нового відео
+        editor.media_pool.retain(|m| m.path != file_path);
+        let old_cache = editor.save_path.join(".frame_cache").join(path_hash(&file_path));
+        let _ = std::fs::remove_dir_all(&old_cache);
+        editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path));
         let media_id = editor.media_pool.iter()
             .find(|m| m.path == file_path)
             .map(|m| m.id.clone())
