@@ -38,7 +38,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "queue_status_awaiting_agent" => "Ожидает подтверждения агента",
         "montage_editor_continue" => "▶ Продолжить рендер",
         "montage_render_ffmpeg" => "🎬 FFmpeg",
-        "montage_render_capcut" => "✂️ CapCut",
+        "montage_render_capcut" => "✂ CapCut",
         "montage_editor_media_pool" => "Медиа пул",
         "montage_editor_add_media" => "+ Добавить",
         "montage_editor_drop_here" => "⬇ Перетащите файлы сюда",

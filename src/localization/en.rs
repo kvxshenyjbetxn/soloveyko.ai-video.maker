@@ -38,7 +38,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "queue_status_awaiting_agent" => "Awaiting Agent Confirmation",
         "montage_editor_continue" => "▶ Continue Render",
         "montage_render_ffmpeg" => "🎬 FFmpeg",
-        "montage_render_capcut" => "✂️ CapCut",
+        "montage_render_capcut" => "✂ CapCut",
         "montage_editor_media_pool" => "Media Pool",
         "montage_editor_add_media" => "+ Add",
         "montage_editor_drop_here" => "⬇ Drop files here",
