@@ -151,6 +151,8 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let prev_clip = active_idx.and_then(|i| if i > 0 { Some(sorted[i - 1].clone()) } else { None });
 
     let clip_offset = active.as_ref().map(|c| (ph - c.start_secs).max(0.0)).unwrap_or(0.0);
+    // Зміщення у вихідному файлі з урахуванням trim_start (для кадрів превʼю)
+    let source_offset = clip_offset + active.as_ref().map(|c| c.trim_start).unwrap_or(0.0);
 
     // Індекс зображення серед усіх зображень (для alternate-зуму)
     let img_idx_active = active_idx.map(|idx| {
@@ -205,7 +207,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
     // Текстури
     let current_tex = active_media.as_ref()
-        .and_then(|m| editor.frame_cache.get_frame(ui.ctx(), m, clip_offset));
+        .and_then(|m| editor.frame_cache.get_frame(ui.ctx(), m, source_offset));
     let prev_tex = if in_transition {
         prev_media.as_ref()
             .and_then(|m| {

@@ -98,7 +98,7 @@ src/
 │       └── timeline/
 │           ├── mod.rs           — реекспорт модулів timeline
 │           ├── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
-│           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
+│           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match); `SegmentTiming` містить поле `#[serde(default)] trim_start: f64` — без нього `assign_media_to_timeline` стирала б це поле при перезапису timeline.json
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
 │   ├── agent_chat_window.rs     — AgentChatWindowState (стан одного вікна чату: input, loading Arc, result Arc, error) + draw_agent_chat_windows: рендерить усі відкриті вікна чату з циклу по HashMap<u64, AgentChatWindowState>; кожне вікно має унікальний egui::Id::new(("agent_chat", job_id)) — кілька вікон можуть бути відкриті одночасно для різних задач; render_message_content — рендерить NDJSON-теговані рядки: [->]/[!!] → L-стрілка/×, [STATS] → рядок статистики; всі іконки намальовані вручну через egui::Painter (не Unicode); спінер внизу поруч з кнопкою «Надіслати»; кнопка «✓ Підтвердити» (зелена) видима тільки при AwaitingAgentControl — відновлює пайплайн через condvar; кнопка «Перебудувати таймлінію» видима завжди (незалежно від сесії)
@@ -113,7 +113,7 @@ src/
 │   │   ├── topbar.rs            — draw_topbar: повзунок масштабу, лічильник кліпів, кнопка «▶ Продовжити рендер» (save + condvar signal), кнопка «🔄» (перебудувати таймлінію — встановлює timeline_rebuild_requested = true для поточної задачі)
 │   │   ├── inspector.rs         — draw_inspector: час/тривалість/доріжка DragValue, scale/pos_x/pos_y Slider, ефекти zoom/shake, видалення кліпу
 │   │   ├── media_pool.rs        — draw_media_pool: OS drag-and-drop, rfd::FileDialog picker, animate-all/selected кнопки, ghost card при drag, extraction status dots, context menu (animate/regen); приймає `regen_paths: &HashSet<PathBuf>` — `is_busy = is_animating || is_regen` забарвлює елемент та крутить спінер під час перегенерації
-│   │   ├── preview.rs           — draw_preview: UV-based зум/покачування, 11 груп xfade переходів, overlay compositing, transport controls, PreviewDragState для drag-трансформу overlay-кліпів
+│   │   ├── preview.rs           — draw_preview: UV-based зум/покачування, 11 груп xfade переходів, overlay compositing, transport controls, PreviewDragState для drag-трансформу overlay-кліпів; `source_offset = clip_offset + clip.trim_start` — зміщення у вихідному медіафайлі для `frame_cache.get_frame`, щоб превʼю показувало коректний кадр з обраного сегменту (без цього завжди показувався початок файлу)
 │   │   └── timeline.rs          — draw_timeline: ruler, N доріжок, sticky labels (painter_at + offset.y sync), drag Move/TrimLeft/TrimRight, магнітний снеп, ghost preview, кнопка «+ Доріжка»; приймає `regen_paths: &HashSet<PathBuf>` — кліп крутить спінер якщо файл у наборі або анімується
 │   ├── task_history.rs          — draw_task_history_panel: ліва фіксована панель (190px) на вкладці Main з историчними задачами; при кліку відновлює налаштування пайплайну і текст сценарію
 │   ├── topbar/
@@ -598,7 +598,7 @@ pub struct ClipDragState {
 4. **Lazy search у GUI:** при кліку на сегмент у Stock Picker — якщо `photos` і `videos` порожні — запускається фоновий запит (`search_photos` + `search_videos`, по 15 результатів) до Pexels або Pixabay відповідно до `stock_service`. Показується "🔍 Шукаємо…" до відповіді. Результати записуються у `SegmentCache` і зберігаються в `stock_cache.json`.
 5. Після «▶ Продовжити рендер» у редакторі монтажу — пайплайн пробуджується та викликає `assign_media_to_timeline` (читає `stock_cache.json` → заповнює поле `media` в `timeline.json`), після чого запускає монтаж.
 
-**Важливо:** `assign_media_to_timeline` при Pexels/Pixabay **завжди** викликається після підтвердження монтажного контролю — на відміну від звичайного Googler-режиму, де вона не потрібна (агент пише `timeline.json` сам).
+**Важливо:** `assign_media_to_timeline` при Pexels/Pixabay **завжди** викликається після підтвердження монтажного контролю — на відміну від звичайного Googler-режиму, де вона не потрібна (агент пише `timeline.json` сам). Ця функція читає і перезаписує `timeline.json` через структуру `SegmentTiming` — тому всі поля, яких немає у структурі, **втрачаються**. Поле `trim_start` додано до `SegmentTiming` з `#[serde(default)]`, щоб значення, виставлені користувачем у редакторі монтажу через trim editor, не стирались при перезаписі.
 
 **Агентний режим (Claude Code, Gemini CLI, Codex CLI або AGY CLI як LLM-сервіс відеоряду):**
 

@@ -14,6 +14,9 @@ pub struct SegmentTiming {
     pub confidence: f64,
     /// Відносний шлях до медіафайлу (наприклад "media/0001.jpg").
     pub media: Option<String>,
+    /// Початок обрізки відео (секунди); встановлюється в редакторі монтажу.
+    #[serde(default)]
+    pub trim_start: f64,
 }
 
 /// Маніфест синхронізації — зберігається як timeline.json.
@@ -655,6 +658,7 @@ pub fn build_timeline(
             duration_secs: r.duration,
             confidence,
             media: if r.filename.is_empty() { None } else { Some(format!("media/{}", r.filename)) },
+            trim_start: 0.0,
         }
     }).collect();
 
