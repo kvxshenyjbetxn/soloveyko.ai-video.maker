@@ -2,13 +2,13 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::{
-    ClipKind, ClipDragState, EditorClip, PreviewDragState,
-    MontagePreviewSettings, FRAME_CACHE_SIZE,
+    ClipKind, ClipDragState, EditorClip, MontagePreviewSettings, PreviewDragState,
+    PreviewQuality, PreviewRenderSettings, FRAME_CACHE_SIZE,
 };
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
 use super::audio::PlayingAudio;
-use super::utils::{probe_duration, uuid_str, path_hash};
+use super::utils::{frame_cache_dir, probe_duration, sharp_frame_cache_dir, uuid_str};
 
 // ─── Стан редактора ───────────────────────────────────────────────────────────
 
@@ -34,6 +34,9 @@ pub struct MontageEditorState {
     pub frame_cache: FrameCache,
     /// Налаштування ефектів превью (синхронізуються з JobSettings кожного кадру)
     pub preview_settings: MontagePreviewSettings,
+    /// Налаштування якості/FPS тільки для попереднього перегляду редактора.
+    /// Не впливає на фінальний FFmpeg/CapCut рендер.
+    pub preview_render: PreviewRenderSettings,
     /// Висота панелі таймлайну (змінюється drag-handle)
     pub timeline_height: f32,
     /// Активні аудіо плеєри
@@ -61,10 +64,12 @@ pub struct MontageEditorState {
     pub needs_stock_refresh: bool,
     /// Блокує drag на превью (коли поверх відкрито stock picker або інше вікно)
     pub input_blocked: bool,
+    /// Нові preview_render, якщо користувач змінив якість/FPS у топбарі
+    pub pending_preview_render: Option<PreviewRenderSettings>,
 }
 
 impl MontageEditorState {
-    pub fn load(save_path: &Path, job_name: &str) -> Self {
+    pub fn load(save_path: &Path, job_name: &str, preview_render: PreviewRenderSettings) -> Self {
         let (mut clips, total_duration, audio_start_secs) = load_timeline_clips(save_path);
         let audio_path = find_audio_file(save_path);
         let audio_duration = if let Some(ref ap) = audio_path {
@@ -72,13 +77,13 @@ impl MontageEditorState {
         } else {
             0.0
         };
-        let mut media_pool = load_media_pool(save_path);
+        let mut media_pool = load_media_pool(save_path, preview_render);
 
         // Додаємо у пул файли з таймлінії, яких ще немає (захист від розбіжності шляхів)
         for clip in &clips {
             if let Some(ref path) = clip.path {
                 if path.exists() && !media_pool.iter().any(|m| m.path == *path) {
-                    media_pool.push(MediaItem::new(path.clone(), save_path));
+                    media_pool.push(MediaItem::new(path.clone(), save_path, preview_render));
                 }
             }
         }
@@ -129,6 +134,7 @@ impl MontageEditorState {
             clip_drag_state: None,
             frame_cache: FrameCache::new(FRAME_CACHE_SIZE),
             preview_settings: MontagePreviewSettings::default(),
+            preview_render,
             timeline_height: 220.0,
             active_audios: Vec::new(),
             preview_drag: None,
@@ -142,6 +148,24 @@ impl MontageEditorState {
             pending_open_stock_picker: None,
             needs_stock_refresh: false,
             input_blocked: false,
+            pending_preview_render: None,
+        }
+    }
+
+    pub fn set_preview_render(&mut self, quality: PreviewQuality, fps: f32) {
+        let next = PreviewRenderSettings { quality, fps };
+        if self.preview_render == next {
+            return;
+        }
+
+        self.preview_render = next;
+        self.pending_preview_render = Some(next);
+        self.frame_cache = FrameCache::new(FRAME_CACHE_SIZE);
+        for media in &mut self.media_pool {
+            let old_id = media.id.clone();
+            let path = media.path.clone();
+            *media = MediaItem::new(path, &self.save_path, next);
+            media.id = old_id;
         }
     }
 
@@ -447,9 +471,11 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
     for (clip_id, file_path, kind, trim_start, seg_idx) in replacements {
         // Видаляємо старий запис і кеш кадрів щоб thumbnail перегенерувався з нового відео
         editor.media_pool.retain(|m| m.path != file_path);
-        let old_cache = editor.save_path.join(".frame_cache").join(path_hash(&file_path));
+        let old_cache = frame_cache_dir(&editor.save_path, &file_path, editor.preview_render);
+        let old_sharp_cache = sharp_frame_cache_dir(&editor.save_path, &file_path, editor.preview_render);
         let _ = std::fs::remove_dir_all(&old_cache);
-        editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path));
+        let _ = std::fs::remove_dir_all(&old_sharp_cache);
+        editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path, editor.preview_render));
         let media_id = editor.media_pool.iter()
             .find(|m| m.path == file_path)
             .map(|m| m.id.clone())
@@ -469,7 +495,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
     still_pending
 }
 
-fn load_media_pool(save_path: &Path) -> Vec<MediaItem> {
+fn load_media_pool(save_path: &Path, preview: PreviewRenderSettings) -> Vec<MediaItem> {
     let media_dir = save_path.join("media");
     let mut items = Vec::new();
     if media_dir.exists() {
@@ -479,7 +505,7 @@ fn load_media_pool(save_path: &Path) -> Vec<MediaItem> {
                 if p.is_file() {
                     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
                     if matches!(ext.as_str(), "mp4" | "mov" | "webm" | "jpg" | "jpeg" | "png" | "webp" | "mp3" | "wav") {
-                        items.push(MediaItem::new(p, save_path));
+                        items.push(MediaItem::new(p, save_path, preview));
                     }
                 }
             }
@@ -487,7 +513,7 @@ fn load_media_pool(save_path: &Path) -> Vec<MediaItem> {
     }
     for name in &["voice.wav", "voice.mp3"] {
         let p = save_path.join(name);
-        if p.exists() { items.push(MediaItem::new(p, save_path)); }
+        if p.exists() { items.push(MediaItem::new(p, save_path, preview)); }
     }
     items
 }

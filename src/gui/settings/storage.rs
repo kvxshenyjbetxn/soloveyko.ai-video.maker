@@ -65,6 +65,8 @@ fn default_subtitle_karaoke_mode() -> u8 { 0 }
 fn default_subtitle_karaoke_highlight_color() -> [u8; 3] { [255, 255, 0] }
 fn default_subtitle_karaoke_outline_color() -> [u8; 3] { [0, 0, 0] }
 fn default_subtitle_karaoke_scale() -> u32 { 120 }
+fn default_preview_quality() -> String { "balanced".to_string() }
+fn default_preview_fps() -> f32 { 30.0 }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -380,6 +382,12 @@ pub struct AppSettings {
     /// Якість апскейлу ("fast", "balanced", "max")
     #[serde(default = "default_upscale_quality")]
     pub googler_video_upscale_quality: String,
+    /// Якість превʼю редактора монтажу — не впливає на фінальний рендер
+    #[serde(default = "default_preview_quality")]
+    pub preview_quality: String,
+    /// FPS превʼю редактора монтажу — не впливає на фінальний рендер
+    #[serde(default = "default_preview_fps")]
+    pub preview_fps: f32,
 }
 
 
@@ -488,6 +496,8 @@ impl Default for AppSettings {
             googler_video_upscale_enabled: false,
             googler_video_upscale_resolution: "1080p".to_string(),
             googler_video_upscale_quality: "balanced".to_string(),
+            preview_quality: default_preview_quality(),
+            preview_fps: default_preview_fps(),
         }
     }
 }

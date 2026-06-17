@@ -184,7 +184,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                 if let Some(path) = clip.path.as_ref() {
                     if path.exists() && !editor.media_pool.iter().any(|m| m.path == *path) {
                         let sp = editor.save_path.clone();
-                        let m = MediaItem::new(path.clone(), &sp);
+                        let m = MediaItem::new(path.clone(), &sp, editor.preview_render);
                         let mid = m.id.clone();
                         editor.media_pool.push(m);
                         let cid = clip.id.clone();
@@ -205,15 +205,18 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         .and_then(|c| find_media_for_clip(&editor.media_pool, c))
         .cloned();
 
-    // Текстури
+    // Текстури. Під час drag/playback використовуємо легкий scrub-кеш,
+    // після зупинки плейхеду просимо чіткий still-кадр у фоні.
+    let pointer_down = ui.ctx().input(|i| i.pointer.primary_down());
+    let use_sharp_frame = !editor.is_playing && !pointer_down && !in_transition;
     let current_tex = active_media.as_ref()
-        .and_then(|m| editor.frame_cache.get_frame(ui.ctx(), m, source_offset));
+        .and_then(|m| editor.frame_cache.get_frame(ui.ctx(), m, source_offset, use_sharp_frame, editor.preview_render));
     let prev_tex = if in_transition {
         prev_media.as_ref()
             .and_then(|m| {
                 // Показуємо останній кадр попереднього кліпу
                 let last_t = (m.duration_secs - 0.001).max(0.0);
-                editor.frame_cache.get_frame(ui.ctx(), m, last_t)
+                editor.frame_cache.get_frame(ui.ctx(), m, last_t, false, editor.preview_render)
             })
     } else {
         None
@@ -448,7 +451,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         5.0, Color32::from_rgba_unmultiplied(255, 200, 60, 220),
                     );
                 }
-                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, item.t_off) {
+                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, item.t_off, use_sharp_frame, editor.preview_render) {
                     let clip_w = rect.width() * item.scale;
                     let clip_h = rect.height() * item.scale;
                     let clip_cx = rect.center().x + item.pos_x * rect.width() / 2.0;

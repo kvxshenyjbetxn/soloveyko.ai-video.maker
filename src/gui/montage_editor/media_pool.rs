@@ -35,7 +35,7 @@ pub(super) fn draw_media_pool(
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             if VALID_EXTS.contains(&ext.as_str()) && !editor.media_pool.iter().any(|m| m.path == *path) {
                 let save_path = editor.save_path.clone();
-                editor.media_pool.push(MediaItem::new(path.clone(), &save_path));
+                editor.media_pool.push(MediaItem::new(path.clone(), &save_path, editor.preview_render));
             }
         }
     }
@@ -51,7 +51,7 @@ pub(super) fn draw_media_pool(
                     let save_path = editor.save_path.clone();
                     for path in paths {
                         if !editor.media_pool.iter().any(|m| m.path == path) {
-                            editor.media_pool.push(MediaItem::new(path, &save_path));
+                            editor.media_pool.push(MediaItem::new(path, &save_path, editor.preview_render));
                         }
                     }
                 }

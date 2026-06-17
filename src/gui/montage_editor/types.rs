@@ -1,9 +1,136 @@
 use std::path::PathBuf;
 use eframe::egui::{Pos2, Rect};
 
-pub const PREVIEW_FPS: f32 = 15.0;
-pub const PREVIEW_WIDTH: u32 = 640;
-pub const FRAME_CACHE_SIZE: usize = 200;
+pub const PREVIEW_FPS: f32 = 30.0;
+/// Кількість GPU-текстур у RAM/GPU LRU.
+pub const FRAME_CACHE_SIZE: usize = 80;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PreviewQuality {
+    Performance,
+    Balanced,
+    High,
+    Ultra,
+}
+
+impl PreviewQuality {
+    pub fn storage_key(self) -> &'static str {
+        match self {
+            Self::Performance => "performance",
+            Self::Balanced => "balanced",
+            Self::High => "high",
+            Self::Ultra => "ultra",
+        }
+    }
+
+    pub fn from_storage(value: &str) -> Self {
+        match value {
+            "performance" => Self::Performance,
+            "high" => Self::High,
+            "ultra" => Self::Ultra,
+            _ => Self::Balanced,
+        }
+    }
+
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Performance => "montage_preview_quality_performance",
+            Self::Balanced => "montage_preview_quality_balanced",
+            Self::High => "montage_preview_quality_high",
+            Self::Ultra => "montage_preview_quality_ultra",
+        }
+    }
+
+    pub fn scrub_width(self) -> u32 {
+        match self {
+            Self::Performance => 640,
+            Self::Balanced => 960,
+            Self::High => 1280,
+            Self::Ultra => 1600,
+        }
+    }
+
+    pub fn sharp_width(self) -> u32 {
+        match self {
+            Self::Performance => 1280,
+            Self::Balanced => 1920,
+            Self::High => 1920,
+            Self::Ultra => 2560,
+        }
+    }
+
+    pub fn jpeg_quality(self) -> u8 {
+        match self {
+            Self::Performance => 82,
+            Self::Balanced => 88,
+            Self::High => 92,
+            Self::Ultra => 94,
+        }
+    }
+
+    pub fn sharp_jpeg_quality(self) -> u8 {
+        match self {
+            Self::Performance => 90,
+            Self::Balanced => 96,
+            Self::High => 97,
+            Self::Ultra => 98,
+        }
+    }
+
+    pub fn ffmpeg_qscale(self) -> &'static str {
+        match self {
+            Self::Performance => "6",
+            Self::Balanced => "4",
+            Self::High => "3",
+            Self::Ultra => "2",
+        }
+    }
+
+    pub fn sharp_ffmpeg_qscale(self) -> &'static str {
+        match self {
+            Self::Performance => "4",
+            Self::Balanced => "2",
+            Self::High => "2",
+            Self::Ultra => "1",
+        }
+    }
+
+    pub fn cache_tag(self) -> &'static str {
+        match self {
+            Self::Performance => "perf_w640_q6",
+            Self::Balanced => "bal_w960_q4",
+            Self::High => "high_w1280_q3",
+            Self::Ultra => "ultra_w1600_q2",
+        }
+    }
+
+    pub fn sharp_cache_tag(self) -> &'static str {
+        match self {
+            Self::Performance => "still_w1280_q4",
+            Self::Balanced => "still_w1920_q2",
+            Self::High => "still_w1920_q2",
+            Self::Ultra => "still_w2560_q1",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PreviewRenderSettings {
+    pub quality: PreviewQuality,
+    pub fps: f32,
+}
+
+impl Default for PreviewRenderSettings {
+    fn default() -> Self {
+        Self { quality: PreviewQuality::Balanced, fps: PREVIEW_FPS }
+    }
+}
+
+impl PreviewRenderSettings {
+    pub fn fps_tag(self) -> String {
+        format!("f{}", self.fps.round() as u32)
+    }
+}
 
 // ─── Налаштування превью (синхронізуються з JobSettings) ─────────────────────
 
@@ -127,10 +254,12 @@ pub struct MontageEditorActions {
     pub regen_action: Option<crate::gui::gallery::RegenAction>,
     /// Запит на відкриття Stock Picker для вказаного індексу сегмента
     pub open_stock_picker: Option<usize>,
+    /// Нові налаштування якості/FPS превʼю, якщо користувач змінив їх у топбарі
+    pub preview_render_changed: Option<PreviewRenderSettings>,
 }
 
 impl Default for MontageEditorActions {
     fn default() -> Self {
-        Self { animate_paths: vec![], regen_action: None, open_stock_picker: None }
+        Self { animate_paths: vec![], regen_action: None, open_stock_picker: None, preview_render_changed: None }
     }
 }

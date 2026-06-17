@@ -1,13 +1,40 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use super::types::PreviewRenderSettings;
 
-/// Стабільний хеш шляху → ім'я папки кешу (не змінюється між запусками)
+/// Стабільний хеш шляху → ім'я базової папки кешу (не змінюється між запусками)
 pub fn path_hash(path: &Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut h = DefaultHasher::new();
     path.hash(&mut h);
     format!("{:x}", h.finish())
+}
+
+/// Папка легкого кешу кадрів превʼю з версією якості/роздільності.
+/// Версіонування не дає редактору випадково читати старі кадри після апдейту.
+pub fn frame_cache_dir(cache_base: &Path, media_path: &Path, settings: PreviewRenderSettings) -> PathBuf {
+    cache_base
+        .join(".frame_cache")
+        .join(format!(
+            "{}_{}_{}",
+            path_hash(media_path),
+            settings.quality.cache_tag(),
+            settings.fps_tag(),
+        ))
+}
+
+/// Папка чіткого still-кешу. Тут зберігаються тільки точкові кадри,
+/// які користувач реально зупиняв на таймлінії.
+pub fn sharp_frame_cache_dir(cache_base: &Path, media_path: &Path, settings: PreviewRenderSettings) -> PathBuf {
+    cache_base
+        .join(".frame_cache")
+        .join(format!(
+            "{}_{}_{}",
+            path_hash(media_path),
+            settings.quality.sharp_cache_tag(),
+            settings.fps_tag(),
+        ))
 }
 
 fn clean_windows_path(path: &Path) -> PathBuf {

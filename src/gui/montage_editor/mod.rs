@@ -10,7 +10,10 @@ mod preview;
 mod inspector;
 mod timeline;
 
-pub use types::{ClipKind, MontagePreviewSettings, MontageEditorActions};
+pub use types::{
+    ClipKind, MontagePreviewSettings, MontageEditorActions,
+    PreviewQuality, PreviewRenderSettings,
+};
 pub use media::MediaItem;
 pub use audio::{AudioPlayer, PlayingAudio};
 pub use state::MontageEditorState;
@@ -33,6 +36,7 @@ pub fn draw_montage_editor_window(
     jobs: &[crate::queue::PipelineJob],
     anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
     regen_paths: &HashSet<PathBuf>,
+    preview_render: PreviewRenderSettings,
 ) -> MontageEditorActions {
     let job_id = match *open_job {
         Some(id) => id,
@@ -44,6 +48,7 @@ pub fn draw_montage_editor_window(
             *state = Some(MontageEditorState::load(
                 std::path::Path::new(&job.settings.save_path),
                 &job.name,
+                preview_render,
             ));
         } else {
             *open_job = None;
@@ -107,7 +112,7 @@ pub fn draw_montage_editor_window(
             }
             if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == old) {
                 let old_id = m.id.clone();
-                *m = MediaItem::new(new.clone(), &save_path);
+                *m = MediaItem::new(new.clone(), &save_path, editor.preview_render);
                 m.id = old_id; // зберігаємо ID щоб кліпи знаходили медіа по media_id
             }
             if editor.pool_preview.as_deref() == Some(old.as_path()) {
@@ -304,6 +309,7 @@ pub fn draw_montage_editor_window(
     let animate_paths = std::mem::take(&mut editor.pending_animate_paths);
     let regen_opt = editor.pending_regen.take();
     let open_stock_picker = editor.pending_open_stock_picker.take();
+    let preview_render_changed = editor.pending_preview_render.take();
     let regen_action = regen_opt.and_then(|(path, is_custom)| {
         jobs.iter().find(|j| j.id == job_id).map(|job| {
             (path, job.settings.clone(), is_custom, job_id, job.name.clone())
@@ -313,7 +319,12 @@ pub fn draw_montage_editor_window(
     if !is_open || close_after {
         *open_job = None;
         *state = None;
-        return MontageEditorActions { animate_paths, regen_action, open_stock_picker: None };
+        return MontageEditorActions {
+            animate_paths,
+            regen_action,
+            open_stock_picker: None,
+            preview_render_changed,
+        };
     }
 
     // Fullscreen preview (подвійний клік на медіа в пулі або кліп у таймлінії)
@@ -366,7 +377,7 @@ pub fn draw_montage_editor_window(
         }
     }
 
-    MontageEditorActions { animate_paths, regen_action, open_stock_picker }
+    MontageEditorActions { animate_paths, regen_action, open_stock_picker, preview_render_changed }
 }
 
 /// Завантажує текстуру для fullscreen preview: зображення читає напряму,
