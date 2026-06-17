@@ -159,6 +159,15 @@ impl Default for MontagePreviewSettings {
     }
 }
 
+// ─── Тип доріжки ────────────────────────────────────────────────────────────
+
+/// Визначає тип доріжки на таймлінії: відео або аудіо.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrackKind {
+    Video,
+    Audio,
+}
+
 // ─── Типи кліпів ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, PartialEq)]

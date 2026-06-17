@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::{
     ClipKind, ClipDragState, EditorClip, MontagePreviewSettings, PreviewDragState,
-    PreviewQuality, PreviewRenderSettings, FRAME_CACHE_SIZE,
+    PreviewQuality, PreviewRenderSettings, TrackKind, FRAME_CACHE_SIZE,
 };
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
@@ -18,9 +18,13 @@ pub struct MontageEditorState {
     pub media_pool: Vec<MediaItem>,
     pub clips: Vec<EditorClip>,
     pub num_tracks: usize,
+    /// Тип кожної доріжки (Video / Audio) у порядку додавання
+    pub track_kinds: Vec<TrackKind>,
     pub audio_path: Option<PathBuf>,
     pub audio_start_secs: f32,
     pub audio_duration: f32,
+    /// Позиція голосової доріжки серед звичайних: 0 = перед V1, num_tracks = знизу (за замовчуванням)
+    pub voiceover_track_idx: usize,
     pub total_duration: f32,
     pub playhead: f32,
     pub is_playing: bool,
@@ -113,6 +117,9 @@ impl MontageEditorState {
         }
 
         let num_tracks = clips.iter().map(|c| c.track_idx + 1).max().unwrap_or(1).max(2);
+        // За замовчуванням всі доріжки — відео (V1, V2, ...)
+        let track_kinds: Vec<TrackKind> = (0..num_tracks).map(|_| TrackKind::Video).collect();
+        let voiceover_track_idx = load_voiceover_track_idx(save_path).unwrap_or(num_tracks);
 
         Self {
             job_name: job_name.to_string(),
@@ -120,9 +127,11 @@ impl MontageEditorState {
             media_pool,
             clips,
             num_tracks,
+            track_kinds,
             audio_path,
             audio_start_secs,
             audio_duration,
+            voiceover_track_idx,
             total_duration: total_duration.max(10.0),
             playhead: 0.0,
             is_playing: false,
@@ -263,6 +272,7 @@ impl MontageEditorState {
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
             "audio_start_secs": self.audio_start_secs as f64,
+            "voiceover_track_idx": self.voiceover_track_idx,
             "segments": main_segments,
             "overlay_tracks": overlay_tracks,
         });
@@ -323,6 +333,15 @@ fn clip_from_json_seg(
         trim_start: seg["trim_start"].as_f64().unwrap_or(0.0) as f32,
         stock_seg_idx: seg["stock_seg_idx"].as_u64().map(|v| v as usize),
     }
+}
+
+/// Завантажує позицію голосової доріжки з timeline.json (0 = перед V1, num_tracks = знизу).
+fn load_voiceover_track_idx(save_path: &Path) -> Option<usize> {
+    let path = save_path.join("timeline.json");
+    if !path.exists() { return None; }
+    let content = std::fs::read_to_string(&path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    v["voiceover_track_idx"].as_u64().map(|n| n as usize)
 }
 
 fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
