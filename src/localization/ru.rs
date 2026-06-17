@@ -61,6 +61,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_delete_clip" => "🗑 Удалить клип",
         "montage_editor_add_video_track" => "+ Видео",
         "montage_editor_add_audio_track" => "+ Аудио",
+        "montage_editor_overlap_transition" => "Переход наложения",
         "montage_editor_tracks_count" => "дорожек",
         "montage_editor_transform" => "Трансформ",
         "montage_editor_clip_scale" => "Масштаб:",

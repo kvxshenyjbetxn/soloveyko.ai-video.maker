@@ -51,7 +51,10 @@ pub fn run_montage(
         media: Option<String>,
         #[serde(default)]
         trim_start: f64,
+        #[serde(default = "default_fade")]
+        overlap_transition: String,
     }
+    fn default_fade() -> String { "fade".to_string() }
 
     #[derive(serde::Deserialize)]
     struct OverlaySeg {
@@ -87,9 +90,13 @@ pub fn run_montage(
     struct Clip {
         path: Option<String>, // None = чорна заставка (gap)
         duration: f64,
+        /// Абсолютний час початку кліпу на таймлінії (секунди)
+        start_secs: f64,
         is_video: bool,
         /// Початок обрізки у вихідному файлі (секунди); 0.0 = з початку
         trim_start: f64,
+        /// Тип xfade для переходу після цього кліпу ("fade", "wipeleft", …)
+        overlap_transition: String,
     }
 
     fn is_video_ext(path: &str) -> bool {
@@ -167,13 +174,13 @@ pub fn run_montage(
                                 duration: dur,
                             });
                         } else {
-                            clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media), trim_start: seg.trim_start });
+                            clips.push(Clip { path: Some(media.clone()), duration: dur, start_secs: seg.start_secs, is_video: is_video_ext(media), trim_start: seg.trim_start, overlap_transition: seg.overlap_transition.clone() });
                         }
                     } else {
                         if matches!(clips.last(), Some(Clip { path: None, .. })) {
                             clips.last_mut().unwrap().duration += dur;
                         } else {
-                            clips.push(Clip { path: None, duration: dur, is_video: false, trim_start: 0.0 });
+                            clips.push(Clip { path: None, duration: dur, start_secs: seg.start_secs, is_video: false, trim_start: 0.0, overlap_transition: "fade".to_string() });
                         }
                     }
                 }
@@ -221,9 +228,9 @@ pub fn run_montage(
         }
 
         let clip_dur = total_dur / files.len() as f64;
-        for f in files {
-            let is_vid = is_video_ext(&f);
-            clips.push(Clip { path: Some(f), duration: clip_dur, is_video: is_vid, trim_start: 0.0 });
+        for (idx, f) in files.iter().enumerate() {
+            let is_vid = is_video_ext(f);
+            clips.push(Clip { path: Some(f.clone()), duration: clip_dur, start_secs: idx as f64 * clip_dur, is_video: is_vid, trim_start: 0.0, overlap_transition: "fade".to_string() });
         }
     }
 
@@ -250,17 +257,52 @@ pub fn run_montage(
     let n = clips.len();
     // Кількість реальних медіа-файлів (black-кліпи не мають input-файлу)
     let media_file_count = clips.iter().filter(|c| c.path.is_some()).count();
-    // Обмежуємо тривалість переходу до половини найкоротшого медіа-кліпу
-    let min_clip_dur = clips.iter()
-        .filter(|c| c.path.is_some())
-        .map(|c| c.duration)
-        .fold(f64::INFINITY, f64::min);
-    let t = if transition == "none" || n < 2 {
-        0.0f64
-    } else {
-        (transition_duration_secs as f64).clamp(0.05, min_clip_dur * 0.5)
-    };
-    let use_xfade = t > 0.0;
+
+    // Будуємо per-pair інформацію про переходи:
+    // Для кожної пари (i → i+1): чи є overlap, яка тривалість, який тип переходу
+    struct PairTransition {
+        /// Тривалість xfade в секундах (0 = без переходу)
+        duration: f64,
+        /// Назва переходу для xfade=transition=...
+        name: String,
+    }
+    let mut pairs: Vec<PairTransition> = Vec::new();
+    for k in 0..n.saturating_sub(1) {
+        let a = &clips[k];
+        let b = &clips[k + 1];
+        let a_end = a.start_secs + a.duration;
+        let b_start = b.start_secs;
+        let b_end = b.start_secs + b.duration;
+
+        // Чи є накладання?
+        let overlap_dur = if a_end > b_start + 0.001 {
+            (a_end.min(b_end) - b_start).max(0.0)
+        } else {
+            0.0
+        };
+
+        if overlap_dur > 0.0 {
+            // Overlap → використовуємо per-clip налаштування з редактора
+            let max_ov = (a.duration.min(b.duration) * 0.5).max(0.05);
+            let ov = overlap_dur.clamp(0.05, max_ov);
+            pairs.push(PairTransition {
+                duration: ov,
+                name: b.overlap_transition.clone(),
+            });
+        } else if transition != "none" {
+            // Нема накладання, але глобальний перехід увімкнено
+            let min_dur = a.duration.min(b.duration);
+            let max_t = (min_dur * 0.5).max(0.05);
+            let t = (transition_duration_secs as f64).clamp(0.05, max_t);
+            pairs.push(PairTransition {
+                duration: t,
+                name: transition.to_string(),
+            });
+        } else {
+            // Без переходу
+            pairs.push(PairTransition { duration: 0.0, name: String::new() });
+        }
+    }
 
     // ─── Будуємо фільтр-граф ─────────────────────────────────────────────────
     let mut filter_parts: Vec<String> = Vec::new();
@@ -268,14 +310,10 @@ pub fn run_montage(
     let mut file_idx = 0usize; // input-файл index (тільки для media-кліпів, не для black)
     let mut img_idx = 0usize;  // лічильник зображень для режиму "alternate"
     for (i, clip) in clips.iter().enumerate() {
-        // При xfade кожен кліп (крім останнього) потрібно подовжити на t,
-        // щоб зберегти синхронізацію: cumulative_dur[k] = start_secs[k+1].
-        let adj_dur = if use_xfade && i < n - 1 {
-            clip.duration + t
-        } else {
-            clip.duration
-        };
-        let adj_dur = adj_dur.max(0.05);
+        // Кожен кліп подовжується на тривалість свого вихідного переходу (pairs[i])
+        // щоб зберегти синхронізацію
+        let ext = if i < pairs.len() { pairs[i].duration } else { 0.0 };
+        let adj_dur = (clip.duration + ext).max(0.05);
         let frames = (adj_dur * fps as f64).round().max(1.0) as u64;
 
         if clip.path.is_none() {
@@ -305,38 +343,47 @@ pub fn run_montage(
         }
     }
 
-    if use_xfade {
-        // ─── Ланцюг xfade-переходів ───────────────────────────────────────────
-        // offset для k-го xfade = sum(orig_dur[0..=k]) = start_secs[k+1]
-        // Завдяки цьому cumulative відео-позиція кожного кліпу збігається
-        // з його start_secs із timeline.
-        let mut cumulative_offset = 0.0f64;
-        let mut prev_label = "v0_final".to_string();
-
-        for k in 0..n - 1 {
-            cumulative_offset += clips[k].duration; // = start_secs[k+1]
-            let trans_name = pick_transition(transition);
-            let out_label = if k == n - 2 {
-                "v_montage_raw".to_string()
+    // ─── Ланцюг xfade-переходів (per-pair) + concat ────────────────────
+    // Підхід: спочатку xfade-склеюємо overlap-пари, потім concat-склеюємо все.
+    // Це простіше ніж змішувати xfade/concat всередині одного ланцюга.
+    let mut merged_labels: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < n {
+        if i < n - 1 && pairs[i].duration > 0.001 {
+            // Overlap-пара: xfade між i та i+1
+            let offset = clips[0..=i].iter().map(|c| c.duration).sum::<f64>();
+            let trans_name = if pairs[i].name == "random" {
+                pick_transition("random")
             } else {
-                format!("vchain{}", k + 1)
+                pick_transition(&pairs[i].name)
             };
+            let label = format!("v_merge_{i}");
             filter_parts.push(format!(
-                "[{prev}][v{next}_final]xfade=transition={trans}:\
-                duration={t:.6}:offset={offset:.6}[{out}]",
-                prev = prev_label,
-                next = k + 1,
+                "[v{i}_final][v{next}_final]xfade=transition={trans}:\
+                duration={t:.6}:offset={offset:.6}[{label}]",
+                next = i + 1,
                 trans = trans_name,
-                t = t,
-                offset = cumulative_offset,
-                out = out_label,
+                t = pairs[i].duration,
+                offset = offset,
+                label = label,
             ));
-            prev_label = out_label;
+            merged_labels.push(label);
+            i += 2;
+        } else {
+            // Без overlap — просто сам кліп
+            merged_labels.push(format!("v{i}_final"));
+            i += 1;
         }
+    }
+
+    if merged_labels.len() == 1 {
+        filter_parts.push(format!("[{}]null[v_montage_raw]", merged_labels[0]));
     } else {
-        // ─── Concat усіх кліпів (без переходів) ──────────────────────────────
-        let concat_inputs: String = (0..n).map(|i| format!("[v{i}_final]")).collect();
-        filter_parts.push(format!("{concat_inputs}concat=n={n}:v=1:a=0[v_montage_raw]"));
+        let inputs: String = merged_labels.iter()
+            .map(|l| format!("[{l}]"))
+            .collect();
+        let count = merged_labels.len();
+        filter_parts.push(format!("{inputs}concat=n={count}:v=1:a=0[v_montage_raw]"));
     }
 
     filter_parts.push("[v_montage_raw]tpad=stop_mode=clone:stop=-1[v_padded]".to_string());

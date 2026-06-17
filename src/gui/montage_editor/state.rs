@@ -60,6 +60,8 @@ pub struct MontageEditorState {
     /// Шлях, для якого треба перезавантажити preview-текстуру через кадр
     /// (дає GPU час звільнити стару текстуру перед завантаженням нової)
     pub preview_stale_path: Option<PathBuf>,
+    /// Спільний стан для випадаючого списку вибору overlap-переходу (clip_id, позиція на екрані)
+    pub overlap_transition_popup: Option<(String, eframe::egui::Pos2)>,
     /// Чи максимізовано вікно редактора на весь екран програми
     pub maximized: bool,
     /// Запит на відкриття Stock Picker для сегмента з вказаним індексом
@@ -153,6 +155,7 @@ impl MontageEditorState {
             pool_preview: None,
             pool_preview_texture: None,
             preview_stale_path: None,
+            overlap_transition_popup: None,
             maximized: false,
             pending_open_stock_picker: None,
             needs_stock_refresh: false,
@@ -216,27 +219,30 @@ impl MontageEditorState {
         let mut main_segments: Vec<serde_json::Value> = Vec::new();
         let mut cursor = 0.0f32;
         for clip in &sorted0 {
-            let actual_start = clip.start_secs.max(cursor);
-            if actual_start > cursor + 0.01 {
+            // Зберігаємо оригінальний start_secs щоб overlap-зони не губились
+            let seg_start = clip.start_secs;
+            if seg_start > cursor + 0.01 {
+                // Проміжок (gap) перед цим кліпом
                 main_segments.push(serde_json::json!({
                     "start_secs": cursor as f64,
-                    "end_secs": actual_start as f64,
+                    "end_secs": seg_start as f64,
                     "media": serde_json::Value::Null,
                 }));
             }
             let media_rel = clip.path.as_ref().and_then(|p| self.path_to_rel(p));
-            let actual_end = actual_start + clip.duration;
+            let seg_end = seg_start + clip.duration;
             main_segments.push(serde_json::json!({
-                "start_secs": actual_start as f64,
-                "end_secs": actual_end as f64,
+                "start_secs": seg_start as f64,
+                "end_secs": seg_end as f64,
                 "media": media_rel,
                 "media_id": clip.media_id,
                 "zoom_enabled": clip.zoom_enabled,
                 "shake_enabled": clip.shake_enabled,
                 "trim_start": clip.trim_start as f64,
                 "stock_seg_idx": clip.stock_seg_idx,
+                "overlap_transition": clip.overlap_transition,
             }));
-            cursor = actual_end;
+            cursor = cursor.max(seg_end);
         }
 
         // ── Overlay-доріжки (1+) ─────────────────────────────────────────────
@@ -261,6 +267,7 @@ impl MontageEditorState {
                     "zoom_enabled": clip.zoom_enabled,
                     "shake_enabled": clip.shake_enabled,
                     "stock_seg_idx": clip.stock_seg_idx,
+                    "overlap_transition": clip.overlap_transition,
                 })
             }).collect();
             overlay_tracks.push(serde_json::json!({
@@ -332,6 +339,7 @@ fn clip_from_json_seg(
         is_placeholder: false,
         trim_start: seg["trim_start"].as_f64().unwrap_or(0.0) as f32,
         stock_seg_idx: seg["stock_seg_idx"].as_u64().map(|v| v as usize),
+        overlap_transition: seg["overlap_transition"].as_str().unwrap_or("fade").to_string(),
     }
 }
 
@@ -414,6 +422,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     zoom_enabled: false, shake_enabled: false,
                     is_placeholder: true, trim_start: 0.0,
                     stock_seg_idx: Some(i),
+                    overlap_transition: "fade".to_string(),
                 });
             }
         }

@@ -229,6 +229,7 @@ pub(super) fn draw_timeline(
                                     is_placeholder: false,
                                     trim_start: 0.0,
                                     stock_seg_idx: None,
+                                    overlap_transition: "fade".to_string(),
                                 });
                             }
                         }
@@ -537,6 +538,35 @@ pub(super) fn draw_timeline(
                             }
                             y += cell;
                         }
+
+                        // Кнопка вибору переходу ◈ у правій частині зони
+                        let btn_size = 14.0;
+                        let btn_center = if zw > btn_size + 8.0 {
+                            Pos2::new(zr - btn_size / 2.0 - 4.0, track_y + track_h / 2.0)
+                        } else {
+                            Pos2::new(zl + zw / 2.0 + btn_size / 2.0 + 1.0, track_y + track_h / 2.0)
+                        };
+                        let btn_rect = Rect::from_center_size(btn_center, Vec2::new(btn_size, btn_size));
+                        let btn_hover = ui.ctx().input(|inp| {
+                            inp.pointer.hover_pos().map_or(false, |pos| btn_rect.contains(pos))
+                        });
+                        let btn_color = if btn_hover {
+                            Color32::from_rgba_unmultiplied(255, 182, 72, 240)
+                        } else {
+                            Color32::from_rgba_unmultiplied(255, 182, 72, 160)
+                        };
+                        painter.rect_filled(btn_rect, 2.0, btn_color);
+                        painter.text(
+                            btn_center,
+                            Align2::CENTER_CENTER,
+                            "◈",
+                            egui::FontId::proportional(11.0),
+                            Color32::BLACK,
+                        );
+                        // Клік по кнопці відкриває випадаючий список
+                        if btn_hover && ui.ctx().input(|inp| inp.pointer.primary_clicked()) {
+                            editor.overlap_transition_popup = Some((b.id.clone(), btn_center));
+                        }
                     }
                 }
             }
@@ -630,6 +660,58 @@ pub(super) fn draw_timeline(
             painter.text(lrect.center(), Align2::CENTER_CENTER, &label, egui::FontId::proportional(11.0), text_color);
         }
     });
+
+    // ─── Випадаючий список вибору overlap-переходу ─────────────────────
+    if let Some((ref clip_id, pos)) = editor.overlap_transition_popup.clone() {
+        // Знаходимо поточний overlap_transition для цього кліпу
+        let current_trans = editor.clips.iter()
+            .find(|c| c.id == *clip_id)
+            .map(|c| c.overlap_transition.clone())
+            .unwrap_or_else(|| "fade".to_string());
+
+        let popup_id = egui::Id::new("overlap_transition_popup");
+        let mut close_popup = false;
+        let mut popup_rect = Rect::NOTHING;
+
+        egui::Area::new(popup_id)
+            .fixed_pos(pos)
+            .order(egui::Order::Foreground)
+            .show(ui.ctx(), |ui| {
+                let frame_resp = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_min_width(120.0);
+                    ui.label(translate(language, "montage_editor_overlap_transition"));
+                    ui.separator();
+                    for &name in crate::gui::pipeline::editing::XFADE_TRANSITIONS {
+                        let selected = current_trans == name;
+                        if ui.selectable_label(selected, name).clicked() {
+                            // Оновлюємо overlap_transition для incoming кліпу
+                            if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == *clip_id) {
+                                clip.overlap_transition = name.to_string();
+                                editor.save_to_timeline().ok();
+                            }
+                            close_popup = true;
+                        }
+                    }
+                });
+                popup_rect = frame_resp.response.rect;
+            });
+
+        // Закриваємо попап при кліку поза ним
+        if ui.ctx().input(|inp| inp.pointer.primary_released()) {
+            if let Some(hover_pos) = ui.ctx().input(|inp| inp.pointer.hover_pos()) {
+                if !popup_rect.contains(hover_pos) {
+                    close_popup = true;
+                }
+            }
+        }
+        if ui.ctx().input(|inp| inp.key_pressed(egui::Key::Escape)) {
+            close_popup = true;
+        }
+
+        if close_popup {
+            editor.overlap_transition_popup = None;
+        }
+    }
 }
 
 // ─── Логіка перетягування кліпів (move / trim) ───────────────────────────────

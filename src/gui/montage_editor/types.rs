@@ -226,6 +226,9 @@ pub struct EditorClip {
     pub trim_start: f32,
     /// Індекс сегменту в stock_cache.json (для кліпів обраних зі стоків; None = не стокове медіа).
     pub stock_seg_idx: Option<usize>,
+    /// Тип xfade-переходу для overlap-зон ("fade", "wipeleft", "dissolve", …).
+    /// Визначає як прев'ю рендерить перехід при накладанні, так і FFmpeg-монтаж.
+    pub overlap_transition: String,
 }
 
 impl EditorClip {

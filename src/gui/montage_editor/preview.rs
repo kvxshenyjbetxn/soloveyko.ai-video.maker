@@ -316,7 +316,8 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
         // ── Рендер базової доріжки 0 (зі zoom/shake/переходами) ─────────────
         let trans_kind = if overlap_progress.is_some() {
-            TransitionKind::Fade // overlap → завжди crossfade
+            // overlap → використовуємо per-clip overlap_transition incoming кліпу
+            transition_kind(&incoming.as_ref().map(|c| c.overlap_transition.as_str()).unwrap_or("fade"))
         } else {
             transition_kind(&settings.transition)
         };
