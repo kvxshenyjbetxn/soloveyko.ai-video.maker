@@ -473,6 +473,74 @@ pub(super) fn draw_timeline(
                 }
             }
 
+            // ─── Зони накладання (жовта сітка переходів) ─────────────
+            for ti in 0..editor.num_tracks {
+                let visual_idx = track_visual(ti);
+                let track_y = vis_y(rect, visual_idx);
+                // Збираємо кліпи цієї доріжки, сортуємо за start_secs
+                let mut track_clips: Vec<&EditorClip> = editor.clips.iter()
+                    .filter(|c| c.track_idx == ti)
+                    .collect();
+                track_clips.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap());
+
+                // Шукаємо накладання (як у kadr TransitionZones)
+                for i in 1..track_clips.len() {
+                    let b = track_clips[i];
+                    let b_start = b.start_secs;
+                    let b_end = b.start_secs + b.duration;
+                    let mut cover_end = 0.0_f32;
+                    for j in 0..i {
+                        let a = track_clips[j];
+                        let a_end = a.start_secs + a.duration;
+                        if a.start_secs < b_start && a_end > b_start {
+                            cover_end = cover_end.max(a_end);
+                        }
+                    }
+                    let zone_to = cover_end.min(b_end);
+                    if zone_to > b_start + 0.001 {
+                        let zx = rect.left() + b_start * zoom;
+                        let zw = ((zone_to - b_start) * zoom).max(2.0);
+                        let zone_rect = Rect::from_min_size(
+                            Pos2::new(zx, track_y + 2.0),
+                            Vec2::new(zw, track_h - 4.0),
+                        );
+                        // Жовта напівпрозора підкладка
+                        painter.rect_filled(zone_rect, 3.0,
+                            Color32::from_rgba_unmultiplied(255, 182, 72, 22));
+                        // Жовта рамка
+                        painter.rect_stroke(zone_rect, 3.0,
+                            Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 182, 72, 180)));
+                        // Діагональна сітка (crosshatch): малюємо X-подібні відрізки
+                        let cell = 6.0_f32;
+                        let line_color = Color32::from_rgba_unmultiplied(255, 182, 72, 120);
+                        let zl = zone_rect.left();
+                        let zt = zone_rect.top();
+                        let zr = zone_rect.right();
+                        let zb = zone_rect.bottom();
+                        let mut y = zt;
+                        while y < zb {
+                            let mut x = zl;
+                            while x < zr {
+                                let cx = x.min(zr - cell);
+                                let cy = y.min(zb - cell);
+                                // ╲
+                                painter.line_segment(
+                                    [Pos2::new(cx, cy), Pos2::new(cx + cell, cy + cell)],
+                                    Stroke::new(1.0, line_color),
+                                );
+                                // ╱
+                                painter.line_segment(
+                                    [Pos2::new(cx + cell, cy), Pos2::new(cx, cy + cell)],
+                                    Stroke::new(1.0, line_color),
+                                );
+                                x += cell;
+                            }
+                            y += cell;
+                        }
+                    }
+                }
+            }
+
             // Плейхед
             let ph_x = rect.left() + editor.playhead * zoom;
             if ph_x >= rect.left() && ph_x <= rect.right() {

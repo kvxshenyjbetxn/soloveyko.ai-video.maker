@@ -147,10 +147,47 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     sorted.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
 
     let active_idx = sorted.iter().position(|c| c.start_secs <= ph && ph < c.end_secs());
-    let active = active_idx.map(|i| sorted[i].clone());
-    let prev_clip = active_idx.and_then(|i| if i > 0 { Some(sorted[i - 1].clone()) } else { None });
+    let first_clip = active_idx.map(|i| sorted[i].clone());
 
+    // ─── Виявлення накладання (overlap → автоматичний crossfade) ────────
+    // active_idx дає перший кліп що містить плейхед (= outgoing).
+    // Якщо є другий кліп пізніше що теж містить плейхед — це incoming, накладання є.
+    let incoming = active_idx.and_then(|ai| {
+        sorted[ai + 1..].iter()
+            .find(|c| c.start_secs <= ph && ph < c.end_secs())
+            .cloned()
+    });
+    let (outgoing, active) = if let Some(ref inc) = incoming {
+        (first_clip, Some(inc.clone()))
+    } else {
+        (None, first_clip)
+    };
+
+    // Чи є налаштування переходу з налаштувань пайплайну
+    let settings_prev = if outgoing.is_none() {
+        active_idx.and_then(|i| if i > 0 { Some(sorted[i - 1].clone()) } else { None })
+    } else {
+        None
+    };
+    let has_settings_trans = settings.transition != "none" && settings.transition_duration > 0.0 && settings_prev.is_some();
+
+    // Обчислюємо overlap-перехід: outgoing + active накладаються
+    let overlap_progress = if let (Some(out), Some(act)) = (&outgoing, &active) {
+        let overlap_start = act.start_secs;
+        let overlap_end = (out.start_secs + out.duration).min(act.start_secs + act.duration);
+        if overlap_end > overlap_start + 0.001 && ph >= overlap_start && ph < overlap_end {
+            Some((ph - overlap_start) / (overlap_end - overlap_start))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Якщо overlap є — використовуємо його замість settings-переходу
+    let prev_clip = if overlap_progress.is_some() { outgoing.clone() } else { settings_prev.clone() };
     let clip_offset = active.as_ref().map(|c| (ph - c.start_secs).max(0.0)).unwrap_or(0.0);
+    let in_transition = overlap_progress.is_some() || (has_settings_trans && clip_offset < settings.transition_duration);
     // Зміщення у вихідному файлі з урахуванням trim_start (для кадрів превʼю)
     let source_offset = clip_offset + active.as_ref().map(|c| c.trim_start).unwrap_or(0.0);
 
@@ -158,20 +195,18 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let img_idx_active = active_idx.map(|idx| {
         sorted[..idx].iter().filter(|c| matches!(c.kind, ClipKind::Image)).count()
     }).unwrap_or(0);
+    let img_idx_incoming = img_idx_active
+        + if outgoing.as_ref().map(|c| matches!(c.kind, ClipKind::Image)).unwrap_or(false) { 1 } else { 0 };
     let img_idx_prev = img_idx_active.saturating_sub(
         if prev_clip.as_ref().map(|c| matches!(c.kind, ClipKind::Image)).unwrap_or(false) { 1 } else { 0 }
     );
 
-    // Визначення стану переходу
-    let use_transition = settings.transition != "none"
-        && settings.transition_duration > 0.0
-        && prev_clip.is_some();
-    let transition_progress = if use_transition && clip_offset < settings.transition_duration {
+    // Визначення стану переходу (progress для overlap або settings)
+    let transition_progress = overlap_progress.unwrap_or(if has_settings_trans && clip_offset < settings.transition_duration {
         clip_offset / settings.transition_duration
     } else {
         0.0
-    };
-    let in_transition = transition_progress > 0.0;
+    });
 
     // Медіа-елементи (clone щоб розділити borrow від frame_cache)
     // Якщо не знайдено в пулі але файл існує — додаємо в пул на ходу (захист від десинхронізації)
@@ -214,9 +249,19 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let prev_tex = if in_transition {
         prev_media.as_ref()
             .and_then(|m| {
-                // Показуємо останній кадр попереднього кліпу
-                let last_t = (m.duration_secs - 0.001).max(0.0);
-                editor.frame_cache.get_frame(ui.ctx(), m, last_t, false, editor.preview_render)
+                // Для overlap-переходу: кадр на поточній позиції плейхеду в межах outgoing кліпу
+                if overlap_progress.is_some() {
+                    if let Some(ref out) = outgoing {
+                        let out_t = (ph - out.start_secs + out.trim_start).max(0.0).min(m.duration_secs - 0.001);
+                        editor.frame_cache.get_frame(ui.ctx(), m, out_t, false, editor.preview_render)
+                    } else {
+                        None
+                    }
+                } else {
+                    // Settings-перехід: останній кадр попереднього кліпу
+                    let last_t = (m.duration_secs - 0.001).max(0.0);
+                    editor.frame_cache.get_frame(ui.ctx(), m, last_t, false, editor.preview_render)
+                }
             })
     } else {
         None
@@ -257,16 +302,28 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         let prev_shake_on = is_prev_img && prev_clip.as_ref().map(|c| c.shake_enabled).unwrap_or(false);
         let dur_curr = active.as_ref().map(|c| c.duration).unwrap_or(1.0);
         let dur_prev = prev_clip.as_ref().map(|c| c.duration).unwrap_or(1.0);
-        let uv_curr = zoom_uv(compute_zoom(clip_offset, dur_curr, &settings, img_idx_active, base_zoom_on));
+        // Для overlap: час у межах outgoing кліпу для коректного зуму/шейку
+        let prev_offset = if overlap_progress.is_some() {
+            outgoing.as_ref().map(|o| (ph - o.start_secs).max(0.0)).unwrap_or(dur_prev)
+        } else {
+            dur_prev
+        };
+        let uv_curr = zoom_uv(compute_zoom(clip_offset, dur_curr, &settings,
+            if overlap_progress.is_some() { img_idx_incoming } else { img_idx_active }, base_zoom_on));
         let sh_curr = shake_uv(clip_offset, &settings, base_shake_on);
-        let uv_prev = zoom_uv(compute_zoom(dur_prev, dur_prev, &settings, img_idx_prev, prev_zoom_on));
-        let sh_prev = shake_uv(dur_prev, &settings, prev_shake_on);
+        let uv_prev = zoom_uv(compute_zoom(prev_offset, dur_prev, &settings, img_idx_prev, prev_zoom_on));
+        let sh_prev = shake_uv(prev_offset, &settings, prev_shake_on);
 
         // ── Рендер базової доріжки 0 (зі zoom/shake/переходами) ─────────────
+        let trans_kind = if overlap_progress.is_some() {
+            TransitionKind::Fade // overlap → завжди crossfade
+        } else {
+            transition_kind(&settings.transition)
+        };
         if let Some(ref curr) = current_tex {
             if in_transition {
                 let tp = transition_progress;
-                match transition_kind(&settings.transition) {
+                match trans_kind {
                     TransitionKind::Fade => {
                         if let Some(ref pt) = prev_tex {
                             render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, ((1.0 - tp) * 255.0) as u8);
