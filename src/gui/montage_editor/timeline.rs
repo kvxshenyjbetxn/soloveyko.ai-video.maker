@@ -550,6 +550,10 @@ pub(super) fn draw_timeline(
                         let btn_hover = ui.ctx().input(|inp| {
                             inp.pointer.hover_pos().map_or(false, |pos| btn_rect.contains(pos))
                         });
+                        // Курсор-вказівник при наведенні
+                        if btn_hover {
+                            ui.ctx().output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+                        }
                         let btn_color = if btn_hover {
                             Color32::from_rgba_unmultiplied(255, 182, 72, 240)
                         } else {
@@ -564,7 +568,9 @@ pub(super) fn draw_timeline(
                             Color32::BLACK,
                         );
                         // Клік по кнопці відкриває випадаючий список
-                        if btn_hover && ui.ctx().input(|inp| inp.pointer.primary_clicked()) {
+                        // primary_pressed (натискання) — щоб уникнути конфлікту
+                        // з primary_released (відпускання) у закритті попапу
+                        if btn_hover && ui.ctx().input(|inp| inp.pointer.primary_pressed()) {
                             editor.overlap_transition_popup = Some((b.id.clone(), btn_center));
                         }
                     }
@@ -671,39 +677,36 @@ pub(super) fn draw_timeline(
 
         let popup_id = egui::Id::new("overlap_transition_popup");
         let mut close_popup = false;
-        let mut popup_rect = Rect::NOTHING;
 
         egui::Area::new(popup_id)
             .fixed_pos(pos)
             .order(egui::Order::Foreground)
             .show(ui.ctx(), |ui| {
-                let frame_resp = egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_min_width(120.0);
+                // Обмежуємо попап висотою екрану з прокруткою
+                let screen_h = ui.ctx().screen_rect().height();
+                let max_popup_h = (screen_h - pos.y - 20.0).max(100.0).min(400.0);
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.label(translate(language, "montage_editor_overlap_transition"));
                     ui.separator();
-                    for &name in crate::gui::pipeline::editing::XFADE_TRANSITIONS {
-                        let selected = current_trans == name;
-                        if ui.selectable_label(selected, name).clicked() {
-                            // Оновлюємо overlap_transition для incoming кліпу
-                            if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == *clip_id) {
-                                clip.overlap_transition = name.to_string();
-                                editor.save_to_timeline().ok();
+                    egui::ScrollArea::vertical()
+                        .max_height(max_popup_h)
+                        .show(ui, |ui| {
+                            for &name in crate::gui::pipeline::editing::XFADE_TRANSITIONS {
+                                let selected = current_trans == name;
+                                if ui.selectable_label(selected, name).clicked() {
+                                    // Оновлюємо overlap_transition для incoming кліпу
+                                    if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == *clip_id) {
+                                        clip.overlap_transition = name.to_string();
+                                        editor.save_to_timeline().ok();
+                                    }
+                                    close_popup = true;
+                                }
                             }
-                            close_popup = true;
-                        }
-                    }
+                        });
                 });
-                popup_rect = frame_resp.response.rect;
             });
 
-        // Закриваємо попап при кліку поза ним
-        if ui.ctx().input(|inp| inp.pointer.primary_released()) {
-            if let Some(hover_pos) = ui.ctx().input(|inp| inp.pointer.hover_pos()) {
-                if !popup_rect.contains(hover_pos) {
-                    close_popup = true;
-                }
-            }
-        }
+        // Закриваємо попап при натисканні Escape
         if ui.ctx().input(|inp| inp.key_pressed(egui::Key::Escape)) {
             close_popup = true;
         }

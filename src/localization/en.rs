@@ -61,7 +61,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_delete_clip" => "🗑 Delete Clip",
         "montage_editor_add_video_track" => "+ Video",
         "montage_editor_add_audio_track" => "+ Audio",
-        "montage_editor_overlap_transition" => "Overlap Transition",
+        "montage_editor_overlap_transition" => "Transition",
         "montage_editor_tracks_count" => "tracks",
         "montage_editor_transform" => "Transform",
         "montage_editor_clip_scale" => "Scale:",

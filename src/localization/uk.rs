@@ -61,7 +61,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_delete_clip" => "🗑 Видалити кліп",
         "montage_editor_add_video_track" => "+ Відео",
         "montage_editor_add_audio_track" => "+ Аудіо",
-        "montage_editor_overlap_transition" => "Перехід накладання",
+        "montage_editor_overlap_transition" => "Перехід",
         "montage_editor_tracks_count" => "доріжок",
         "montage_editor_transform" => "Трансформ",
         "montage_editor_clip_scale" => "Масштаб:",
