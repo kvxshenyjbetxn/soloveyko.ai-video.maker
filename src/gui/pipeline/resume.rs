@@ -453,6 +453,42 @@ fn enqueue_with_resume(
         }
     }
 
+    // Відновлюємо чат з агентом
+    let task_dir = std::path::Path::new(&save_path);
+    if let Ok(text) = std::fs::read_to_string(task_dir.join("agent_chat.json")) {
+        if let Ok(msgs) = serde_json::from_str::<Vec<serde_json::Value>>(&text) {
+            let mut chat = job.agent_chat.lock().unwrap();
+            for msg in msgs {
+                if let (Some(role), Some(content)) = (
+                    msg["role"].as_str(),
+                    msg["content"].as_str(),
+                ) {
+                    chat.push(crate::queue::AgentChatMessage {
+                        role: role.to_string(),
+                        content: content.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Відновлюємо сесію агента (щоб можна було продовжити чат після перезапуску)
+    if let Ok(text) = std::fs::read_to_string(task_dir.join("agent_session.json")) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let (Some(session_id), Some(service), Some(model)) = (
+                v["session_id"].as_str(),
+                v["service"].as_str(),
+                v["model"].as_str(),
+            ) {
+                *job.agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
+                    session_id: session_id.to_string(),
+                    service: service.to_string(),
+                    model: model.to_string(),
+                });
+            }
+        }
+    }
+
     // Позначаємо завершені етапи для коректного відображення в черзі
     pre_mark_stages(&job, &found, keep_vo, keep_su, keep_tl, keep_vi);
 

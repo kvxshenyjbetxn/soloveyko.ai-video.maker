@@ -1502,8 +1502,6 @@ fn run_agent_timeline(
     settings: &crate::queue::JobSettings,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
-    agent_control_resume: Arc<(Mutex<bool>, std::sync::Condvar)>,
-    status: Arc<Mutex<crate::queue::JobStatus>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
     let save_dir = std::path::Path::new(&settings.save_path);
@@ -1595,23 +1593,14 @@ fn run_agent_timeline(
         }
         Err(e) => {
             crate::logger::log_job(job_id, job_name,
-                &format!("Agent error: {} — чат доступний для продовження, очікую підтвердження", e));
+                &format!("Agent error: {} — чат доступний для продовження", e));
         }
     }
 
-    // Пауза — чекаємо поки користувач натисне «Підтвердити» в чаті
-    *status.lock().unwrap() = crate::queue::JobStatus::AwaitingAgentControl;
-    ctx.request_repaint();
-    let (lock, cvar) = &*agent_control_resume;
-    let mut resumed = lock.lock().unwrap();
-    while !*resumed {
-        resumed = cvar.wait(resumed).unwrap();
+    // Зберігаємо фінальний session_id на диск (для відновлення після перезапуску)
+    if let Some(ref sess) = *agent_session.lock().unwrap() {
+        save_agent_session_to_file(save_dir, sess);
     }
-    *resumed = false;
-
-    crate::logger::log_job(job_id, job_name, "Agent confirmed. Resuming pipeline...");
-    *status.lock().unwrap() = crate::queue::JobStatus::Running;
-    ctx.request_repaint();
 
     if !timeline_path.exists() {
         return Err("Agent did not create timeline.json".to_string());
@@ -1686,6 +1675,16 @@ pub fn call_agent_resume(
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
+}
+
+/// Зберігає інформацію про сесію агента у файл agent_session.json у папці задачі.
+fn save_agent_session_to_file(save_dir: &std::path::Path, session: &crate::queue::AgentSessionInfo) {
+    let json = serde_json::to_string_pretty(&serde_json::json!({
+        "session_id": session.session_id,
+        "service": session.service,
+        "model": session.model,
+    })).unwrap_or_default();
+    let _ = std::fs::write(save_dir.join("agent_session.json"), json);
 }
 
 /// Зберігає историю чату агента у файл agent_chat.json у папці задачі.
@@ -1767,7 +1766,7 @@ pub fn run_pipeline(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
-    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    _agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     capcut_mode_override: Arc<Mutex<Option<bool>>>,
@@ -1884,8 +1883,6 @@ pub fn run_pipeline(
                 job_id, &job_name, &settings,
                 Arc::clone(&agent_chat),
                 Arc::clone(&agent_session),
-                Arc::clone(&agent_control_resume),
-                Arc::clone(&status),
                 &ctx,
             ) {
                 crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2406,8 +2403,6 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
-                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2484,8 +2479,6 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
-                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2588,8 +2581,6 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
-                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
