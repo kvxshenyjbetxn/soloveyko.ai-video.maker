@@ -432,7 +432,12 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                 });
 
             if let Some(media) = media_str {
-                clips.push(clip_from_json_seg(seg, &media, save_path, 0));
+                let mut clip = clip_from_json_seg(seg, &media, save_path, 0);
+                // Pipeline-формат (є "text") не містить stock_seg_idx у JSON — відновлюємо з індексу сегменту
+                if clip.stock_seg_idx.is_none() && seg["text"].as_str().is_some() {
+                    clip.stock_seg_idx = Some(i);
+                }
+                clips.push(clip);
             } else if seg["text"].as_str().is_some() {
                 // Сегмент без медіа (media: null) — плейсхолдер для Stock Picker
                 let text = seg["text"].as_str().unwrap_or("").to_string();
@@ -526,6 +531,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
         }
     }
 
+    let made_replacements = !replacements.is_empty();
     for (clip_id, file_path, kind, trim_start, seg_idx) in replacements {
         // Видаляємо старий запис і кеш кадрів щоб thumbnail перегенерувався з нового відео
         editor.media_pool.retain(|m| m.path != file_path);
@@ -548,6 +554,11 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
             clip.trim_start = trim_start;
             clip.stock_seg_idx = Some(seg_idx);
         }
+    }
+
+    // Зберігаємо timeline.json щоб stock_seg_idx пережив перезапуск
+    if made_replacements {
+        editor.save_to_timeline().ok();
     }
 
     still_pending

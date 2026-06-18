@@ -170,6 +170,7 @@ pub(super) fn draw_media_pool(
         let mut toggle_select_id: Option<String> = None;
         let mut context_animate: Option<PathBuf> = None;
         let mut context_regen: Option<(PathBuf, bool)> = None;
+        let mut context_replace_stock: Option<usize> = None;
 
         for (idx, media) in editor.media_pool.iter().enumerate() {
             let item_w = (ui.available_width() - 30.0).max(80.0);
@@ -180,6 +181,10 @@ pub(super) fn draw_media_pool(
             let is_animating = anim_loading.lock().unwrap().contains(&media.path);
             let is_regen = regen_paths.contains(&media.path);
             let is_busy = is_animating || is_regen;
+            // Чи є хоч один кліп на таймлайні що посилається на це медіа зі стокового джерела
+            let stock_seg_idx: Option<usize> = editor.clips.iter()
+                .find(|c| c.media_id == media_id && c.stock_seg_idx.is_some())
+                .and_then(|c| c.stock_seg_idx);
 
             ui.horizontal(|ui| {
                 let (rect, resp) = ui.allocate_exact_size(Vec2::new(item_w, ITEM_H), Sense::click_and_drag());
@@ -320,6 +325,13 @@ pub(super) fn draw_media_pool(
 
                 // Контекстне меню (правий клік)
                 resp.context_menu(|ui| {
+                    if let Some(seg_idx) = stock_seg_idx {
+                        if ui.button(translate(language, "montage_editor_replace_stock")).clicked() {
+                            context_replace_stock = Some(seg_idx);
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                    }
                     if matches!(media_kind, ClipKind::Image) {
                         if is_animating {
                             ui.add_enabled(false, egui::Button::new(format!("⏳ {}", translate(language, "gallery_regen_loading"))));
@@ -354,6 +366,9 @@ pub(super) fn draw_media_pool(
         }
         if let Some(regen) = context_regen {
             editor.pending_regen = Some(regen);
+        }
+        if let Some(seg_idx) = context_replace_stock {
+            editor.pending_open_stock_picker = Some(seg_idx);
         }
         if let Some(idx) = to_remove {
             let removed_id = editor.media_pool[idx].id.clone();
