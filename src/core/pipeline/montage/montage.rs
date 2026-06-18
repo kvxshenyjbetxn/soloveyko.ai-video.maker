@@ -67,8 +67,11 @@ pub fn run_montage(
         pos_x: f64,
         #[serde(default)]
         pos_y: f64,
+        #[serde(default = "default_opacity")]
+        opacity: f64,
     }
     fn default_scale() -> f64 { 1.0 }
+    fn default_opacity() -> f64 { 1.0 }
 
     #[derive(serde::Deserialize)]
     struct OverlayTrack {
@@ -520,6 +523,7 @@ pub fn run_montage(
         x: i32,
         y: i32,
         is_video: bool,
+        opacity: f64,
     }
 
     let mut overlay_items: Vec<OverlayItem> = Vec::new();
@@ -556,7 +560,7 @@ pub fn run_montage(
             log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s",
                 seg.start_secs, seg.end_secs));
 
-            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, w: w as i32, h: h as i32, x, y, is_video: is_vid });
+            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, w: w as i32, h: h as i32, x, y, is_video: is_vid, opacity: seg.opacity.clamp(0.0, 1.0) });
         }
     }
 
@@ -602,10 +606,16 @@ pub fn run_montage(
             let out_label = format!("v_ov_out_{i}");
             let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
             let (w, h) = (ov.w, ov.h);
+            // colorchannelmixer=aa=<opacity> — множить альфа-канал на значення opacity
+            let alpha_filter = if ov.opacity < 0.999 {
+                format!(",colorchannelmixer=aa={:.4}", ov.opacity)
+            } else {
+                String::new()
+            };
 
             if ov.is_video {
                 filter_parts.push(format!(
-                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                    "[{}:v]format=yuva420p{alpha_filter},scale={w}:{h}:force_original_aspect_ratio=decrease,\
                     pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
                     ov.input_idx, ov.start,
                 ));
@@ -615,7 +625,7 @@ pub fn run_montage(
                 ));
             } else {
                 filter_parts.push(format!(
-                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                    "[{}:v]format=yuva420p{alpha_filter},scale={w}:{h}:force_original_aspect_ratio=decrease,\
                     pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
                     ov.input_idx, ov.start,
                 ));

@@ -68,6 +68,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_clip_pos_x" => "Поз. X:",
         "montage_editor_clip_pos_y" => "Поз. Y:",
         "montage_editor_reset_transform" => "↺ Скинути",
+        "montage_editor_clip_opacity" => "Прозорість:",
         "montage_editor_effects" => "Ефекти",
         "montage_editor_clip_zoom" => "Зум",
         "montage_editor_clip_shake" => "Покачування",

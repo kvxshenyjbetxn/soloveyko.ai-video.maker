@@ -64,6 +64,13 @@ pub(super) fn draw_inspector(
                 clip.pos_y = 0.0;
             }
 
+            // ── Прозорість ──────────────────────────────────────────────────
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label(translate(language, "montage_editor_clip_opacity"));
+                ui.add(egui::Slider::new(&mut clip.opacity, 0.0..=1.0).step_by(0.01));
+            });
+
             // ── Ефекти (лише для зображень) ─────────────────────────────────
             if matches!(clip.kind, ClipKind::Image) {
                 ui.add_space(8.0);

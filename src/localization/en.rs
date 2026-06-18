@@ -68,6 +68,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_clip_pos_x" => "Pos X:",
         "montage_editor_clip_pos_y" => "Pos Y:",
         "montage_editor_reset_transform" => "↺ Reset",
+        "montage_editor_clip_opacity" => "Opacity:",
         "montage_editor_effects" => "Effects",
         "montage_editor_clip_zoom" => "Zoom",
         "montage_editor_clip_shake" => "Shake",

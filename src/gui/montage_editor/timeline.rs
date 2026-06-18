@@ -5,7 +5,7 @@ use eframe::egui;
 use egui::{Align2, Color32, Pos2, Rect, ScrollArea, Sense, Stroke, Vec2};
 use crate::localization::{Language, translate};
 use super::state::MontageEditorState;
-use super::types::{ClipKind, DragMode, ClipDragState, EditorClip, TrackKind};
+use super::types::{ClipKind, DragMode, ClipDragState, EditorClip, OpacityDragState, TrackKind};
 use super::utils::uuid_str;
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
@@ -230,6 +230,7 @@ pub(super) fn draw_timeline(
                                     trim_start: 0.0,
                                     stock_seg_idx: None,
                                     overlap_transition: "fade".to_string(),
+                                    opacity: 1.0,
                                 });
                             }
                         }
@@ -240,6 +241,9 @@ pub(super) fn draw_timeline(
 
             // Обробка перетягування кліпів (move / trim)
             update_clip_drag(ui.ctx(), editor, rect, ruler_h, track_h, zoom, has_vo, vo_pos, total_rows);
+
+            // Обробка drag смужки прозорості
+            update_opacity_drag(ui, editor);
 
             // Кліпи
             let clips_snapshot: Vec<EditorClip> = editor.clips.clone();
@@ -302,12 +306,24 @@ pub(super) fn draw_timeline(
                     .unwrap_or(false);
 
                 let is_sel = editor.selected_clip_id.as_deref() == Some(clip.id.as_str());
+                // Прозорість: мінімум 30% видимості, щоб кліп не зникав
+                let op = clip.opacity.clamp(0.0, 1.0);
+                let bg_alpha = ((op * 0.7 + 0.3) * 255.0) as u8;
                 let (bg, accent) = match clip.kind {
-                    ClipKind::Video => (Color32::from_rgb(18, 32, 55), Color32::from_rgb(9, 100, 220)),
-                    ClipKind::Image => (Color32::from_rgb(30, 22, 48), Color32::from_rgb(120, 70, 200)),
-                    ClipKind::Audio => (Color32::from_rgb(20, 40, 28), Color32::from_rgb(39, 160, 80)),
+                    ClipKind::Video => (
+                        Color32::from_rgba_unmultiplied(18, 32, 55, bg_alpha),
+                        Color32::from_rgb(9, 100, 220),
+                    ),
+                    ClipKind::Image => (
+                        Color32::from_rgba_unmultiplied(30, 22, 48, bg_alpha),
+                        Color32::from_rgb(120, 70, 200),
+                    ),
+                    ClipKind::Audio => (
+                        Color32::from_rgba_unmultiplied(20, 40, 28, bg_alpha),
+                        Color32::from_rgb(39, 160, 80),
+                    ),
                 };
-                let border = if is_sel { Color32::WHITE } else { accent };
+                let border = if is_sel { Color32::WHITE } else { accent.linear_multiply(op * 0.7 + 0.3) };
                 painter.rect(clip_rect, 3.0, bg, Stroke::new(if is_sel { 2.0 } else { 1.2 }, border));
 
                 // Індикатор оживлення поверх кліпу (painter-based, надійно в ScrollArea)
@@ -344,6 +360,20 @@ pub(super) fn draw_timeline(
                     2.0, handle_col,
                 );
 
+                // ─── Смужка прозорості ───────────────────────────────────────
+                // Відступ зверху/знизу щоб смужка не зливалась з рамкою кліпу
+                let opacity_strip_h = 3.0;
+                let pad_top = 4.0;
+                let pad_bot = 3.0;
+                let inner_h = clip_rect.height() - opacity_strip_h - pad_top - pad_bot;
+                let strip_y = clip_rect.top() + pad_top + (1.0 - clip.opacity.clamp(0.0, 1.0)) * inner_h;
+                let strip_rect = Rect::from_min_size(
+                    Pos2::new(clip_rect.left() + handle_w, strip_y),
+                    Vec2::new(clip_rect.width() - handle_w * 2.0, opacity_strip_h),
+                );
+                let strip_alpha = if is_sel { 230u8 } else { 140u8 };
+                painter.rect_filled(strip_rect, 1.0, Color32::from_rgba_unmultiplied(255, 255, 255, strip_alpha));
+
                 if cw > 18.0 {
                     let icon = match clip.kind { ClipKind::Video => "🎬", ClipKind::Image => "🖼", ClipKind::Audio => "🎵" };
                     let label = if clip.name.chars().count() > 16 {
@@ -365,10 +395,18 @@ pub(super) fn draw_timeline(
                     }
                 }
 
+                // Курсор залежно від зони: горизонтальний trim, вертикальний (смужка opacity)
                 if let Some(pos) = mouse_pos {
                     if clip_rect.contains(pos) {
                         let rx = pos.x - clip_rect.left();
-                        if rx < 8.0 || rx > clip_rect.width() - 8.0 {
+                        let ry = pos.y - clip_rect.top();
+                        let strip_y_rel = pad_top + (1.0 - clip.opacity.clamp(0.0, 1.0)) * inner_h;
+                        let on_strip = (ry - strip_y_rel).abs() < 5.0
+                            && rx >= handle_w
+                            && rx <= clip_rect.width() - handle_w;
+                        if on_strip {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                        } else if rx < 8.0 || rx > clip_rect.width() - 8.0 {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                         }
                     }
@@ -384,25 +422,44 @@ pub(super) fn draw_timeline(
                     editor.selected_clip_id = Some(clip.id.clone());
                 }
                 if clip_resp.drag_started() {
-                    if let Some(pos) = mouse_pos {
+                    // press_origin() — де саме натиснули, а не де зараз курсор
+                    let start = ui.input(|i| i.pointer.press_origin()).or(mouse_pos);
+                    if let Some(pos) = start {
                         let rx = pos.x - clip_rect.left();
-                        let mode = if rx < 8.0 {
-                            DragMode::TrimLeft
-                        } else if rx > clip_rect.width() - 8.0 {
-                            DragMode::TrimRight
-                        } else {
-                            DragMode::Move
-                        };
-                        editor.clip_drag_state = Some(ClipDragState {
-                            clip_id: clip.id.clone(),
-                            mode,
-                            initial_start: clip.start_secs,
-                            initial_duration: clip.duration,
-                            initial_mouse_x: pos.x,
-                            initial_track_idx: clip.track_idx,
-                            snap_line_secs: None,
-                        });
-                        editor.selected_clip_id = Some(clip.id.clone());
+                        let ry = pos.y - clip_rect.top();
+                        let strip_y_rel = pad_top + (1.0 - clip.opacity.clamp(0.0, 1.0)) * inner_h;
+                        // 8px зони захоплення — надійніший за 5px
+                        let on_strip = (ry - strip_y_rel).abs() < 8.0
+                            && rx >= handle_w
+                            && rx <= clip_rect.width() - handle_w;
+
+                        if on_strip && editor.clip_drag_state.is_none() {
+                            editor.opacity_drag = Some(OpacityDragState {
+                                clip_id: clip.id.clone(),
+                                initial_opacity: clip.opacity,
+                                initial_mouse_y: pos.y,
+                                clip_height: inner_h,
+                            });
+                            editor.selected_clip_id = Some(clip.id.clone());
+                        } else if editor.opacity_drag.is_none() {
+                            let mode = if rx < 8.0 {
+                                DragMode::TrimLeft
+                            } else if rx > clip_rect.width() - 8.0 {
+                                DragMode::TrimRight
+                            } else {
+                                DragMode::Move
+                            };
+                            editor.clip_drag_state = Some(ClipDragState {
+                                clip_id: clip.id.clone(),
+                                mode,
+                                initial_start: clip.start_secs,
+                                initial_duration: clip.duration,
+                                initial_mouse_x: pos.x,
+                                initial_track_idx: clip.track_idx,
+                                snap_line_secs: None,
+                            });
+                            editor.selected_clip_id = Some(clip.id.clone());
+                        }
                     }
                 }
 
@@ -745,6 +802,34 @@ pub(super) fn draw_timeline(
     }
 }
 
+// ─── Логіка перетягування смужки прозорості ─────────────────────────────────
+
+fn update_opacity_drag(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
+    if editor.opacity_drag.is_none() { return; }
+
+    let released = ui.input(|i| !i.pointer.any_down());
+    if released {
+        editor.opacity_drag = None;
+        return;
+    }
+
+    // Поки opacity_drag активний — clip_drag не повинен запускатись
+    editor.clip_drag_state = None;
+
+    let Some(ref state) = editor.opacity_drag else { return };
+    let Some(pos) = ui.input(|i| i.pointer.hover_pos()) else { return };
+
+    let dy = pos.y - state.initial_mouse_y;
+    // Рух вниз → зменшення прозорості, вгору → збільшення
+    let new_opacity = (state.initial_opacity - dy / state.clip_height.max(1.0)).clamp(0.0, 1.0);
+    let clip_id = state.clip_id.clone();
+    if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == clip_id) {
+        clip.opacity = new_opacity;
+    }
+    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+    ui.ctx().request_repaint();
+}
+
 // ─── Логіка перетягування кліпів (move / trim) ───────────────────────────────
 
 fn update_clip_drag(
@@ -758,6 +843,9 @@ fn update_clip_drag(
     vo_pos: usize,
     _total_rows: usize,
 ) {
+    // Якщо opacity_drag активний — clip_drag не обробляємо
+    if editor.opacity_drag.is_some() { return; }
+
     if ctx.input(|i| i.pointer.any_released()) {
         editor.clip_drag_state = None;
         return;

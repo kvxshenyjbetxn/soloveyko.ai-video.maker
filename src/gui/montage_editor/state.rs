@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::{
-    ClipKind, ClipDragState, EditorClip, MontagePreviewSettings, PreviewDragState,
-    PreviewQuality, PreviewRenderSettings, TrackKind, FRAME_CACHE_SIZE,
+    ClipKind, ClipDragState, EditorClip, MontagePreviewSettings, OpacityDragState,
+    PreviewDragState, PreviewQuality, PreviewRenderSettings, TrackKind, FRAME_CACHE_SIZE,
 };
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
@@ -72,6 +72,8 @@ pub struct MontageEditorState {
     pub input_blocked: bool,
     /// Нові preview_render, якщо користувач змінив якість/FPS у топбарі
     pub pending_preview_render: Option<PreviewRenderSettings>,
+    /// Стан drag смужки прозорості кліпу
+    pub opacity_drag: Option<OpacityDragState>,
 }
 
 impl MontageEditorState {
@@ -161,6 +163,7 @@ impl MontageEditorState {
             needs_stock_refresh: false,
             input_blocked: false,
             pending_preview_render: None,
+            opacity_drag: None,
         }
     }
 
@@ -241,6 +244,7 @@ impl MontageEditorState {
                 "trim_start": clip.trim_start as f64,
                 "stock_seg_idx": clip.stock_seg_idx,
                 "overlap_transition": clip.overlap_transition,
+                "opacity": clip.opacity as f64,
             }));
             cursor = cursor.max(seg_end);
         }
@@ -268,6 +272,7 @@ impl MontageEditorState {
                     "shake_enabled": clip.shake_enabled,
                     "stock_seg_idx": clip.stock_seg_idx,
                     "overlap_transition": clip.overlap_transition,
+                    "opacity": clip.opacity as f64,
                 })
             }).collect();
             overlay_tracks.push(serde_json::json!({
@@ -340,6 +345,7 @@ fn clip_from_json_seg(
         trim_start: seg["trim_start"].as_f64().unwrap_or(0.0) as f32,
         stock_seg_idx: seg["stock_seg_idx"].as_u64().map(|v| v as usize),
         overlap_transition: seg["overlap_transition"].as_str().unwrap_or("fade").to_string(),
+        opacity: seg["opacity"].as_f64().unwrap_or(1.0) as f32,
     }
 }
 
@@ -423,6 +429,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     is_placeholder: true, trim_start: 0.0,
                     stock_seg_idx: Some(i),
                     overlap_transition: "fade".to_string(),
+                    opacity: 1.0,
                 });
             }
         }

@@ -199,6 +199,15 @@ pub struct ClipDragState {
     pub snap_line_secs: Option<f32>,
 }
 
+// ─── Стан перетягування смужки прозорості ────────────────────────────────────
+
+pub struct OpacityDragState {
+    pub clip_id: String,
+    pub initial_opacity: f32,
+    pub initial_mouse_y: f32,
+    pub clip_height: f32,
+}
+
 // ─── Кліп на таймлінії ───────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
@@ -231,6 +240,8 @@ pub struct EditorClip {
     /// Тип xfade-переходу для overlap-зон ("fade", "wipeleft", "dissolve", …).
     /// Визначає як прев'ю рендерить перехід при накладанні, так і FFmpeg-монтаж.
     pub overlap_transition: String,
+    /// Прозорість кліпу від 0.0 (повністю прозорий) до 1.0 (непрозорий).
+    pub opacity: f32,
 }
 
 impl EditorClip {

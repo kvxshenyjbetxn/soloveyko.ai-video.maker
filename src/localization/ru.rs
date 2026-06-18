@@ -68,6 +68,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_clip_pos_x" => "Поз. X:",
         "montage_editor_clip_pos_y" => "Поз. Y:",
         "montage_editor_reset_transform" => "↺ Сбросить",
+        "montage_editor_clip_opacity" => "Прозрачность:",
         "montage_editor_effects" => "Эффекты",
         "montage_editor_clip_zoom" => "Зум",
         "montage_editor_clip_shake" => "Покачивание",

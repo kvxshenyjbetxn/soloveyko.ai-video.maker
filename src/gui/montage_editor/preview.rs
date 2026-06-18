@@ -17,6 +17,7 @@ struct OverlayRenderItem {
     kind: ClipKind,
     zoom_enabled: bool,
     shake_enabled: bool,
+    opacity: f32,
 }
 
 // ─── Допоміжні типи та функції для превью-ефектів ────────────────────────────
@@ -321,110 +322,116 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         } else {
             transition_kind(&settings.transition)
         };
+        // Прозорість активного та попереднього кліпів
+        let active_opacity = active.as_ref().map(|c| c.opacity.clamp(0.0, 1.0)).unwrap_or(1.0);
+        let prev_opacity = prev_clip.as_ref().map(|c| c.opacity.clamp(0.0, 1.0)).unwrap_or(1.0);
+        let ao = |a: f32| -> u8 { (active_opacity * a * 255.0).round() as u8 };
+        let po = |a: f32| -> u8 { (prev_opacity * a * 255.0).round() as u8 };
+
         if let Some(ref curr) = current_tex {
             if in_transition {
                 let tp = transition_progress;
                 match trans_kind {
                     TransitionKind::Fade => {
                         if let Some(ref pt) = prev_tex {
-                            render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, ((1.0 - tp) * 255.0) as u8);
+                            render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, po(1.0 - tp));
                         }
-                        render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, (tp * 255.0) as u8);
+                        render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, ao(tp));
                     }
                     TransitionKind::FadeBlack => {
                         if tp < 0.5 {
                             if let Some(ref pt) = prev_tex {
-                                render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, ((1.0 - tp * 2.0) * 255.0) as u8);
+                                render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, po(1.0 - tp * 2.0));
                             }
                         } else {
-                            render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, (((tp - 0.5) * 2.0) * 255.0) as u8);
+                            render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, ao((tp - 0.5) * 2.0));
                         }
                     }
                     TransitionKind::FadeWhite => {
                         painter.rect_filled(rect, 0.0, Color32::WHITE);
                         if tp < 0.5 {
                             if let Some(ref pt) = prev_tex {
-                                render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, ((1.0 - tp * 2.0) * 255.0) as u8);
+                                render_clip_frame(&painter, pt, rect, uv_prev, sh_prev, po(1.0 - tp * 2.0));
                             }
                         } else {
-                            render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, (((tp - 0.5) * 2.0) * 255.0) as u8);
+                            render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, ao((tp - 0.5) * 2.0));
                         }
                     }
                     TransitionKind::WipeLeft => {
                         let sx = rect.left() + (1.0 - tp) * rect.width();
                         if let Some(ref pt) = prev_tex {
                             let r = Rect::from_min_max(rect.min, Pos2::new(sx, rect.max.y));
-                            render_clip_frame(&ui.painter_at(r), pt, rect, uv_prev, sh_prev, 255);
+                            render_clip_frame(&ui.painter_at(r), pt, rect, uv_prev, sh_prev, po(1.0));
                         }
                         let r = Rect::from_min_max(Pos2::new(sx, rect.min.y), rect.max);
-                        render_clip_frame(&ui.painter_at(r), curr, rect, uv_curr, sh_curr, 255);
+                        render_clip_frame(&ui.painter_at(r), curr, rect, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::WipeRight => {
                         let sx = rect.left() + tp * rect.width();
                         let r_new = Rect::from_min_max(rect.min, Pos2::new(sx, rect.max.y));
                         let r_old = Rect::from_min_max(Pos2::new(sx, rect.min.y), rect.max);
                         if let Some(ref pt) = prev_tex {
-                            render_clip_frame(&ui.painter_at(r_old), pt, rect, uv_prev, sh_prev, 255);
+                            render_clip_frame(&ui.painter_at(r_old), pt, rect, uv_prev, sh_prev, po(1.0));
                         }
-                        render_clip_frame(&ui.painter_at(r_new), curr, rect, uv_curr, sh_curr, 255);
+                        render_clip_frame(&ui.painter_at(r_new), curr, rect, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::WipeUp => {
                         let sy = rect.top() + (1.0 - tp) * rect.height();
                         if let Some(ref pt) = prev_tex {
                             let r = Rect::from_min_max(rect.min, Pos2::new(rect.max.x, sy));
-                            render_clip_frame(&ui.painter_at(r), pt, rect, uv_prev, sh_prev, 255);
+                            render_clip_frame(&ui.painter_at(r), pt, rect, uv_prev, sh_prev, po(1.0));
                         }
                         let r = Rect::from_min_max(Pos2::new(rect.min.x, sy), rect.max);
-                        render_clip_frame(&ui.painter_at(r), curr, rect, uv_curr, sh_curr, 255);
+                        render_clip_frame(&ui.painter_at(r), curr, rect, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::WipeDown => {
                         let sy = rect.top() + tp * rect.height();
                         let r_new = Rect::from_min_max(rect.min, Pos2::new(rect.max.x, sy));
                         let r_old = Rect::from_min_max(Pos2::new(rect.min.x, sy), rect.max);
                         if let Some(ref pt) = prev_tex {
-                            render_clip_frame(&ui.painter_at(r_old), pt, rect, uv_prev, sh_prev, 255);
+                            render_clip_frame(&ui.painter_at(r_old), pt, rect, uv_prev, sh_prev, po(1.0));
                         }
-                        render_clip_frame(&ui.painter_at(r_new), curr, rect, uv_curr, sh_curr, 255);
+                        render_clip_frame(&ui.painter_at(r_new), curr, rect, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::SlideLeft => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
                             let c = rect.translate(Vec2::new(-tp * rect.width(), 0.0));
-                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, 255);
+                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, po(1.0));
                         }
                         let c = rect.translate(Vec2::new((1.0 - tp) * rect.width(), 0.0));
-                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
+                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::SlideRight => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
                             let c = rect.translate(Vec2::new(tp * rect.width(), 0.0));
-                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, 255);
+                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, po(1.0));
                         }
                         let c = rect.translate(Vec2::new(-(1.0 - tp) * rect.width(), 0.0));
-                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
+                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::SlideUp => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
                             let c = rect.translate(Vec2::new(0.0, -tp * rect.height()));
-                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, 255);
+                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, po(1.0));
                         }
                         let c = rect.translate(Vec2::new(0.0, (1.0 - tp) * rect.height()));
-                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
+                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, ao(1.0));
                     }
                     TransitionKind::SlideDown => {
                         let p = ui.painter_at(rect);
                         if let Some(ref pt) = prev_tex {
                             let c = rect.translate(Vec2::new(0.0, tp * rect.height()));
-                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, 255);
+                            render_clip_frame(&p, pt, c, uv_prev, sh_prev, po(1.0));
                         }
                         let c = rect.translate(Vec2::new(0.0, -(1.0 - tp) * rect.height()));
-                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, 255);
+                        render_clip_frame(&p, curr, c, uv_curr, sh_curr, ao(1.0));
                     }
                 }
             } else {
-                render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, 255);
+                render_clip_frame(&painter, curr, rect, uv_curr, sh_curr, ao(1.0));
             }
 
             if is_extracting {
@@ -495,6 +502,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                 kind: c.kind.clone(),
                 zoom_enabled: c.zoom_enabled,
                 shake_enabled: c.shake_enabled,
+                opacity: c.opacity,
             })
             .collect();
 
@@ -523,7 +531,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         is_ov_img && item.zoom_enabled));
                     let ov_shake = shake_uv(item.t_off, &settings,
                         is_ov_img && item.shake_enabled);
-                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, 255);
+                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, (item.opacity.clamp(0.0, 1.0) * 255.0) as u8);
                 }
             }
         }
