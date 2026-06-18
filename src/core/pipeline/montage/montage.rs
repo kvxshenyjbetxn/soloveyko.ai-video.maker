@@ -529,6 +529,10 @@ pub fn run_montage(
     let mut overlay_items: Vec<OverlayItem> = Vec::new();
     let mut overlay_input_paths: Vec<(String, bool)> = Vec::new();
 
+    // Вищий трек (менший track_idx) = візуально вище = рендериться ОСТАННІМ (поверх усіх).
+    // Тому сортуємо: спочатку більший track_idx (нижній), потім менший (верхній).
+    overlay_tracks.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
+
     for track in &overlay_tracks {
         for seg in &track.segments {
             let media_path_str = match &seg.media {

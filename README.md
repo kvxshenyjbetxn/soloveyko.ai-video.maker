@@ -90,7 +90,7 @@ src/
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
 │       ├── montage/
 │       │   ├── mod.rs           — реекспорт run_montage
-│       │   ├── montage.rs       — run_montage: збірка фінального відео через FFmpeg filter_complex_script; overlay-кліпи підтримують `opacity`: при значенні < 1.0 додається фільтр `colorchannelmixer=aa=<opacity>` після `format=yuva420p` — альфа-канал множиться перед накладанням; opacity основної доріжки (V1) в FFmpeg не застосовується (лише у превью)
+│       │   ├── montage.rs       — run_montage: збірка фінального відео через FFmpeg filter_complex_script; overlay-кліпи підтримують `opacity`: при значенні < 1.0 додається фільтр `colorchannelmixer=aa=<opacity>` після `format=yuva420p` — альфа-канал множиться перед накладанням; opacity основної доріжки (V1) в FFmpeg не застосовується (лише у превью); overlay-доріжки сортуються по спадаючому `track_idx` перед побудовою ланцюжка — нижчий track_idx (вища доріжка візуально) рендериться останнім і лишається поверх
 │       │   └── trigger.rs       — OverlayTrigger структура; find_text_timing: нечіткий пошук фрази у ASS/SRT субтитрах для визначення часу накладки
 │       ├── agent_prompts.rs     — VIDEO_AGENT_SYSTEM_PROMPT: зашита системна інструкція для CLI-агента відеоряду (формат timeline.json, правила запису); плейсхолдери {{srt}}/{{path}} замінюються перед відправкою; редагуй тільки цей файл щоб змінити поведінку агента
 │       ├── capcut/
@@ -302,7 +302,7 @@ src/
 
 **Багатодоріжкове накладання (Overlay compositing):**
 
-Доріжка 0 (`track_idx=0`) — базова: рендериться першою з переходами між кліпами. Доріжки 1+ — overlay: рендеруються поверх базової в порядку зростання `track_idx`. Кожна overlay-доріжка незалежна від базової.
+Доріжка 0 (`track_idx=0`) — базова: рендериться першою з переходами між кліпами. Доріжки 1+ — overlay: рендеруються поверх базової в порядку **спадання** `track_idx` — тобто вища доріжка у таймлінії (менший `track_idx`) має більший пріоритет і виявляється поверх нижчих. Кожна overlay-доріжка незалежна від базової.
 
 - **`OverlayRenderItem`** — проміжна структура для передачі даних з borrow-safe zone у цикл рендерингу: `path, t_off, scale, pos_x, pos_y, duration, kind, zoom_enabled, shake_enabled`. Формується до циклу (вся borrowing на `editor`) і потім використовується без доступу до `editor`.
 - **Позиціонування overlay-кліпів:** `clip_w = rect.width() * scale`, `clip_cx = rect.center().x + pos_x * rect.width() / 2.0`. Тобто `pos_x/pos_y` — нормалізовані координати відносно розміру прев'ю, де `0.0` = центр, `±1.0` = край.

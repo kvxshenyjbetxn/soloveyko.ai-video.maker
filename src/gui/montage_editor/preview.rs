@@ -492,7 +492,8 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             .filter(|c| c.track_idx > 0 && c.path.is_some())
             .filter(|c| c.start_secs <= ph && ph < c.end_secs())
             .collect();
-        ov_sorted.sort_by_key(|c| c.track_idx);
+        // Менший track_idx = вищий в таймлінії = рендериться поверх → сортуємо спадно.
+        ov_sorted.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
         let overlay_data: Vec<OverlayRenderItem> = ov_sorted.iter()
             .map(|c| OverlayRenderItem {
                 path: c.path.clone().unwrap(),
