@@ -195,6 +195,8 @@ pub struct ClipDragState {
     pub initial_duration: f32,
     pub initial_mouse_x: f32,
     pub initial_track_idx: usize,
+    /// Позиція лінії снапу (секунди), якщо кліп приліп до чогось
+    pub snap_line_secs: Option<f32>,
 }
 
 // ─── Кліп на таймлінії ───────────────────────────────────────────────────────

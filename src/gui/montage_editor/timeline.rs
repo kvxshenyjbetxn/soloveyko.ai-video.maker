@@ -400,6 +400,7 @@ pub(super) fn draw_timeline(
                             initial_duration: clip.duration,
                             initial_mouse_x: pos.x,
                             initial_track_idx: clip.track_idx,
+                            snap_line_secs: None,
                         });
                         editor.selected_clip_id = Some(clip.id.clone());
                     }
@@ -619,6 +620,33 @@ pub(super) fn draw_timeline(
                 });
                 if !hit { editor.selected_clip_id = None; }
             }
+
+            // ─── Візуальна лінія снапу при перетягуванні ──────────────
+            if let Some(ref drag) = editor.clip_drag_state {
+                if let Some(snap_secs) = drag.snap_line_secs {
+                    let snap_x = rect.left() + snap_secs * zoom;
+                    if snap_x >= rect.left() && snap_x <= rect.right() {
+                        let top_y = rect.top() + ruler_h;
+                        let total_rows = editor.num_tracks + if has_vo { 1 } else { 0 };
+                        let bottom_y = top_y + total_rows as f32 * (track_h + 2.0) + 4.0;
+                        let snap_color = Color32::from_rgb(255, 182, 72);
+                        painter.line_segment(
+                            [Pos2::new(snap_x, top_y), Pos2::new(snap_x, bottom_y)],
+                            Stroke::new(2.0, snap_color.gamma_multiply(0.5)),
+                        );
+                        let mut y = top_y;
+                        let step = 8.0;
+                        while y < bottom_y {
+                            let seg_end = (y + step * 0.5).min(bottom_y);
+                            painter.line_segment(
+                                [Pos2::new(snap_x, y), Pos2::new(snap_x, seg_end)],
+                                Stroke::new(1.5, snap_color),
+                            );
+                            y += step;
+                        }
+                    }
+                }
+            }
         });
 
         // Sticky лейбли доріжок — малюємо поверх через painter з урахуванням vertical offset
@@ -743,6 +771,7 @@ fn update_clip_drag(
             initial_duration: d.initial_duration,
             initial_mouse_x: d.initial_mouse_x,
             initial_track_idx: d.initial_track_idx,
+            snap_line_secs: d.snap_line_secs,
         },
         None => return,
     };
@@ -774,27 +803,42 @@ fn update_clip_drag(
     let clip_dur = drag.initial_duration;
     let raw_end = raw_start + clip_dur;
 
-    // Магнітний snap до сусідніх кліпів
-    let snap_threshold = 8.0 / zoom;
+    // Магнітний snap до сусідніх кліпів + плейхеда
+    let snap_threshold = 10.0 / zoom; // ~10 px
     let mut best_snap: Option<f32> = None;
     let mut best_dist = snap_threshold;
+    let mut snap_is_end = false; // true якщо снап по кінцю кліпу
+
+    // Snap до плейхеда (початок або кінець кліпу)
+    let ph = editor.playhead;
+    let d_ph_start = (raw_start - ph).abs();
+    if d_ph_start < best_dist { best_dist = d_ph_start; best_snap = Some(ph); snap_is_end = false; }
+    let d_ph_end = (raw_end - ph).abs();
+    if d_ph_end < best_dist { best_dist = d_ph_end; best_snap = Some((ph - clip_dur).max(0.0)); snap_is_end = true; }
 
     for (i, other) in editor.clips.iter().enumerate() {
         if i == clip_idx { continue; }
+        // Снап тільки в межах тієї ж доріжки
+        if other.track_idx != new_track { continue; }
 
         let other_end = other.start_secs + other.duration;
 
+        // Початок кліпу до кінця іншого (стиковка)
         let d1 = (raw_start - other_end).abs();
-        if d1 < best_dist { best_dist = d1; best_snap = Some(other_end); }
-
+        if d1 < best_dist { best_dist = d1; best_snap = Some(other_end); snap_is_end = false; }
+        // Початок кліпу до початку іншого (вирівнювання)
         let d2 = (raw_start - other.start_secs).abs();
-        if d2 < best_dist { best_dist = d2; best_snap = Some(other.start_secs); }
-
+        if d2 < best_dist { best_dist = d2; best_snap = Some(other.start_secs); snap_is_end = false; }
+        // Кінець кліпу до початку іншого (стиковка справа)
         let d3 = (raw_end - other.start_secs).abs();
-        if d3 < best_dist { best_dist = d3; best_snap = Some((other.start_secs - clip_dur).max(0.0)); }
+        if d3 < best_dist { best_dist = d3; best_snap = Some((other.start_secs - clip_dur).max(0.0)); snap_is_end = true; }
     }
 
+    // Візуальний індикатор снапу — позиція на таймлінії де краї збігаються
     let snapped_start = best_snap.unwrap_or(raw_start);
+    if let Some(ref mut ds) = editor.clip_drag_state {
+        ds.snap_line_secs = best_snap.map(|s| if snap_is_end { s + clip_dur } else { s });
+    }
 
     let clip = &mut editor.clips[clip_idx];
     match drag.mode {
