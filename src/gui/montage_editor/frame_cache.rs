@@ -217,8 +217,8 @@ impl FrameCache {
     }
 
     /// Повертає найближчий вже готовий кадр цієї якості.
-    /// Важливо: не беремо довільний останній кадр з майбутнього — саме це давало
-    /// стрибки/тремтіння після перемотування назад і старту playback.
+    /// Шукає в обох напрямках — це прибирає мерехтіння при скрабінгу назад,
+    /// коли кеш містить кадри "попереду" поточної позиції плейхеду.
     fn cached_near_frame(
         &self,
         media: &MediaItem,
@@ -232,12 +232,8 @@ impl FrameCache {
             .rev()
             .filter_map(|key| {
                 let idx = Self::frame_index_from_key(&prefix, key)?;
-                // Для playback краще тримати попередній кадр, ніж стрибати вперед.
-                if idx <= frame_idx && frame_idx - idx <= max_distance {
-                    Some((frame_idx - idx, key))
-                } else {
-                    None
-                }
+                let dist = if idx <= frame_idx { frame_idx - idx } else { idx - frame_idx };
+                if dist <= max_distance { Some((dist, key)) } else { None }
             })
             .min_by_key(|(distance, _)| *distance)
             .and_then(|(_, key)| self.textures.get(key))
@@ -303,9 +299,9 @@ impl FrameCache {
         self.request_first_frame_if_needed(ctx, media, frame_idx, settings);
         ctx.request_repaint();
 
-        // Фолбек тільки на близький попередній scrub-кадр. Не використовуємо sharp
-        // або далекий кадр з іншого часу, щоб не було візуального тремтіння.
-        let max_distance = (settings.fps / 6.0).ceil().max(2.0) as u32;
+        // Фолбек на найближчий кадр (в будь-який бік) поки async-завантаження не завершилось.
+        // fps/3 ≈ 8-10 кадрів — достатньо для плавного скрабінгу в обидва боки.
+        let max_distance = (settings.fps / 3.0).ceil().max(3.0) as u32;
         self.cached_near_frame(media, frame_idx, FrameQuality::Scrub, max_distance)
     }
 
