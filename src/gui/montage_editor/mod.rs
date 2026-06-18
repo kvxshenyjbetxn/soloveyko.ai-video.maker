@@ -15,6 +15,7 @@ pub use types::{
     PreviewQuality, PreviewRenderSettings,
 };
 pub use media::MediaItem;
+pub use frame_cache::FrameCache;
 pub use audio::{AudioPlayer, PlayingAudio};
 pub use state::MontageEditorState;
 

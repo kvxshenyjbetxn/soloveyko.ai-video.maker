@@ -2260,11 +2260,16 @@ impl eframe::App for VideoMakerApp {
         if let Some(seg_idx) = montage_actions.open_stock_picker {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                    let picker_render = crate::gui::montage_editor::PreviewRenderSettings {
+                        quality: crate::gui::montage_editor::PreviewQuality::from_storage(&self.preview_quality),
+                        fps: self.preview_fps.max(15.0).min(60.0),
+                    };
                     if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
                         job.settings.save_path.clone(),
                         job.settings.pexels_key.clone(),
                         job.settings.pixabay_key.clone(),
                         job.settings.video_service.clone(),
+                        picker_render,
                     ) {
                         state.active_segment = seg_idx;
                         state.edit_keyword = state.cache.get(seg_idx)
