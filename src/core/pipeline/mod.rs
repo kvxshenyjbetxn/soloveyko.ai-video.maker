@@ -2938,41 +2938,18 @@ pub fn find_changed_prompts_for_rebuild(
         .and_then(|c| serde_json::from_str::<Vec<String>>(&c).ok())
         .unwrap_or_default();
 
-    let mut files: Vec<String> = std::fs::read_dir(&media_dir)
-        .ok().into_iter().flatten()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            let name = e.file_name();
-            let s = name.to_string_lossy();
-            let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
-            matches!(ext.as_str(), "jpg"|"jpeg"|"png"|"webp"|"gif"|"mp4"|"mov"|"webm")
-        })
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
-    files.sort();
-
-    if files.is_empty() {
-        return vec![];
-    }
-
-    let n_segs = new_texts.len();
-    let n_files = files.len();
     let mut changed = vec![];
 
     for (i, new_text) in new_texts.iter().enumerate() {
         if new_text.trim().is_empty() { continue; }
 
-        let file_idx = if n_files <= n_segs {
-            (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
-        } else {
-            i.min(n_files - 1)
-        };
-
         let old_text = old_texts.get(i).map(|s| s.as_str()).unwrap_or("");
 
         if new_text.trim() != old_text.trim() {
-            if let Some(filename) = files.get(file_idx) {
-                let file_path = media_dir.join(filename);
+            // Використовуємо реальний шлях медіа з сегменту, а не сортований індекс файлу.
+            // Якщо media == null (агент не зберіг шляхи) — не регенеруємо нічого.
+            if let Some(media_str) = segs[i]["media"].as_str() {
+                let file_path = save_dir.join(media_str);
                 if file_path.exists() {
                     // Будуємо повний промт так само як при початковій генерації
                     let full_prompt = if video_style_enabled && !video_style_prompt.is_empty() {

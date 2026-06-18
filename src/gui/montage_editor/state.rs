@@ -372,8 +372,11 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
 
     // Доріжка 0 з "segments"
     if let Some(segs) = v["segments"].as_array() {
-        // Збираємо медіафайли для відновлення null-media сегментів
-        // (агент міг випадково прибрати шляхи при редагуванні таймінгів)
+        // stock_cache.json для відновлення медіа в режимі стоків (пріоритет над індексним маппінгом)
+        let stock_cache = crate::api::stock::load_cache(save_path);
+
+        // Збираємо медіафайли для fallback-відновлення null-media сегментів
+        // (використовується тільки коли немає stock_cache і немає медіа в сегменті)
         let media_dir = save_path.join("media");
         let recovery_files: Vec<String> = if media_dir.exists() {
             let mut files: Vec<String> = std::fs::read_dir(&media_dir)
@@ -399,7 +402,24 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
             let media_str = seg["media"].as_str().map(|s| s.to_string())
                 .or_else(|| {
                     // Відновлення лише для pipeline-формату (є поле "text"), не для редакторських gap-сегментів
-                    if seg["text"].as_str().is_none() || n_files == 0 { return None; }
+                    if seg["text"].as_str().is_none() { return None; }
+
+                    // Режим стоків: якщо stock_cache.json існує — він є єдиним джерелом медіа.
+                    // Сегменти без вибраного стоку залишаються плейсхолдерами (не беремо перший з пулу).
+                    if let Some(ref cache) = stock_cache {
+                        if let Some(entry) = cache.get(i) {
+                            if let Some(sel) = &entry.selected {
+                                let fp = format!("media/{}", sel.filename);
+                                if save_path.join(&fp).exists() {
+                                    return Some(fp);
+                                }
+                            }
+                        }
+                        return None; // stocks-режим, але медіа ще не вибрано — плейсхолдер
+                    }
+
+                    // Fallback (не stocks-режим): пропорційний індексний маппінг (для 0001.jpg…)
+                    if n_files == 0 { return None; }
                     let file_idx = if n_files <= n_segs {
                         (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
                     } else {
