@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::{
@@ -74,6 +74,8 @@ pub struct MontageEditorState {
     pub pending_preview_render: Option<PreviewRenderSettings>,
     /// Стан drag смужки прозорості кліпу
     pub opacity_drag: Option<OpacityDragState>,
+    /// Кеш мініатюр для медіа-пулу та таймлайну (media_id → текстура першого кадру)
+    pub pool_thumbnails: HashMap<String, eframe::egui::TextureHandle>,
 }
 
 impl MontageEditorState {
@@ -164,6 +166,7 @@ impl MontageEditorState {
             input_blocked: false,
             pending_preview_render: None,
             opacity_drag: None,
+            pool_thumbnails: HashMap::new(),
         }
     }
 

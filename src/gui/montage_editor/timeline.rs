@@ -347,6 +347,29 @@ pub(super) fn draw_timeline(
                 }
 
                 let handle_w = 6.0;
+
+                // ─── Thumbnail першого кадру ─────────────────────────────────
+                if !is_anim && !matches!(clip.kind, ClipKind::Audio) && cw > 32.0 {
+                    if let Some(texture) = editor.pool_thumbnails.get(&clip.media_id) {
+                        let tex_size = texture.size_vec2();
+                        if tex_size.x > 0.0 && tex_size.y > 0.0 {
+                            let th = clip_rect.height() - 4.0; // висота thumbnail
+                            let tw = (th * tex_size.x / tex_size.y).min(cw - handle_w * 2.0 - 2.0);
+                            let img_rect = Rect::from_min_size(
+                                Pos2::new(clip_rect.left() + handle_w + 1.0, clip_rect.top() + 2.0),
+                                Vec2::new(tw, th),
+                            );
+                            painter.image(
+                                texture.id(),
+                                img_rect,
+                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                // Напівпрозорий щоб фонова кольорова заливка та текст залишались читабельними
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 180),
+                            );
+                        }
+                    }
+                }
+
                 let handle_col = if is_sel { Color32::WHITE } else { accent.linear_multiply(0.6) };
                 painter.rect_filled(
                     Rect::from_min_size(clip_rect.min, Vec2::new(handle_w, clip_rect.height())),
