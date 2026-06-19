@@ -380,13 +380,18 @@ fn run_whisper_amd(
     let save_dir = std::path::Path::new(&settings.save_path);
     let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
     if !model_path.exists() {
-        let msg = format!(
-            "Subtitles error: model '{}' not found. Download it in the subtitles settings.",
-            settings.whisper_model
-        );
-        crate::logger::log_job(job_id, job_name, &msg);
-        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-        return Err(msg);
+        crate::logger::log_job(job_id, job_name, &format!(
+            "Model '{}' not found — downloading...", settings.whisper_model
+        ));
+        if let Err(e) = crate::bundle::download_whisper_model(&settings.whisper_model, |label| {
+            crate::logger::log_job(job_id, job_name, &label);
+        }) {
+            let msg = format!("Subtitles error: failed to download model '{}': {}", settings.whisper_model, e);
+            crate::logger::log_job(job_id, job_name, &msg);
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            return Err(msg);
+        }
+        crate::logger::log_job(job_id, job_name, &format!("Model '{}' downloaded.", settings.whisper_model));
     }
 
     let audio_path = if save_dir.join("voice.wav").exists() {
@@ -472,13 +477,20 @@ fn run_subtitles_only(
     subtitles_stage: &Arc<Mutex<crate::queue::StageStatus>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
-    if settings.subtitles_service == "WhisperX" {
+    // На non-Windows WhisperAMD недоступний — використовуємо Whisper як запасний варіант
+    let effective_service: &str = if !cfg!(target_os = "windows") && settings.subtitles_service == "WhisperAMD" {
+        "Whisper"
+    } else {
+        &settings.subtitles_service
+    };
+
+    if effective_service == "WhisperX" {
         run_whisperx(settings, job_id, job_name, subtitles_stage, ctx)?;
-    } else if settings.subtitles_service == "AssemblyAI" {
+    } else if effective_service == "AssemblyAI" {
         run_assemblyai(settings, job_id, job_name, subtitles_stage, ctx)?;
-    } else if settings.subtitles_service == "WhisperAMD" {
+    } else if effective_service == "WhisperAMD" {
         run_whisper_amd(settings, job_id, job_name, subtitles_stage, ctx)?;
-    } else if settings.subtitles_service == "Whisper" {
+    } else if effective_service == "Whisper" {
         let reason = if settings.subtitles_enabled {
             "Starting subtitle generation via Whisper (burn-in enabled)..."
         } else {
@@ -491,13 +503,18 @@ fn run_subtitles_only(
         let save_dir = std::path::Path::new(&settings.save_path);
         let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
         if !model_path.exists() {
-            let msg = format!(
-                "Subtitles error: model '{}' not found at '{}'. Download it in the subtitles settings.",
-                settings.whisper_model, model_path.display()
-            );
-            crate::logger::log_job(job_id, job_name, &msg);
-            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-            return Err(msg);
+            crate::logger::log_job(job_id, job_name, &format!(
+                "Model '{}' not found — downloading...", settings.whisper_model
+            ));
+            if let Err(e) = crate::bundle::download_whisper_model(&settings.whisper_model, |label| {
+                crate::logger::log_job(job_id, job_name, &label);
+            }) {
+                let msg = format!("Subtitles error: failed to download model '{}': {}", settings.whisper_model, e);
+                crate::logger::log_job(job_id, job_name, &msg);
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                return Err(msg);
+            }
+            crate::logger::log_job(job_id, job_name, &format!("Model '{}' downloaded.", settings.whisper_model));
         }
 
         let audio_path = if save_dir.join("voice.wav").exists() {
