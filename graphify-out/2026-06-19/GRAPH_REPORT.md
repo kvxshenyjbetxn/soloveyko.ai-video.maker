@@ -1,16 +1,16 @@
-# Graph Report - soloveyko.ai-video.maker  (2026-06-19)
+# Graph Report - soloveyko.ai-video.maker  (2026-06-18)
 
 ## Corpus Check
-- 97 files · ~210,745 words
+- 97 files · ~210,667 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1473 nodes · 2909 edges · 83 communities (78 shown, 5 thin omitted)
+- 1473 nodes · 2909 edges · 87 communities (82 shown, 5 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 98 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e1d02965`
+- Built from commit: `5ba83b16`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -60,6 +60,9 @@
 - [[_COMMUNITY_Montage Editor Timeline|Montage Editor Timeline]]
 - [[_COMMUNITY_Montage Montage|Montage Montage]]
 - [[_COMMUNITY_Montage Trigger|Montage Trigger]]
+- [[_COMMUNITY_Pipeline Translation|Pipeline Translation]]
+- [[_COMMUNITY_Src Core Pipeline Voiceover Voiceover Rs Jobsettings|Src Core Pipeline Voiceover Voiceover Rs Jobsettings]]
+- [[_COMMUNITY_Pipeline Api|Pipeline Api]]
 - [[_COMMUNITY_Pipeline Voiceover|Pipeline Voiceover]]
 - [[_COMMUNITY_Settings Storage Clean Numeric Param|Settings Storage Clean Numeric Param]]
 - [[_COMMUNITY_Montage Editor Audio|Montage Editor Audio]]
@@ -68,6 +71,7 @@
 - [[_COMMUNITY_Gui Subtitle Fonts|Gui Subtitle Fonts]]
 - [[_COMMUNITY_Gui Task History|Gui Task History]]
 - [[_COMMUNITY_Capcut Project Format Md Draft Content|Capcut Project Format Md Draft Content]]
+- [[_COMMUNITY_Gui Update Dialog|Gui Update Dialog]]
 - [[_COMMUNITY_Pipeline Templates|Pipeline Templates]]
 - [[_COMMUNITY_Icondata|Icondata]]
 - [[_COMMUNITY_Montage Editor Topbar|Montage Editor Topbar]]
@@ -99,8 +103,6 @@
 10. `draw_pipeline_panel()` - 22 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `draw_resume_dialog()` --calls--> `translate()`  [INFERRED]
-  src/gui/pipeline/resume.rs → src/localization/mod.rs
 - `call_claude_code_new_session_streaming()` --calls--> `log()`  [INFERRED]
   src/api/claude.rs → src/logger.rs
 - `call_claude_code_resume()` --calls--> `log()`  [INFERRED]
@@ -108,6 +110,8 @@
 - `call_claude_code()` --calls--> `log()`  [INFERRED]
   src/api/claude.rs → src/logger.rs
 - `call_codex_new_session_streaming()` --calls--> `log()`  [INFERRED]
+  src/api/codex.rs → src/logger.rs
+- `call_codex_resume()` --calls--> `log()`  [INFERRED]
   src/api/codex.rs → src/logger.rs
 
 ## Import Cycles
@@ -137,7 +141,7 @@
 - **CapCut Project File Set — draft_content + draft_meta_info + timelines/project** — capcut_project_format_md_draft_content, capcut_project_format_md_draft_meta_info, capcut_project_format_md_timelines_project, capcut_project_format_md_generation_schema [EXTRACTED 1.00]
 - **Pipeline Template Save/Load Cycle — PipelineTemplate + save_template + load_template** — claude_md_pipeline_template, claude_md_save_template, claude_md_load_template [EXTRACTED 1.00]
 
-## Communities (83 total, 5 thin omitted)
+## Communities (87 total, 5 thin omitted)
 
 ### Community 0 - "Stock Media Picker"
 Cohesion: 0.07
@@ -237,7 +241,7 @@ Nodes (15): FfmpegDownload, BinaryDownload, draw_download_row(), draw_tool_row()
 
 ### Community 24 - "Pipeline Resume"
 Cohesion: 0.21
-Nodes (17): Context, JobSettings, Language, Option, Path, draw_resume_dialog(), enqueue_fill_missing(), enqueue_fresh() (+9 more)
+Nodes (17): draw_resume_dialog(), enqueue_fill_missing(), enqueue_fresh(), enqueue_with_resume(), FoundFiles, pre_mark_stages(), ResumePendingData, Context (+9 more)
 
 ### Community 25 - "Agypermit"
 Cohesion: 0.16
@@ -296,8 +300,8 @@ Cohesion: 0.15
 Nodes (10): Display, Formatter, Language, translate(), draw_control_section(), Language, Ui, Default (+2 more)
 
 ### Community 39 - "Montage Editor Media Pool"
-Cohesion: 0.05
-Nodes (55): draw_update_dialog(), draw_media_pool(), load_thumb_texture(), draw_api_section(), draw_model_selector(), draw_translation_section(), ModelsResponse, OpenRouterModel (+47 more)
+Cohesion: 0.19
+Nodes (13): draw_media_pool(), load_thumb_texture(), Arc, Context, HashSet, Language, MontageEditorState, Mutex (+5 more)
 
 ### Community 40 - "Settings Storage Append To Task History"
 Cohesion: 0.22
@@ -318,6 +322,18 @@ Nodes (12): build_image_filter_parts(), find_voice_file(), pick_transition(), ru
 ### Community 44 - "Montage Trigger"
 Cohesion: 0.28
 Nodes (12): ass_time_to_secs(), find_text_timing(), is_word_similar(), levenshtein(), normalize(), OverlayTrigger, remove_ass_tags(), srt_time_to_secs() (+4 more)
+
+### Community 45 - "Pipeline Translation"
+Cohesion: 0.27
+Nodes (12): draw_model_selector(), draw_translation_section(), ModelsResponse, OpenRouterModel, Arc, Language, Mutex, Option (+4 more)
+
+### Community 46 - "Src Core Pipeline Voiceover Voiceover Rs Jobsettings"
+Cohesion: 0.40
+Nodes (12): JobSettings, Path, PathBuf, Result, String, Vec, merge_audio_binary(), merge_audio_ffmpeg() (+4 more)
+
+### Community 47 - "Pipeline Api"
+Cohesion: 0.17
+Nodes (11): draw_api_section(), Send, Arc, GooglerBalance, Language, Mutex, Option, String (+3 more)
 
 ### Community 48 - "Pipeline Voiceover"
 Cohesion: 0.20
@@ -350,6 +366,10 @@ Nodes (8): draw_task_history_panel(), format_ts(), stage_dots(), Language, Optio
 ### Community 55 - "Capcut Project Format Md Draft Content"
 Cohesion: 0.39
 Nodes (8): draft_content.json — CapCut Main Timeline File, draft_meta_info.json — CapCut Media Pool Metadata, CapCut Project Generation Schema — Steps to Build Project from timeline.json, CapCut materials{} — Video/Audio/Aux Material Objects, CapCut segments[] — Clip Placement on Timeline, CapCut Time Units — Microseconds as Base Unit, Timelines/project.json — CapCut Timeline Registry, CapCut tracks[] — Timeline Track Structure
+
+### Community 56 - "Gui Update Dialog"
+Cohesion: 0.29
+Nodes (7): draw_update_dialog(), Arc, Context, Language, Mutex, Option, UpdateInfo
 
 ### Community 57 - "Pipeline Templates"
 Cohesion: 0.25
@@ -400,22 +420,22 @@ Cohesion: 1.00
 Nodes (3): Pixabay API Response Schema — hits, totalHits, image/video URLs, Pixabay Search Images API, Pixabay Search Videos API
 
 ## Knowledge Gaps
-- **390 isolated node(s):** `Path`, `Context`, `Language`, `graphify`, `Mutex` (+385 more)
+- **390 isolated node(s):** `graphify`, `Mutex`, `Condvar`, `Self`, `AgyPermit` (+385 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Sync` connect `Montage Editor Media Pool` to `Stock Media Picker`, `Claude API Client`, `Pipeline Orchestration`, `Googler Agent API`, `Video Generation UI`, `Edge TTS Service`, `AssemblyAI Transcription`, `Codex CLI Client`, `VoiceBot TTS Service`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Agypermit`, `Api Openrouter`, `Gallery Video Player`, `Montage Editor Mod`, `Src Queue`, `Pipeline Subtitles`, `Api Ffmpeg`, `Api Updater`, `Montage Editor Timeline`, `Pipeline Voiceover`?**
-  _High betweenness centrality (0.406) - this node is a cross-community bridge._
-- **Why does `translate()` connect `Display` to `Stock Media Picker`, `Gallery UI Icons`, `Video Generation UI`, `Agent Chat Window`, `Topbar Balance UI`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Pipeline Resume`, `Gui Queue`, `Pipeline Subtitles`, `Pipeline Translation Control`, `Corebpe`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Pipeline Voiceover`, `Creationcontext`, `Gui Logs`, `Gui Task History`, `Pipeline Templates`, `Montage Editor Topbar`, `Pipeline Storage`, `Settings General`, `Montage Editor Inspector`, `Pipeline Editing`, `Pipelinetemplate`?**
-  _High betweenness centrality (0.381) - this node is a cross-community bridge._
+- **Why does `Sync` connect `Pipeline Api` to `Stock Media Picker`, `Claude API Client`, `Pipeline Orchestration`, `Googler Agent API`, `Video Generation UI`, `Edge TTS Service`, `AssemblyAI Transcription`, `Codex CLI Client`, `VoiceBot TTS Service`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Agypermit`, `Api Openrouter`, `Gallery Video Player`, `Montage Editor Mod`, `Src Queue`, `Pipeline Subtitles`, `Api Ffmpeg`, `Api Updater`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Pipeline Translation`, `Src Core Pipeline Voiceover Voiceover Rs Jobsettings`, `Pipeline Voiceover`, `Gui Update Dialog`?**
+  _High betweenness centrality (0.380) - this node is a cross-community bridge._
+- **Why does `translate()` connect `Display` to `Stock Media Picker`, `Gallery UI Icons`, `Video Generation UI`, `Agent Chat Window`, `Topbar Balance UI`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Pipeline Resume`, `Gui Queue`, `Pipeline Subtitles`, `Pipeline Translation Control`, `Corebpe`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Pipeline Translation`, `Pipeline Api`, `Pipeline Voiceover`, `Creationcontext`, `Gui Logs`, `Gui Task History`, `Gui Update Dialog`, `Pipeline Templates`, `Montage Editor Topbar`, `Pipeline Storage`, `Settings General`, `Montage Editor Inspector`, `Pipeline Editing`, `Pipelinetemplate`?**
+  _High betweenness centrality (0.331) - this node is a cross-community bridge._
 - **Why does `save_settings()` connect `Settings Storage Clean Numeric Param` to `Settings Storage Append To Task History`, `Creationcontext`, `Settings & Storage`?**
-  _High betweenness centrality (0.131) - this node is a cross-community bridge._
+  _High betweenness centrality (0.101) - this node is a cross-community bridge._
 - **Are the 49 inferred relationships involving `translate()` (e.g. with `draw_media_regen_window()` and `draw_gallery_tab()`) actually correct?**
   _`translate()` has 49 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Path`, `Context`, `Language` to the rest of the system?**
+- **What connects `graphify`, `Mutex`, `Condvar` to the rest of the system?**
   _390 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Stock Media Picker` be split into smaller, more focused modules?**
   _Cohesion score 0.07243243243243243 - nodes in this community are weakly interconnected._

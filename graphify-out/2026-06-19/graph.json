@@ -50,244 +50,14 @@
   },
   "nodes": [
     {
-      "label": "resume.rs",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "pipeline_resume",
-      "community": 24,
-      "norm_label": "resume.rs"
-    },
-    {
-      "label": "FoundFiles",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L5",
-      "_origin": "ast",
-      "id": "pipeline_resume_foundfiles",
-      "community": 24,
-      "norm_label": "foundfiles"
-    },
-    {
-      "label": "Option",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L15",
-      "_origin": "ast",
-      "id": "option",
-      "community": 24,
-      "norm_label": "option"
-    },
-    {
-      "label": "ResumePendingData",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L20",
-      "_origin": "ast",
-      "id": "pipeline_resume_resumependingdata",
-      "community": 24,
-      "norm_label": "resumependingdata"
-    },
-    {
-      "label": "String",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L21",
-      "_origin": "ast",
-      "id": "string",
-      "community": 24,
-      "norm_label": "string"
-    },
-    {
-      "label": "JobSettings",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L23",
-      "_origin": "ast",
-      "id": "jobsettings",
-      "community": 24,
-      "norm_label": "jobsettings"
-    },
-    {
-      "label": ".new()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "_origin": "ast",
-      "id": "pipeline_resume_resumependingdata_new",
-      "community": 24,
-      "norm_label": ".new()"
-    },
-    {
-      "label": "Self",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "_origin": "ast",
-      "id": "self",
-      "community": 24,
-      "norm_label": "self"
-    },
-    {
-      "label": ".effective_resume_stage()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L44",
-      "_origin": "ast",
-      "id": "pipeline_resume_resumependingdata_effective_resume_stage",
-      "community": 24,
-      "norm_label": ".effective_resume_stage()"
-    },
-    {
-      "label": "RetryStage",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L44",
-      "_origin": "ast",
-      "id": "retrystage",
-      "community": 24,
-      "norm_label": "retrystage"
-    },
-    {
-      "label": ".scan()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L76",
-      "_origin": "ast",
-      "id": "pipeline_resume_foundfiles_scan",
-      "community": 24,
-      "norm_label": ".scan()"
-    },
-    {
-      "label": "Path",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L76",
-      "_origin": "ast",
-      "id": "path",
-      "community": 24,
-      "norm_label": "path"
-    },
-    {
-      "label": ".has_any()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L125",
-      "_origin": "ast",
-      "id": "pipeline_resume_foundfiles_has_any",
-      "community": 24,
-      "norm_label": ".has_any()"
-    },
-    {
-      "label": ".resume_stage()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L137",
-      "_origin": "ast",
-      "id": "pipeline_resume_foundfiles_resume_stage",
-      "community": 24,
-      "norm_label": ".resume_stage()"
-    },
-    {
-      "label": "draw_resume_dialog()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "_origin": "ast",
-      "id": "pipeline_resume_draw_resume_dialog",
-      "community": 24,
-      "norm_label": "draw_resume_dialog()"
-    },
-    {
-      "label": "Context",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "_origin": "ast",
-      "id": "context",
-      "community": 24,
-      "norm_label": "context"
-    },
-    {
-      "label": "Language",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "_origin": "ast",
-      "id": "language",
-      "community": 24,
-      "norm_label": "language"
-    },
-    {
-      "label": "Vec",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "_origin": "ast",
-      "id": "vec",
-      "community": 24,
-      "norm_label": "vec"
-    },
-    {
-      "label": "PipelineJob",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "_origin": "ast",
-      "id": "pipelinejob",
-      "community": 24,
-      "norm_label": "pipelinejob"
-    },
-    {
-      "label": "enqueue_with_resume()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L431",
-      "_origin": "ast",
-      "id": "pipeline_resume_enqueue_with_resume",
-      "community": 24,
-      "norm_label": "enqueue_with_resume()"
-    },
-    {
-      "label": "enqueue_fresh()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L518",
-      "_origin": "ast",
-      "id": "pipeline_resume_enqueue_fresh",
-      "community": 24,
-      "norm_label": "enqueue_fresh()"
-    },
-    {
-      "label": "enqueue_fill_missing()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L531",
-      "_origin": "ast",
-      "id": "pipeline_resume_enqueue_fill_missing",
-      "community": 24,
-      "norm_label": "enqueue_fill_missing()"
-    },
-    {
-      "label": "pre_mark_stages()",
-      "file_type": "code",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L574",
-      "_origin": "ast",
-      "id": "pipeline_resume_pre_mark_stages",
-      "community": 24,
-      "norm_label": "pre_mark_stages()"
-    },
-    {
       "label": "AGENTS.md",
       "file_type": "document",
       "source_file": "AGENTS.md",
       "source_location": "L1",
       "_origin": "ast",
+      "id": "agents",
       "community": 84,
-      "norm_label": "agents.md",
-      "id": "agents"
+      "norm_label": "agents.md"
     },
     {
       "label": "CLAUDE.md",
@@ -295,9 +65,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L1",
       "_origin": "ast",
+      "id": "claude",
       "community": 83,
-      "norm_label": "claude.md",
-      "id": "claude"
+      "norm_label": "claude.md"
     },
     {
       "label": "graphify",
@@ -305,9 +75,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L97",
       "_origin": "ast",
+      "id": "claude_graphify",
       "community": 83,
-      "norm_label": "graphify",
-      "id": "claude_graphify"
+      "norm_label": "graphify"
     },
     {
       "label": "build.rs",
@@ -2945,7 +2715,7 @@
       "source_file": "src/api/stock/mod.rs",
       "source_location": "L143",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "stockprovider",
       "id": "stock_mod_stockprovider"
     },
@@ -2955,7 +2725,7 @@
       "source_file": "src/api/stock/mod.rs",
       "source_location": "L143",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "send",
       "id": "src_api_stock_mod_rs_send"
     },
@@ -2965,7 +2735,7 @@
       "source_file": "src/api/stock/mod.rs",
       "source_location": "L143",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "sync",
       "id": "sync"
     },
@@ -6245,7 +6015,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "voiceover.rs",
       "id": "voiceover_voiceover"
     },
@@ -6255,7 +6025,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "run_voiceover_sync()",
       "id": "voiceover_voiceover_run_voiceover_sync"
     },
@@ -6265,7 +6035,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "jobsettings",
       "id": "src_core_pipeline_voiceover_voiceover_rs_jobsettings"
     },
@@ -6275,7 +6045,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "result",
       "id": "src_core_pipeline_voiceover_voiceover_rs_result"
     },
@@ -6285,7 +6055,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "string",
       "id": "src_core_pipeline_voiceover_voiceover_rs_string"
     },
@@ -6295,7 +6065,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "run_voicebot_voiceover()",
       "id": "voiceover_voiceover_run_voicebot_voiceover"
     },
@@ -6305,7 +6075,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L78",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "run_edge_tts_voiceover()",
       "id": "voiceover_voiceover_run_edge_tts_voiceover"
     },
@@ -6315,7 +6085,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L262",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "split_text_by_chunks()",
       "id": "voiceover_voiceover_split_text_by_chunks"
     },
@@ -6325,7 +6095,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L262",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "vec",
       "id": "src_core_pipeline_voiceover_voiceover_rs_vec"
     },
@@ -6335,7 +6105,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L314",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "merge_audio_ffmpeg()",
       "id": "voiceover_voiceover_merge_audio_ffmpeg"
     },
@@ -6345,7 +6115,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L314",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "pathbuf",
       "id": "src_core_pipeline_voiceover_voiceover_rs_pathbuf"
     },
@@ -6355,7 +6125,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L314",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "path",
       "id": "src_core_pipeline_voiceover_voiceover_rs_path"
     },
@@ -6365,7 +6135,7 @@
       "source_file": "src/core/pipeline/voiceover/voiceover.rs",
       "source_location": "L369",
       "_origin": "ast",
-      "community": 39,
+      "community": 46,
       "norm_label": "merge_audio_binary()",
       "id": "voiceover_voiceover_merge_audio_binary"
     },
@@ -10015,7 +9785,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "api.rs",
       "id": "pipeline_api"
     },
@@ -10025,7 +9795,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "draw_api_section()",
       "id": "pipeline_api_draw_api_section"
     },
@@ -10035,7 +9805,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "ui",
       "id": "src_gui_pipeline_api_rs_ui"
     },
@@ -10045,7 +9815,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "language",
       "id": "src_gui_pipeline_api_rs_language"
     },
@@ -10055,7 +9825,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "string",
       "id": "src_gui_pipeline_api_rs_string"
     },
@@ -10065,7 +9835,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "option",
       "id": "src_gui_pipeline_api_rs_option"
     },
@@ -10075,7 +9845,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "arc",
       "id": "src_gui_pipeline_api_rs_arc"
     },
@@ -10085,7 +9855,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "mutex",
       "id": "src_gui_pipeline_api_rs_mutex"
     },
@@ -10095,7 +9865,7 @@
       "source_file": "src/gui/pipeline/api.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 47,
       "norm_label": "googlerbalance",
       "id": "src_gui_pipeline_api_rs_googlerbalance"
     },
@@ -10430,6 +10200,236 @@
       "id": "pipeline_mod_validate_and_enqueue"
     },
     {
+      "label": "resume.rs",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "resume.rs",
+      "id": "pipeline_resume"
+    },
+    {
+      "label": "FoundFiles",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "foundfiles",
+      "id": "pipeline_resume_foundfiles"
+    },
+    {
+      "label": "Option",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "option",
+      "id": "src_gui_pipeline_resume_rs_option"
+    },
+    {
+      "label": "ResumePendingData",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "resumependingdata",
+      "id": "pipeline_resume_resumependingdata"
+    },
+    {
+      "label": "String",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L21",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "string",
+      "id": "src_gui_pipeline_resume_rs_string"
+    },
+    {
+      "label": "JobSettings",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L23",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "jobsettings",
+      "id": "src_gui_pipeline_resume_rs_jobsettings"
+    },
+    {
+      "label": ".new()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": ".new()",
+      "id": "pipeline_resume_resumependingdata_new"
+    },
+    {
+      "label": "Self",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "self",
+      "id": "src_gui_pipeline_resume_rs_self"
+    },
+    {
+      "label": ".effective_resume_stage()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L44",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": ".effective_resume_stage()",
+      "id": "pipeline_resume_resumependingdata_effective_resume_stage"
+    },
+    {
+      "label": "RetryStage",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L44",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "retrystage",
+      "id": "src_gui_pipeline_resume_rs_retrystage"
+    },
+    {
+      "label": ".scan()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L66",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": ".scan()",
+      "id": "pipeline_resume_foundfiles_scan"
+    },
+    {
+      "label": "Path",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L66",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "path",
+      "id": "src_gui_pipeline_resume_rs_path"
+    },
+    {
+      "label": ".has_any()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L115",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": ".has_any()",
+      "id": "pipeline_resume_foundfiles_has_any"
+    },
+    {
+      "label": ".resume_stage()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L127",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": ".resume_stage()",
+      "id": "pipeline_resume_foundfiles_resume_stage"
+    },
+    {
+      "label": "draw_resume_dialog()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "draw_resume_dialog()",
+      "id": "pipeline_resume_draw_resume_dialog"
+    },
+    {
+      "label": "Context",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "context",
+      "id": "src_gui_pipeline_resume_rs_context"
+    },
+    {
+      "label": "Language",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "language",
+      "id": "src_gui_pipeline_resume_rs_language"
+    },
+    {
+      "label": "Vec",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "vec",
+      "id": "src_gui_pipeline_resume_rs_vec"
+    },
+    {
+      "label": "PipelineJob",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "pipelinejob",
+      "id": "src_gui_pipeline_resume_rs_pipelinejob"
+    },
+    {
+      "label": "enqueue_with_resume()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L421",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "enqueue_with_resume()",
+      "id": "pipeline_resume_enqueue_with_resume"
+    },
+    {
+      "label": "enqueue_fresh()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L499",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "enqueue_fresh()",
+      "id": "pipeline_resume_enqueue_fresh"
+    },
+    {
+      "label": "enqueue_fill_missing()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L512",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "enqueue_fill_missing()",
+      "id": "pipeline_resume_enqueue_fill_missing"
+    },
+    {
+      "label": "pre_mark_stages()",
+      "file_type": "code",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L555",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "pre_mark_stages()",
+      "id": "pipeline_resume_pre_mark_stages"
+    },
+    {
       "label": "storage.rs",
       "file_type": "code",
       "source_file": "src/gui/pipeline/storage.rs",
@@ -10745,7 +10745,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "translation.rs",
       "id": "pipeline_translation"
     },
@@ -10755,7 +10755,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "openroutermodel",
       "id": "pipeline_translation_openroutermodel"
     },
@@ -10765,7 +10765,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "string",
       "id": "src_gui_pipeline_translation_rs_string"
     },
@@ -10775,7 +10775,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "modelsresponse",
       "id": "pipeline_translation_modelsresponse"
     },
@@ -10785,7 +10785,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "vec",
       "id": "src_gui_pipeline_translation_rs_vec"
     },
@@ -10795,7 +10795,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "draw_translation_section()",
       "id": "pipeline_translation_draw_translation_section"
     },
@@ -10805,7 +10805,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "ui",
       "id": "src_gui_pipeline_translation_rs_ui"
     },
@@ -10815,7 +10815,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "language",
       "id": "src_gui_pipeline_translation_rs_language"
     },
@@ -10825,7 +10825,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "arc",
       "id": "src_gui_pipeline_translation_rs_arc"
     },
@@ -10835,7 +10835,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "mutex",
       "id": "src_gui_pipeline_translation_rs_mutex"
     },
@@ -10845,7 +10845,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "option",
       "id": "src_gui_pipeline_translation_rs_option"
     },
@@ -10855,7 +10855,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "result",
       "id": "src_gui_pipeline_translation_rs_result"
     },
@@ -10865,7 +10865,7 @@
       "source_file": "src/gui/pipeline/translation.rs",
       "source_location": "L443",
       "_origin": "ast",
-      "community": 39,
+      "community": 45,
       "norm_label": "draw_model_selector()",
       "id": "pipeline_translation_draw_model_selector"
     },
@@ -13545,7 +13545,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "update_dialog.rs",
       "id": "gui_update_dialog"
     },
@@ -13555,7 +13555,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "draw_update_dialog()",
       "id": "gui_update_dialog_draw_update_dialog"
     },
@@ -13565,7 +13565,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "context",
       "id": "src_gui_update_dialog_rs_context"
     },
@@ -13575,7 +13575,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "language",
       "id": "src_gui_update_dialog_rs_language"
     },
@@ -13585,7 +13585,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "arc",
       "id": "src_gui_update_dialog_rs_arc"
     },
@@ -13595,7 +13595,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "mutex",
       "id": "src_gui_update_dialog_rs_mutex"
     },
@@ -13605,7 +13605,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "option",
       "id": "src_gui_update_dialog_rs_option"
     },
@@ -13615,7 +13615,7 @@
       "source_file": "src/gui/update_dialog.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 39,
+      "community": 56,
       "norm_label": "updateinfo",
       "id": "src_gui_update_dialog_rs_updateinfo"
     },
@@ -14883,605 +14883,12 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L148",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_draw_resume_dialog"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L512",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_enqueue_fill_missing"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L499",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_enqueue_fresh"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L421",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_enqueue_with_resume"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L5",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_foundfiles"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L555",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_pre_mark_stages"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L20",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume",
-      "target": "pipeline_resume_resumependingdata"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L15",
-      "weight": 1.0,
-      "context": "field",
-      "source": "pipeline_resume_foundfiles",
-      "target": "option",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L115",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_foundfiles",
-      "target": "pipeline_resume_foundfiles_has_any"
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L127",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_foundfiles",
-      "target": "pipeline_resume_foundfiles_resume_stage"
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_foundfiles",
-      "target": "pipeline_resume_foundfiles_scan"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L555",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_pre_mark_stages",
-      "target": "pipeline_resume_foundfiles"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L22",
-      "weight": 1.0,
-      "context": "field",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_resumependingdata",
-      "target": "pipeline_resume_foundfiles"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_resumependingdata_new",
-      "target": "pipeline_resume_foundfiles"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "option",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "pipeline_resume_foundfiles_resume_stage",
-      "target": "option",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "pipeline_resume_resumependingdata_effective_resume_stage",
-      "target": "option",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L148",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipeline_resume_resumependingdata"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L512",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_fill_missing",
-      "target": "pipeline_resume_resumependingdata"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L499",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_fresh",
-      "target": "pipeline_resume_resumependingdata"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L421",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_with_resume",
-      "target": "pipeline_resume_resumependingdata"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "context": "field",
-      "source": "pipeline_resume_resumependingdata",
-      "target": "jobsettings",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_resumependingdata",
-      "target": "pipeline_resume_resumependingdata_effective_resume_stage"
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_resumependingdata",
-      "target": "pipeline_resume_resumependingdata_new"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L21",
-      "weight": 1.0,
-      "context": "field",
-      "source": "pipeline_resume_resumependingdata",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_resumependingdata_new",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_resumependingdata_new",
-      "target": "jobsettings",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L190",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipeline_resume_resumependingdata_new"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L528",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_fill_missing",
-      "target": "pipeline_resume_resumependingdata_new"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L507",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_fresh",
-      "target": "pipeline_resume_resumependingdata_new"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L445",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_with_resume",
-      "target": "pipeline_resume_resumependingdata_new"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "pipeline_resume_resumependingdata_new",
-      "target": "self",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L76",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "pipeline_resume_foundfiles_scan",
-      "target": "self",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L201",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipeline_resume_resumependingdata_effective_resume_stage"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L426",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_with_resume",
-      "target": "pipeline_resume_resumependingdata_effective_resume_stage"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L60",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_resumependingdata_effective_resume_stage",
-      "target": "pipeline_resume_foundfiles_resume_stage"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "pipeline_resume_resumependingdata_effective_resume_stage",
-      "target": "retrystage",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "pipeline_resume_foundfiles_resume_stage",
-      "target": "retrystage",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L76",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_foundfiles_scan",
-      "target": "path",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "context",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "language",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L207",
-      "weight": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "localization_mod_translate"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L414",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipeline_resume_enqueue_fill_missing"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L409",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipeline_resume_enqueue_fresh"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L404",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipeline_resume_enqueue_with_resume"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "pipelinejob",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L158",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_draw_resume_dialog",
-      "target": "vec",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L531",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_enqueue_fill_missing",
-      "target": "vec",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L518",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_enqueue_fresh",
-      "target": "vec",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L431",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_enqueue_with_resume",
-      "target": "vec",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L531",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "pipeline_resume_enqueue_fill_missing",
-      "target": "pipelinejob",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L518",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "pipeline_resume_enqueue_fresh",
-      "target": "pipelinejob",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L431",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "pipeline_resume_enqueue_with_resume",
-      "target": "pipelinejob",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L574",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "pipeline_resume_pre_mark_stages",
-      "target": "pipelinejob",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/gui/pipeline/resume.rs",
-      "source_location": "L493",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "pipeline_resume_enqueue_with_resume",
-      "target": "pipeline_resume_pre_mark_stages"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "CLAUDE.md",
       "source_location": "L97",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "claude",
-      "target": "claude_graphify"
+      "target": "claude_graphify",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -37130,6 +36537,599 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_draw_resume_dialog"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L512",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_enqueue_fill_missing"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L499",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_enqueue_fresh"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L421",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_enqueue_with_resume"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_foundfiles"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L555",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_pre_mark_stages"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume",
+      "target": "pipeline_resume_resumependingdata"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L115",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles",
+      "target": "pipeline_resume_foundfiles_has_any"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L127",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles",
+      "target": "pipeline_resume_foundfiles_resume_stage"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles",
+      "target": "pipeline_resume_foundfiles_scan"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles",
+      "target": "src_gui_pipeline_resume_rs_option"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L555",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_pre_mark_stages",
+      "target": "pipeline_resume_foundfiles"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata",
+      "target": "pipeline_resume_foundfiles"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_new",
+      "target": "pipeline_resume_foundfiles"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "src_gui_pipeline_resume_rs_option"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L127",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles_resume_stage",
+      "target": "src_gui_pipeline_resume_rs_option"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_effective_resume_stage",
+      "target": "src_gui_pipeline_resume_rs_option"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "pipeline_resume_resumependingdata"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L512",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fill_missing",
+      "target": "pipeline_resume_resumependingdata"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L499",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fresh",
+      "target": "pipeline_resume_resumependingdata"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L421",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_with_resume",
+      "target": "pipeline_resume_resumependingdata"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata",
+      "target": "pipeline_resume_resumependingdata_effective_resume_stage"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata",
+      "target": "pipeline_resume_resumependingdata_new"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata",
+      "target": "src_gui_pipeline_resume_rs_jobsettings"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata",
+      "target": "src_gui_pipeline_resume_rs_string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_new",
+      "target": "src_gui_pipeline_resume_rs_string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_new",
+      "target": "src_gui_pipeline_resume_rs_jobsettings"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L190",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "pipeline_resume_resumependingdata_new"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L528",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fill_missing",
+      "target": "pipeline_resume_resumependingdata_new"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L507",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fresh",
+      "target": "pipeline_resume_resumependingdata_new"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L445",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_with_resume",
+      "target": "pipeline_resume_resumependingdata_new"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_new",
+      "target": "src_gui_pipeline_resume_rs_self"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles_scan",
+      "target": "src_gui_pipeline_resume_rs_self"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L201",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "pipeline_resume_resumependingdata_effective_resume_stage"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L426",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_with_resume",
+      "target": "pipeline_resume_resumependingdata_effective_resume_stage"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L60",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_effective_resume_stage",
+      "target": "pipeline_resume_foundfiles_resume_stage"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_resumependingdata_effective_resume_stage",
+      "target": "src_gui_pipeline_resume_rs_retrystage"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L127",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles_resume_stage",
+      "target": "src_gui_pipeline_resume_rs_retrystage"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_foundfiles_scan",
+      "target": "src_gui_pipeline_resume_rs_path"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L207",
+      "weight": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "localization_mod_translate"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L414",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "pipeline_resume_enqueue_fill_missing"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L409",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "pipeline_resume_enqueue_fresh"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L404",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "pipeline_resume_enqueue_with_resume"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "src_gui_pipeline_resume_rs_context"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "src_gui_pipeline_resume_rs_language"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "src_gui_pipeline_resume_rs_pipelinejob"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_draw_resume_dialog",
+      "target": "src_gui_pipeline_resume_rs_vec"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L512",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fill_missing",
+      "target": "src_gui_pipeline_resume_rs_vec"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L499",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fresh",
+      "target": "src_gui_pipeline_resume_rs_vec"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L421",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_with_resume",
+      "target": "src_gui_pipeline_resume_rs_vec"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L512",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fill_missing",
+      "target": "src_gui_pipeline_resume_rs_pipelinejob"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L499",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_fresh",
+      "target": "src_gui_pipeline_resume_rs_pipelinejob"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L421",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_with_resume",
+      "target": "src_gui_pipeline_resume_rs_pipelinejob"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L555",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_pre_mark_stages",
+      "target": "src_gui_pipeline_resume_rs_pipelinejob"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/gui/pipeline/resume.rs",
+      "source_location": "L493",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "pipeline_resume_enqueue_with_resume",
+      "target": "pipeline_resume_pre_mark_stages"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "src/gui/pipeline/storage.rs",
       "source_location": "L26",
       "weight": 1.0,
@@ -46171,5 +46171,5 @@
       "source_file": "CLAUDE.md"
     }
   ],
-  "built_at_commit": "e1d02965525ee93be7d95d2f9d6ab31034f5f38c"
+  "built_at_commit": "5ba83b16e2094c0051a144161b0309f6c527f9fb"
 }

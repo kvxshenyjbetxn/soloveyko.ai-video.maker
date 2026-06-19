@@ -300,9 +300,9 @@
     "semantic_hash": "06b9fc2e521fe5db79965220b9706cfe"
   },
   "src/gui/pipeline/resume.rs": {
-    "mtime": 1781885598.94793,
-    "ast_hash": "03cfa2a7665f0c81f425a7dfcf2fcb41",
-    "semantic_hash": ""
+    "mtime": 1781795544.4241333,
+    "ast_hash": "4d837fa57e1a234be605351f630d423b",
+    "semantic_hash": "4d837fa57e1a234be605351f630d423b"
   },
   "src/gui/pipeline/storage.rs": {
     "mtime": 1781602530.6691093,
@@ -435,13 +435,13 @@
     "semantic_hash": "dfafb903d5c2720cbb75348cad6f797f"
   },
   "AGENTS.md": {
-    "mtime": 1781884185.3458638,
-    "ast_hash": "71b7416cb3bd79bce3405afe5b80c5f3",
-    "semantic_hash": ""
+    "mtime": 1781815569.5080798,
+    "ast_hash": "614d0229b0bc2a762f0fa3d062eebdfe",
+    "semantic_hash": "614d0229b0bc2a762f0fa3d062eebdfe"
   },
   "CLAUDE.md": {
-    "mtime": 1781884174.8194842,
-    "ast_hash": "2822e2e601a44f0a1d07ace48ab60737",
+    "mtime": 1781816705.3648703,
+    "ast_hash": "fc9a2f4b7558d5b58c07d67d3f5287a2",
     "semantic_hash": ""
   },
   "doc/antigravity.cli.md": {

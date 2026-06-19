@@ -1,4 +1,4 @@
-- не роби коміти та не оновлюй файл README до поки я не скажу.
+- не роби коміти  до поки я не скажу.
 Before editing any file, read it first. Before modifying a function, grep for all callers. Research before you edit.
 - відповідаеш завжди українською мовою.
 - стек програми rust + egui
