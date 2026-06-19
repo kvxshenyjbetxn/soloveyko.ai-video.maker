@@ -526,7 +526,7 @@ fn run_subtitles_only(
             (tmp_audio, tmp_stem, Some(tmp))
         };
         #[cfg(not(target_os = "windows"))]
-        let (whisper_audio, whisper_out_stem, whisper_temp) = {
+        let (whisper_audio, whisper_out_stem, _whisper_temp) = {
             let stem = save_dir.join("subtitle");
             (audio_path.clone(), stem, None::<std::path::PathBuf>)
         };
