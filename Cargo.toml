@@ -1,6 +1,6 @@
 [package]
 name = "soloveyko-ai-video-maker"
-version = "4.5.1"
+version = "4.6.0"
 edition = "2024"
 
 [dependencies]
@@ -28,7 +28,7 @@ winres = "0.1"
 [package.metadata.bundle]
 name = "Soloveyko AI Video Maker"
 identifier = "ai.soloveyko.videomaker"
-version = "4.5.1"
+version = "4.6.0"
 copyright = "Copyright © 2026 Soloveyko.ai. All rights reserved."
 short_description = "Soloveyko.AI-Video.Maker Application"
 long_description = "An amazing cross-platform desktop video maker using Rust and egui."

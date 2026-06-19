@@ -1,18 +1,13 @@
-# Graph Report - soloveyko.ai-video.maker  (2026-06-18)
+# Graph Report - .  (2026-06-18)
 
 ## Corpus Check
-- 97 files · ~210,667 words
+- 97 files · ~210,375 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1473 nodes · 2909 edges · 87 communities (82 shown, 5 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 98 edges (avg confidence: 0.8)
+- 1479 nodes · 2921 edges · 83 communities (81 shown, 2 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 103 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
-
-## Graph Freshness
-- Built from commit: `5ba83b16`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Stock Media Picker|Stock Media Picker]]
@@ -86,9 +81,6 @@
 - [[_COMMUNITY_Pipelinetemplate|Pipelinetemplate]]
 - [[_COMMUNITY_Pixabay Md Api Response Schema|Pixabay Md Api Response Schema]]
 - [[_COMMUNITY_Src App|Src App]]
-- [[_COMMUNITY_Community 83|Community 83]]
-- [[_COMMUNITY_Community 85|Community 85]]
-- [[_COMMUNITY_Community 86|Community 86]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `translate()` - 51 edges
@@ -103,16 +95,16 @@
 10. `draw_pipeline_panel()` - 22 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `call_claude_code_new_session_streaming()` --calls--> `log()`  [INFERRED]
-  src/api/claude.rs → src/logger.rs
-- `call_claude_code_resume()` --calls--> `log()`  [INFERRED]
-  src/api/claude.rs → src/logger.rs
-- `call_claude_code()` --calls--> `log()`  [INFERRED]
-  src/api/claude.rs → src/logger.rs
-- `call_codex_new_session_streaming()` --calls--> `log()`  [INFERRED]
-  src/api/codex.rs → src/logger.rs
-- `call_codex_resume()` --calls--> `log()`  [INFERRED]
-  src/api/codex.rs → src/logger.rs
+- `Soloveyko AI Video Maker App Icon` --conceptually_related_to--> `Rust + egui Technology Stack`  [INFERRED]
+  video.maker.png → CLAUDE.md
+- `Project Development Rules (AGENTS.md)` --semantically_similar_to--> `Project Development Rules (CLAUDE.md)`  [EXTRACTED] [semantically similar]
+  AGENTS.md → CLAUDE.md
+- `API Services Pattern — src/api/ Module Layout` --rationale_for--> `AGY CLI — AI Agent CLI Tool`  [INFERRED]
+  CLAUDE.md → doc/antigravity.cli.md
+- `API Services Pattern — src/api/ Module Layout` --rationale_for--> `call_claude_code — Claude API Invocation Functions`  [INFERRED]
+  CLAUDE.md → doc/antigravity.cli.md
+- `new_direct_cli_command — Windows-Safe CLI Launcher (no cmd /C)` --rationale_for--> `Cross-Platform Requirement — Windows and macOS`  [INFERRED]
+  doc/antigravity.cli.md → CLAUDE.md
 
 ## Import Cycles
 - 1-file cycle: `src/gui/gallery/video_player.rs -> src/gui/gallery/video_player.rs`
@@ -141,7 +133,7 @@
 - **CapCut Project File Set — draft_content + draft_meta_info + timelines/project** — capcut_project_format_md_draft_content, capcut_project_format_md_draft_meta_info, capcut_project_format_md_timelines_project, capcut_project_format_md_generation_schema [EXTRACTED 1.00]
 - **Pipeline Template Save/Load Cycle — PipelineTemplate + save_template + load_template** — claude_md_pipeline_template, claude_md_save_template, claude_md_load_template [EXTRACTED 1.00]
 
-## Communities (87 total, 5 thin omitted)
+## Communities (83 total, 2 thin omitted)
 
 ### Community 0 - "Stock Media Picker"
 Cohesion: 0.07
@@ -152,8 +144,8 @@ Cohesion: 0.06
 Nodes (55): AtomicBool, ClipDragState, MediaItem, save_preview_jpeg(), clip_from_json_seg(), find_audio_file(), load_media_pool(), load_timeline_clips() (+47 more)
 
 ### Community 2 - "Claude API Client"
-Cohesion: 0.06
-Nodes (44): AgyPermit, AgyLimiter, AgyPermit, AgyPermit<'a>, call_agy_cli(), call_agy_new_session_streaming(), call_agy_resume(), call_gemini_cli() (+36 more)
+Cohesion: 0.07
+Nodes (46): call_claude_code(), call_claude_code_new_session_streaming(), call_claude_code_resume(), ClaudeLimiter, ClaudePermit, ClaudePermit<'a>, format_claude_json_event(), parse_claude_json_response() (+38 more)
 
 ### Community 3 - "Pipeline Orchestration"
 Cohesion: 0.16
@@ -196,8 +188,8 @@ Cohesion: 0.14
 Nodes (30): AgentChatWindowState, draw_agent_chat_windows(), draw_dot_sep(), draw_h_line(), draw_icon_arrow_down(), draw_icon_arrow_up(), draw_icon_l_arrow(), draw_icon_x() (+22 more)
 
 ### Community 13 - "AGY CLI & Project Docs"
-Cohesion: 0.15
-Nodes (20): AgentType Enum — Claude / Gemini / Agy Dispatch, AGY CLI — AI Agent CLI Tool, AgyLimiter — Concurrency Semaphore for AGY Requests, call_agy_new_session — Launch New AGY Agent Session, call_agy_resume — Resume Specific AGY Conversation, call_agy_resume_last — Continue Last AGY Session, call_claude_code — Claude API Invocation Functions, new_direct_cli_command — Windows-Safe CLI Launcher (no cmd /C) (+12 more)
+Cohesion: 0.09
+Nodes (31): Project Development Rules (AGENTS.md), AgentType Enum — Claude / Gemini / Agy Dispatch, AGY CLI — AI Agent CLI Tool, AgyLimiter — Concurrency Semaphore for AGY Requests, call_agy_new_session — Launch New AGY Agent Session, call_agy_resume — Resume Specific AGY Conversation, call_agy_resume_last — Continue Last AGY Session, call_claude_code — Claude API Invocation Functions (+23 more)
 
 ### Community 14 - "Topbar Balance UI"
 Cohesion: 0.11
@@ -244,8 +236,8 @@ Cohesion: 0.21
 Nodes (17): draw_resume_dialog(), enqueue_fill_missing(), enqueue_fresh(), enqueue_with_resume(), FoundFiles, pre_mark_stages(), ResumePendingData, Context (+9 more)
 
 ### Community 25 - "Agypermit"
-Cohesion: 0.16
-Nodes (17): call_claude_code(), call_claude_code_new_session_streaming(), call_claude_code_resume(), ClaudeLimiter, ClaudePermit, ClaudePermit<'a>, format_claude_json_event(), parse_claude_json_response() (+9 more)
+Cohesion: 0.15
+Nodes (15): AgyPermit, AgyLimiter, AgyPermit, AgyPermit<'a>, call_agy_cli(), call_agy_new_session_streaming(), call_agy_resume(), Condvar (+7 more)
 
 ### Community 26 - "Api Openrouter"
 Cohesion: 0.11
@@ -420,23 +412,23 @@ Cohesion: 1.00
 Nodes (3): Pixabay API Response Schema — hits, totalHits, image/video URLs, Pixabay Search Images API, Pixabay Search Videos API
 
 ## Knowledge Gaps
-- **390 isolated node(s):** `graphify`, `Mutex`, `Condvar`, `Self`, `AgyPermit` (+385 more)
+- **390 isolated node(s):** `Mutex`, `Condvar`, `Self`, `AgyPermit`, `Drop` (+385 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Sync` connect `Pipeline Api` to `Stock Media Picker`, `Claude API Client`, `Pipeline Orchestration`, `Googler Agent API`, `Video Generation UI`, `Edge TTS Service`, `AssemblyAI Transcription`, `Codex CLI Client`, `VoiceBot TTS Service`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Agypermit`, `Api Openrouter`, `Gallery Video Player`, `Montage Editor Mod`, `Src Queue`, `Pipeline Subtitles`, `Api Ffmpeg`, `Api Updater`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Pipeline Translation`, `Src Core Pipeline Voiceover Voiceover Rs Jobsettings`, `Pipeline Voiceover`, `Gui Update Dialog`?**
-  _High betweenness centrality (0.380) - this node is a cross-community bridge._
+  _High betweenness centrality (0.371) - this node is a cross-community bridge._
 - **Why does `translate()` connect `Display` to `Stock Media Picker`, `Gallery UI Icons`, `Video Generation UI`, `Agent Chat Window`, `Topbar Balance UI`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Pipeline Resume`, `Gui Queue`, `Pipeline Subtitles`, `Pipeline Translation Control`, `Corebpe`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Pipeline Translation`, `Pipeline Api`, `Pipeline Voiceover`, `Creationcontext`, `Gui Logs`, `Gui Task History`, `Gui Update Dialog`, `Pipeline Templates`, `Montage Editor Topbar`, `Pipeline Storage`, `Settings General`, `Montage Editor Inspector`, `Pipeline Editing`, `Pipelinetemplate`?**
-  _High betweenness centrality (0.331) - this node is a cross-community bridge._
+  _High betweenness centrality (0.322) - this node is a cross-community bridge._
 - **Why does `save_settings()` connect `Settings Storage Clean Numeric Param` to `Settings Storage Append To Task History`, `Creationcontext`, `Settings & Storage`?**
-  _High betweenness centrality (0.101) - this node is a cross-community bridge._
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
 - **Are the 49 inferred relationships involving `translate()` (e.g. with `draw_media_regen_window()` and `draw_gallery_tab()`) actually correct?**
   _`translate()` has 49 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `graphify`, `Mutex`, `Condvar` to the rest of the system?**
-  _390 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Mutex`, `Condvar`, `Self` to the rest of the system?**
+  _393 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Stock Media Picker` be split into smaller, more focused modules?**
   _Cohesion score 0.07243243243243243 - nodes in this community are weakly interconnected._
 - **Should `Montage Editor Media` be split into smaller, more focused modules?**
