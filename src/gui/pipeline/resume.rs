@@ -56,6 +56,16 @@ impl ResumePendingData {
         if (self.found.media_images > 0 || self.found.media_videos > 0) && !self.keep_video {
             return Some(crate::queue::RetryStage::Video);
         }
+        // Якщо медіа зберігаємо, але набір неповний — потрібно довантажити відсутні
+        // (аналог "Догенерувати відсутні", але автоматично при "Продовжити")
+        if self.keep_video && self.found.timeline_json {
+            if let Some(expected) = self.found.expected_media {
+                let present = self.found.media_images + self.found.media_videos;
+                if present < expected {
+                    return Some(crate::queue::RetryStage::Video);
+                }
+            }
+        }
         // Всі знайдені файли зберігаємо → визначаємо по наявності відсутніх файлів
         self.found.resume_stage()
     }
@@ -439,6 +449,15 @@ fn enqueue_with_resume(
     settings.resume_from_stage = resume_stage;
     // Якщо timeline.json зберігаємо — пропускаємо агента при Video retry
     settings.skip_agent_on_resume = keep_tl;
+    // Якщо медіа неповне і ми йдемо від Video — пропускаємо вже наявні медіафайли
+    if keep_vi && found.timeline_json {
+        if let Some(expected) = found.expected_media {
+            let present = found.media_images + found.media_videos;
+            if present < expected {
+                settings.skip_existing_media = true;
+            }
+        }
+    }
 
     let id = *job_counter;
     *job_counter += 1;
