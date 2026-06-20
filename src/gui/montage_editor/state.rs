@@ -20,11 +20,6 @@ pub struct MontageEditorState {
     pub num_tracks: usize,
     /// Тип кожної доріжки (Video / Audio) у порядку додавання
     pub track_kinds: Vec<TrackKind>,
-    pub audio_path: Option<PathBuf>,
-    pub audio_start_secs: f32,
-    pub audio_duration: f32,
-    /// Позиція голосової доріжки серед звичайних: 0 = перед V1, num_tracks = знизу (за замовчуванням)
-    pub voiceover_track_idx: usize,
     pub total_duration: f32,
     pub playhead: f32,
     pub is_playing: bool,
@@ -78,8 +73,8 @@ pub struct MontageEditorState {
     pub pool_thumbnails: HashMap<String, eframe::egui::TextureHandle>,
     /// Гучність кожної доріжки (індекс = track_idx); 1.0 = норма, 0.0 = тиша
     pub track_volumes: Vec<f32>,
-    /// Гучність голосової доріжки (1.0 = норма)
-    pub voiceover_volume: f32,
+    /// Чи активний інструмент розрізу (як лезо в професійних редакторах)
+    pub split_tool_active: bool,
 }
 
 impl MontageEditorState {
@@ -92,6 +87,47 @@ impl MontageEditorState {
             0.0
         };
         let mut media_pool = load_media_pool(save_path, preview_render);
+
+        // Створюємо візуальний аудіо-кліп для голосової доріжки (без зміни audio_path для рендеру)
+        let mut vo_clip_on_track = None;
+        if let Some(ref ap) = audio_path {
+            let media_id = if let Some(m) = media_pool.iter().find(|m| m.path == *ap) {
+                m.id.clone()
+            } else {
+                let m = MediaItem::new(ap.clone(), save_path, preview_render);
+                let id = m.id.clone();
+                media_pool.push(m);
+                id
+            };
+            let vo_name = ap.file_name().and_then(|n| n.to_str()).unwrap_or("voice").to_string();
+            // Знаходимо існуючу аудіо-доріжку або створюємо нову
+            let has_audio_track = clips.iter().any(|c| matches!(c.kind, ClipKind::Audio));
+            let num_tracks_now = clips.iter().map(|c| c.track_idx + 1).max().unwrap_or(1).max(2);
+            let audio_track_idx = if has_audio_track {
+                clips.iter().filter(|c| matches!(c.kind, ClipKind::Audio))
+                    .map(|c| c.track_idx).min().unwrap_or(num_tracks_now)
+            } else {
+                num_tracks_now
+            };
+            vo_clip_on_track = Some(EditorClip {
+                id: uuid_str(),
+                media_id,
+                path: Some(ap.clone()),
+                name: format!("♪ {}", vo_name),
+                start_secs: audio_start_secs,
+                duration: audio_duration,
+                track_idx: audio_track_idx,
+                kind: ClipKind::Audio,
+                scale: 1.0, pos_x: 0.0, pos_y: 0.0,
+                zoom_enabled: false, shake_enabled: false,
+                is_placeholder: false, trim_start: 0.0,
+                stock_seg_idx: None,
+                overlap_transition: "fade".to_string(),
+                opacity: 1.0,
+                pair_id: None, audio_linked: false,
+                is_embedded_audio: false,
+            });
+        }
 
         // Додаємо у пул файли з таймлінії, яких ще немає (захист від розбіжності шляхів)
         for clip in &clips {
@@ -126,14 +162,24 @@ impl MontageEditorState {
             }
         }
 
+        // Додаємо візуальний кліп голосової доріжки ДО обчислення num_tracks
+        if let Some(vo_clip) = vo_clip_on_track {
+            clips.push(vo_clip);
+        }
+
         let num_tracks = clips.iter().map(|c| c.track_idx + 1).max().unwrap_or(1).max(2);
-        // За замовчуванням всі доріжки — відео (V1, V2, ...)
-        let track_kinds: Vec<TrackKind> = (0..num_tracks).map(|_| TrackKind::Video).collect();
-        let voiceover_track_idx = load_voiceover_track_idx(save_path).unwrap_or(num_tracks);
+        // За замовчуванням всі доріжки — відео (V1, V2, ...), але ті де є аудіо-кліпи — аудіо
+        let mut track_kinds: Vec<TrackKind> = (0..num_tracks).map(|_| TrackKind::Video).collect();
+        for clip in &clips {
+            if matches!(clip.kind, ClipKind::Audio) {
+                if clip.track_idx < track_kinds.len() {
+                    track_kinds[clip.track_idx] = TrackKind::Audio;
+                }
+            }
+        }
         let mut track_volumes = load_track_volumes(save_path).unwrap_or_default();
         // Доповнюємо до поточної кількості доріжок
         while track_volumes.len() < num_tracks { track_volumes.push(1.0); }
-        let voiceover_volume = load_voiceover_volume(save_path).unwrap_or(1.0);
 
         // Запускаємо витягування WAV для всіх вбудованих аудіо-кліпів без кешу
         for clip in &clips {
@@ -151,10 +197,6 @@ impl MontageEditorState {
             clips,
             num_tracks,
             track_kinds,
-            audio_path,
-            audio_start_secs,
-            audio_duration,
-            voiceover_track_idx,
             total_duration: total_duration.max(10.0),
             playhead: 0.0,
             is_playing: false,
@@ -185,7 +227,7 @@ impl MontageEditorState {
             opacity_drag: None,
             pool_thumbnails: HashMap::new(),
             track_volumes,
-            voiceover_volume,
+            split_tool_active: false,
         }
     }
 
@@ -236,8 +278,11 @@ impl MontageEditorState {
             .max(self.total_dur() as f64);
 
         // ── Доріжка 0: основна послідовність ────────────────────────────────
+        // Виключаємо візуальний кліп голосової доріжки (він обробляється окремо)
         let mut sorted0: Vec<&EditorClip> = self.clips.iter()
-            .filter(|c| c.track_idx == 0 && c.path.is_some())
+            .filter(|c| c.track_idx == 0 && c.path.is_some()
+                // Не включаємо візуальний голосовий кліп
+                && !(matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none()))
             .collect();
         sorted0.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -280,7 +325,8 @@ impl MontageEditorState {
         let mut overlay_tracks: Vec<serde_json::Value> = Vec::new();
         for t in 1..=max_track {
             let mut segs: Vec<&EditorClip> = self.clips.iter()
-                .filter(|c| c.track_idx == t && c.path.is_some())
+                .filter(|c| c.track_idx == t && c.path.is_some()
+                    && !(matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none()))
                 .collect();
             if segs.is_empty() { continue; }
             segs.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
@@ -312,11 +358,15 @@ impl MontageEditorState {
         }
 
         let track_vols_json: Vec<f64> = self.track_volumes.iter().map(|&v| v as f64).collect();
+        // Синхронізуємо audio_start_secs з позиції візуального кліпу
+        let vo_start = self.clips.iter()
+            .find(|c| matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none())
+            .map(|c| c.start_secs as f64)
+            .unwrap_or(0.0);
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
-            "audio_start_secs": self.audio_start_secs as f64,
-            "voiceover_track_idx": self.voiceover_track_idx,
-            "voiceover_volume": self.voiceover_volume as f64,
+            "audio_start_secs": vo_start as f64,
+            "voiceover_volume": 1.0_f64,
             "track_volumes": track_vols_json,
             "segments": main_segments,
             "overlay_tracks": overlay_tracks,
@@ -337,7 +387,7 @@ impl MontageEditorState {
             .unwrap_or_else(|_| serde_json::json!({}));
 
         let track_vols_json: Vec<f64> = self.track_volumes.iter().map(|&v| v as f64).collect();
-        json["voiceover_volume"] = serde_json::json!(self.voiceover_volume as f64);
+        json["voiceover_volume"] = serde_json::json!(1.0_f64);
         json["track_volumes"] = serde_json::json!(track_vols_json);
 
         let updated = serde_json::to_string_pretty(&json)
@@ -408,15 +458,6 @@ fn clip_from_json_seg(
     }
 }
 
-/// Завантажує позицію голосової доріжки з timeline.json (0 = перед V1, num_tracks = знизу).
-fn load_voiceover_track_idx(save_path: &Path) -> Option<usize> {
-    let path = save_path.join("timeline.json");
-    if !path.exists() { return None; }
-    let content = std::fs::read_to_string(&path).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
-    v["voiceover_track_idx"].as_u64().map(|n| n as usize)
-}
-
 fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
     let path = save_path.join("timeline.json");
     if !path.exists() { return None; }
@@ -425,14 +466,6 @@ fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
     v["track_volumes"].as_array().map(|arr| {
         arr.iter().map(|x| x.as_f64().unwrap_or(1.0) as f32).collect()
     })
-}
-
-fn load_voiceover_volume(save_path: &Path) -> Option<f32> {
-    let path = save_path.join("timeline.json");
-    if !path.exists() { return None; }
-    let content = std::fs::read_to_string(&path).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
-    v["voiceover_volume"].as_f64().map(|x| x as f32)
 }
 
 fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {

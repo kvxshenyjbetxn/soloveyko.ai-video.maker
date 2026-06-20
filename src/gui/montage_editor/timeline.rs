@@ -8,6 +8,116 @@ use super::state::MontageEditorState;
 use super::types::{ClipKind, DragMode, ClipDragState, EditorClip, OpacityDragState, TrackKind};
 use super::utils::uuid_str;
 
+// ─── Розріз кліпу ──────────────────────────────────────────────────────────
+
+/// Розрізає кліп на два в точці `split_time` (секунди).
+/// Якщо кліп має парне аудіо — розрізає і його.
+/// Повертає true якщо розріз виконано успішно.
+fn split_clip_at(editor: &mut MontageEditorState, clip_id: &str, split_time: f32) -> bool {
+    // Знаходимо індекс кліпу
+    let idx = match editor.clips.iter().position(|c| c.id == clip_id) {
+        Some(i) => i,
+        None => return false,
+    };
+
+    // Збираємо всі необхідні дані до мутації
+    let (clip_start, clip_end, pair_id, audio_linked, is_emb_audio) = {
+        let clip = &editor.clips[idx];
+        let start = clip.start_secs;
+        let end = clip.end_secs();
+        let pid = clip.pair_id.clone();
+        let linked = clip.audio_linked;
+        let emb = clip.is_embedded_audio;
+        (start, end, pid, linked, emb)
+    };
+
+    // Перевіряємо що точка розрізу всередині кліпу (з запасом 0.05с)
+    if split_time <= clip_start + 0.05 || split_time >= clip_end - 0.05 {
+        return false;
+    }
+
+    // Дані для створення правого кліпу (клонуємо)
+    let right_clip = {
+        let clip = &editor.clips[idx];
+        EditorClip {
+            id: uuid_str(),
+            media_id: clip.media_id.clone(),
+            path: clip.path.clone(),
+            name: clip.name.clone(),
+            start_secs: split_time,
+            duration: clip_end - split_time,
+            track_idx: clip.track_idx,
+            kind: clip.kind.clone(),
+            scale: clip.scale,
+            pos_x: clip.pos_x,
+            pos_y: clip.pos_y,
+            zoom_enabled: clip.zoom_enabled,
+            shake_enabled: clip.shake_enabled,
+            is_placeholder: false,
+            trim_start: clip.trim_start + (split_time - clip_start),
+            stock_seg_idx: clip.stock_seg_idx,
+            overlap_transition: clip.overlap_transition.clone(),
+            opacity: clip.opacity,
+            pair_id: pair_id.clone(),
+            audio_linked,
+            is_embedded_audio: is_emb_audio,
+        }
+    };
+
+    // Вкорочуємо лівий кліп
+    editor.clips[idx].duration = split_time - clip_start;
+
+    // Додаємо правий кліп
+    editor.clips.push(right_clip);
+
+    // Якщо є парне аудіо — розрізаємо і його
+    if let (Some(pid), true) = (pair_id, audio_linked) {
+        if let Some(audio_idx) = editor.clips.iter().position(|c| {
+            c.pair_id.as_deref() == Some(pid.as_str()) && c.id != clip_id
+        }) {
+            let a_start = editor.clips[audio_idx].start_secs;
+            let a_end = editor.clips[audio_idx].end_secs();
+            let a_dur = (a_end - a_start).max(0.1);
+            // Пропорційний розріз аудіо
+            let ratio = (split_time - clip_start) / (clip_end - clip_start);
+            let a_split = a_start + a_dur * ratio;
+
+            if a_split > a_start + 0.05 && a_split < a_end - 0.05 {
+                let paired_kind = editor.clips[audio_idx].kind.clone();
+                let a_right = EditorClip {
+                    id: uuid_str(),
+                    media_id: editor.clips[audio_idx].media_id.clone(),
+                    path: editor.clips[audio_idx].path.clone(),
+                    name: editor.clips[audio_idx].name.clone(),
+                    start_secs: a_split,
+                    duration: a_end - a_split,
+                    track_idx: editor.clips[audio_idx].track_idx,
+                    kind: paired_kind,
+                    scale: editor.clips[audio_idx].scale,
+                    pos_x: editor.clips[audio_idx].pos_x,
+                    pos_y: editor.clips[audio_idx].pos_y,
+                    zoom_enabled: editor.clips[audio_idx].zoom_enabled,
+                    shake_enabled: editor.clips[audio_idx].shake_enabled,
+                    is_placeholder: false,
+                    trim_start: editor.clips[audio_idx].trim_start + (a_split - a_start),
+                    stock_seg_idx: editor.clips[audio_idx].stock_seg_idx,
+                    overlap_transition: editor.clips[audio_idx].overlap_transition.clone(),
+                    opacity: editor.clips[audio_idx].opacity,
+                    pair_id: Some(pid.clone()),
+                    audio_linked: true,
+                    is_embedded_audio: editor.clips[audio_idx].is_embedded_audio,
+                };
+                editor.clips[audio_idx].duration = (a_split - a_start).max(0.1);
+                editor.clips.push(a_right);
+            }
+        }
+    }
+
+    // Зберігаємо зміни
+    editor.save_to_timeline().ok();
+    true
+}
+
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
 
 pub(super) fn draw_timeline(
@@ -42,6 +152,23 @@ pub(super) fn draw_timeline(
             .clamp(80.0, 500.0);
     }
 
+    // ─── Клавіша S: розріз на плейхеді (працює завжди) ──────────────
+    if ui.input(|i| i.key_pressed(egui::Key::S)) {
+        // Знаходимо кліп під плейхедом
+        let ph = editor.playhead;
+        if let Some(clip_id) = editor.clips.iter()
+            .find(|c| c.start_secs <= ph && ph < c.end_secs() && !c.is_placeholder)
+            .map(|c| c.id.clone())
+        {
+            split_clip_at(editor, &clip_id, ph);
+        }
+    }
+
+    // Escape — вихід з інструменту розрізу
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) && editor.split_tool_active {
+        editor.split_tool_active = false;
+    }
+
     // ─── Кнопки додавання доріжок (як у kadr) ────────────────────────────
     ui.horizontal(|ui| {
         let spacing = 6.0;
@@ -53,8 +180,6 @@ pub(super) fn draw_timeline(
             }
             editor.num_tracks += 1;
             editor.track_kinds.insert(0, TrackKind::Video);
-            // Голосова доріжка теж зсувається вниз
-            editor.voiceover_track_idx += 1;
         }
         ui.add_space(spacing);
         // Кнопка "+ Аудіо"
@@ -67,16 +192,12 @@ pub(super) fn draw_timeline(
     });
 
     let avail_h = ui.available_height();
-    let has_vo = editor.audio_path.is_some();
-    let vo_pos = editor.voiceover_track_idx.min(editor.num_tracks);
-    let total_rows = editor.num_tracks + if has_vo { 1 } else { 0 };
+    let total_rows = editor.num_tracks;
     let total_tracks_h = ruler_h + (track_h + 2.0) * total_rows as f32;
     let timeline_w = (total_dur + 10.0) * zoom;
 
-    // Візуальна позиція звичайної доріжки з урахуванням голосової
-    let track_visual = |ti: usize| -> usize {
-        if has_vo && ti >= vo_pos { ti + 1 } else { ti }
-    };
+    // Візуальна позиція доріжки = track_idx (без зсуву)
+    let track_visual = |ti: usize| -> usize { ti };
     // Y-координата візуальної позиції
     let vis_y = |rect: Rect, vis: usize| -> f32 {
         rect.top() + ruler_h + (track_h + 2.0) * vis as f32
@@ -126,13 +247,10 @@ pub(super) fn draw_timeline(
             for vis in 0..total_rows {
                 let track_y = vis_y(rect, vis);
                 let track_row = Rect::from_min_size(Pos2::new(rect.left(), track_y), Vec2::new(rect.width(), track_h));
-                let is_vo_row = has_vo && vis == vo_pos;
-                let track_bg = if !is_vo_row && editor.drop_target_track == Some(if vis < vo_pos { vis } else { vis - 1 }) {
+                let track_bg = if editor.drop_target_track == Some(vis) {
                     Color32::from_rgba_unmultiplied(9, 123, 244, 20)
-                } else if is_vo_row {
-                    Color32::from_rgb(14, 22, 16) // зелений фон для голосової
                 } else {
-                    let ti = if vis < vo_pos { vis } else { vis - 1 };
+                    let ti = vis;
                     let kind = editor.track_kinds.get(ti).copied().unwrap_or(TrackKind::Video);
                     match kind {
                         TrackKind::Video => Color32::from_rgb(16, 16, 20),
@@ -148,6 +266,19 @@ pub(super) fn draw_timeline(
 
             let mouse_pos = ui.input(|i| i.pointer.hover_pos());
 
+            // Глобальний курсор для інструменту розрізу (поверх усіх кліпів)
+            if editor.split_tool_active {
+                if let Some(pos) = mouse_pos {
+                    if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                        let total_rows = editor.num_tracks;
+                        let tracks_bottom = rect.top() + ruler_h + total_rows as f32 * (track_h + 2.0);
+                        if pos.y <= tracks_bottom {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                        }
+                    }
+                }
+            }
+
             // Ghost-preview при drag з медіа-пулу
             if let Some(ref drag_id) = editor.dragged_media_id.clone() {
                 if let Some(pos) = mouse_pos {
@@ -155,13 +286,7 @@ pub(super) fn draw_timeline(
                         let click_t = ((pos.x - rect.left()) / zoom).max(0.0);
                         let rel_y = pos.y - (rect.top() + ruler_h);
                         let vis_idx = ((rel_y / (track_h + 2.0)) as usize).min(total_rows - 1);
-                        // Конвертуємо візуальну позицію в track_idx, пропускаючи голосову
-                        let t_idx = if has_vo && vis_idx == vo_pos {
-                            // Не можна кидати на голосову доріжку — беремо найближчу
-                            if vis_idx > 0 { vis_idx - 1 } else { 0 }
-                        } else {
-                            if vis_idx < vo_pos { vis_idx } else { vis_idx - 1 }
-                        };
+                        let t_idx = vis_idx;
                         editor.drop_target_track = Some(t_idx);
 
                         if let Some(media) = editor.media_pool.iter().find(|m| &m.id == drag_id) {
@@ -197,11 +322,7 @@ pub(super) fn draw_timeline(
                             let t_idx = {
                                 let rel_y = pos.y - (rect.top() + ruler_h);
                                 let vis_idx = ((rel_y / (track_h + 2.0)) as usize).min(total_rows - 1);
-                                if has_vo && vis_idx == vo_pos {
-                                    if vis_idx > 0 { vis_idx - 1 } else { 0 }
-                                } else {
-                                    if vis_idx < vo_pos { vis_idx } else { vis_idx - 1 }
-                                }
+                                vis_idx
                             };
                             let start = ((pos.x - rect.left()) / zoom).max(0.0);
                             if let Some(media) = editor.media_pool.iter().find(|m| m.id == drag_id) {
@@ -292,13 +413,15 @@ pub(super) fn draw_timeline(
             }
 
             // Обробка перетягування кліпів (move / trim)
-            update_clip_drag(ui.ctx(), editor, rect, ruler_h, track_h, zoom, has_vo, vo_pos, total_rows);
+            update_clip_drag(ui.ctx(), editor, rect, ruler_h, track_h, zoom);
 
             // Обробка drag смужки прозорості
             update_opacity_drag(ui, editor);
 
             // Кліпи
             let clips_snapshot: Vec<EditorClip> = editor.clips.clone();
+            // Прапорець щоб не розрізати кілька кліпів за один кадр
+            let mut split_done_this_frame = false;
             for clip in &clips_snapshot {
                 let visual_idx = track_visual(clip.track_idx);
                 let track_y = vis_y(rect, visual_idx);
@@ -488,23 +611,51 @@ pub(super) fn draw_timeline(
                 }
 
                 // Курсор залежно від зони: горизонтальний trim, вертикальний (смужка opacity)
+                // Або хрестик якщо активний інструмент розрізу
                 if let Some(pos) = mouse_pos {
                     if clip_rect.contains(pos) {
-                        let rx = pos.x - clip_rect.left();
-                        let ry = pos.y - clip_rect.top();
-                        let strip_y_rel = pad_top + (1.0 - clip.opacity.clamp(0.0, 1.0)) * inner_h;
-                        let on_strip = (ry - strip_y_rel).abs() < 5.0
-                            && rx >= handle_w
-                            && rx <= clip_rect.width() - handle_w;
-                        if on_strip {
-                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
-                        } else if rx < 8.0 || rx > clip_rect.width() - 8.0 {
-                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                        if editor.split_tool_active {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                        } else {
+                            let rx = pos.x - clip_rect.left();
+                            let ry = pos.y - clip_rect.top();
+                            let strip_y_rel = pad_top + (1.0 - clip.opacity.clamp(0.0, 1.0)) * inner_h;
+                            let on_strip = (ry - strip_y_rel).abs() < 5.0
+                                && rx >= handle_w
+                                && rx <= clip_rect.width() - handle_w;
+                            if on_strip {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                            } else if rx < 8.0 || rx > clip_rect.width() - 8.0 {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                            }
                         }
                     }
                 }
 
-                let clip_resp = ui.allocate_rect(clip_rect, Sense::click_and_drag());
+                let clip_resp = if editor.split_tool_active {
+                    ui.allocate_rect(clip_rect, Sense::click())
+                } else {
+                    ui.allocate_rect(clip_rect, Sense::click_and_drag())
+                };
+
+                // Інструмент розрізу: клік по кліпу = розріз у місці кліку
+                if editor.split_tool_active {
+                    // Примусово хрестик поверх PointingHand від Sense::click()
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                    if !split_done_this_frame && clip_resp.clicked() {
+                        if let Some(pos) = mouse_pos {
+                            if clip_rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                                let click_time = ((pos.x - rect.left()) / zoom).max(0.0);
+                                let clip_id = clip.id.clone();
+                                split_clip_at(editor, &clip_id, click_time);
+                                split_done_this_frame = true;
+                            }
+                        }
+                    }
+                    // Не обробляємо подвійний клік, drag та інше в режимі розрізу
+                    continue;
+                }
+
                 if clip_resp.double_clicked() {
                     if let Some(ref path) = clip.path {
                         editor.pool_preview = Some(path.clone());
@@ -664,40 +815,6 @@ pub(super) fn draw_timeline(
                 }
             }
 
-            // ─── Голосова доріжка (інтерлівінг серед звичайних) ────────────
-            if let Some(ref ap) = editor.audio_path.clone() {
-                let vo_vis = vo_pos.min(total_rows - 1);
-                let audio_y = vis_y(rect, vo_vis) + 2.0;
-                let audio_w = editor.audio_duration * zoom;
-                let audio_x = rect.left() + editor.audio_start_secs * zoom;
-                let audio_rect = Rect::from_min_size(Pos2::new(audio_x, audio_y), Vec2::new(audio_w, track_h - 4.0));
-                painter.rect(audio_rect, 3.0, Color32::from_rgb(20, 48, 30), Stroke::new(1.2, Color32::from_rgb(39, 174, 96)));
-
-                let audio_resp = ui.allocate_rect(audio_rect, Sense::click_and_drag());
-                if audio_resp.dragged() {
-                    let delta = audio_resp.drag_delta();
-                    // Горизонтальне перетягування: зсув старту
-                    editor.audio_start_secs = (editor.audio_start_secs + delta.x / zoom).max(0.0);
-                    // Вертикальне перетягування: позиція миші → цільова доріжка
-                    if let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos()) {
-                        let rel_y = mouse_pos.y - (rect.top() + ruler_h);
-                        let vis_idx = (rel_y / (track_h + 2.0)).max(0.0) as usize;
-                        let new_pos = vis_idx.min(editor.num_tracks);
-                        editor.voiceover_track_idx = new_pos;
-                    }
-                    editor.active_audios.clear();
-                }
-
-                if audio_w > 20.0 {
-                    let aname = ap.file_name().and_then(|n| n.to_str()).unwrap_or("audio");
-                    painter.text(
-                        Pos2::new(audio_rect.left() + 6.0, audio_rect.top() + 8.0),
-                        Align2::LEFT_TOP, format!("♪ {}", aname),
-                        egui::FontId::proportional(11.0), Color32::from_rgb(150, 210, 160),
-                    );
-                }
-            }
-
             // ─── Зони накладання (жовта сітка переходів) ─────────────
             for ti in 0..editor.num_tracks {
                 let visual_idx = track_visual(ti);
@@ -801,6 +918,22 @@ pub(super) fn draw_timeline(
                 }
             }
 
+            // Індикатор лінії розрізу при активному інструменті (поверх кліпів)
+            if editor.split_tool_active {
+                if let Some(pos) = mouse_pos {
+                    if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                        let split_x = pos.x;
+                        let top_y = rect.top() + ruler_h;
+                        let total_rows = editor.num_tracks;
+                        let bottom_y = top_y + total_rows as f32 * (track_h + 2.0);
+                        painter.line_segment(
+                            [Pos2::new(split_x, top_y), Pos2::new(split_x, bottom_y)],
+                            Stroke::new(2.0, Color32::from_rgb(240, 50, 40)),
+                        );
+                    }
+                }
+            }
+
             // Плейхед
             let ph_x = rect.left() + editor.playhead * zoom;
             if ph_x >= rect.left() && ph_x <= rect.right() {
@@ -850,7 +983,7 @@ pub(super) fn draw_timeline(
                     let snap_x = rect.left() + snap_secs * zoom;
                     if snap_x >= rect.left() && snap_x <= rect.right() {
                         let top_y = rect.top() + ruler_h;
-                        let total_rows = editor.num_tracks + if has_vo { 1 } else { 0 };
+                        let total_rows = editor.num_tracks;
                         let bottom_y = top_y + total_rows as f32 * (track_h + 2.0) + 4.0;
                         let snap_color = Color32::from_rgb(255, 182, 72);
                         painter.line_segment(
@@ -886,33 +1019,24 @@ pub(super) fn draw_timeline(
         for vis in 0..total_rows {
             let track_y = vis_y(labels_rect, vis) - v_off;
             if track_y + track_h < labels_rect.top() || track_y > labels_rect.bottom() { continue; }
-            let is_vo_row = has_vo && vis == vo_pos;
-            let (label, bg, border, text_color, bar_color) = if is_vo_row {
-                ("♪ Voice".to_string(),
-                 Color32::from_rgb(22, 32, 26),
-                 Color32::from_rgb(35, 52, 40),
-                 Color32::from_rgb(100, 170, 120),
-                 Color32::from_rgb(39, 160, 80))
-            } else {
-                let ti = if vis < vo_pos { vis } else { vis - 1 };
-                let kind = editor.track_kinds.get(ti).copied().unwrap_or(TrackKind::Video);
-                match kind {
-                    TrackKind::Video => {
-                        video_num += 1;
-                        (format!("V{}", video_num),
-                         Color32::from_rgb(28, 28, 32),
-                         Color32::from_rgb(42, 42, 48),
-                         Color32::from_rgb(160, 160, 170),
-                         Color32::from_rgb(9, 100, 220))
-                    }
-                    TrackKind::Audio => {
-                        audio_num += 1;
-                        (format!("A{}", audio_num),
-                         Color32::from_rgb(22, 32, 26),
-                         Color32::from_rgb(35, 52, 40),
-                         Color32::from_rgb(100, 170, 120),
-                         Color32::from_rgb(39, 160, 80))
-                    }
+            let ti = vis;
+            let kind = editor.track_kinds.get(ti).copied().unwrap_or(TrackKind::Video);
+            let (label, bg, border, text_color, bar_color) = match kind {
+                TrackKind::Video => {
+                    video_num += 1;
+                    (format!("V{}", video_num),
+                     Color32::from_rgb(28, 28, 32),
+                     Color32::from_rgb(42, 42, 48),
+                     Color32::from_rgb(160, 160, 170),
+                     Color32::from_rgb(9, 100, 220))
+                }
+                TrackKind::Audio => {
+                    audio_num += 1;
+                    (format!("A{}", audio_num),
+                     Color32::from_rgb(22, 32, 26),
+                     Color32::from_rgb(35, 52, 40),
+                     Color32::from_rgb(100, 170, 120),
+                     Color32::from_rgb(39, 160, 80))
                 }
             };
             let lrect = Rect::from_min_size(Pos2::new(labels_rect.left(), track_y), Vec2::new(label_w, track_h));
@@ -923,20 +1047,9 @@ pub(super) fn draw_timeline(
             painter.text(name_rect.center(), Align2::CENTER_CENTER, &label, egui::FontId::proportional(11.0), text_color);
 
             // ─── Повзунок гучності (нижня частина лейблу) ────────────────────
-            let ti_opt = if is_vo_row {
-                None // голосова
-            } else {
-                Some(if vis < vo_pos { vis } else { vis - 1 })
-            };
 
             // Поточне значення гучності
-            let current_vol = if is_vo_row {
-                editor.voiceover_volume
-            } else if let Some(ti) = ti_opt {
-                editor.track_volumes.get(ti).copied().unwrap_or(1.0)
-            } else {
-                1.0
-            };
+            let current_vol = editor.track_volumes.get(ti).copied().unwrap_or(1.0);
 
             // Малюємо фонову доріжку слайдера
             let slider_y = lrect.top() + track_h * 0.62;
@@ -991,34 +1104,24 @@ pub(super) fn draw_timeline(
                     let rel_x = (pos.x - slider_track.left()).clamp(0.0, label_w - pad_x * 2.0);
                     let new_vol = (rel_x / (label_w - pad_x * 2.0)) * 2.0;
                     let new_vol = new_vol.clamp(0.0, 2.0);
-                    if is_vo_row {
-                        editor.voiceover_volume = new_vol;
-                    } else if let Some(ti) = ti_opt {
-                        while editor.track_volumes.len() <= ti { editor.track_volumes.push(1.0); }
-                        editor.track_volumes[ti] = new_vol;
-                    }
+                    while editor.track_volumes.len() <= ti { editor.track_volumes.push(1.0); }
+                    editor.track_volumes[ti] = new_vol;
                     // Зупиняємо активне аудіо щоб воно перезапустилось з новою гучністю
                     let save_path = editor.save_path.clone();
                     editor.active_audios.retain(|a| {
-                        if is_vo_row {
-                            editor.audio_path.as_deref() != Some(a.path.as_path())
-                        } else if let Some(ti) = ti_opt {
-                            !editor.clips.iter().any(|c| {
-                                if c.track_idx != ti { return false; }
-                                // Прямий збіг шляху
-                                if c.path.as_deref() == Some(a.path.as_path()) { return true; }
-                                // Вбудоване аудіо: clip.path = .mp4, active.path = .wav кеш
-                                if c.is_embedded_audio {
-                                    if let Some(ref cp) = c.path {
-                                        let cached = super::audio::embedded_audio_cache_path(cp, &save_path);
-                                        return cached == a.path;
-                                    }
+                        !editor.clips.iter().any(|c| {
+                            if c.track_idx != ti { return false; }
+                            // Прямий збіг шляху
+                            if c.path.as_deref() == Some(a.path.as_path()) { return true; }
+                            // Вбудоване аудіо: clip.path = .mp4, active.path = .wav кеш
+                            if c.is_embedded_audio {
+                                if let Some(ref cp) = c.path {
+                                    let cached = super::audio::embedded_audio_cache_path(cp, &save_path);
+                                    return cached == a.path;
                                 }
-                                false
-                            })
-                        } else {
-                            true
-                        }
+                            }
+                            false
+                        })
                     });
                 }
                 ui.ctx().request_repaint();
@@ -1124,9 +1227,6 @@ fn update_clip_drag(
     ruler_h: f32,
     track_h: f32,
     zoom: f32,
-    has_vo: bool,
-    vo_pos: usize,
-    _total_rows: usize,
 ) {
     // Якщо opacity_drag активний — clip_drag не обробляємо
     if editor.opacity_drag.is_some() { return; }
@@ -1165,13 +1265,7 @@ fn update_clip_drag(
     let dy = pos.y - (rect.top() + ruler_h);
     let vis_idx = (dy / (track_h + 2.0)).max(0.0) as usize;
     // Конвертуємо візуальну позицію в track_idx, пропускаючи голосову
-    let new_track = if has_vo && vis_idx == vo_pos {
-        // На голосову доріжку не можна — беремо найближчу
-        if vis_idx > 0 { vis_idx - 1 } else { 0 }
-    } else {
-        let ti = if vis_idx < vo_pos { vis_idx } else { vis_idx - 1 };
-        ti.min(editor.num_tracks - 1)
-    };
+    let new_track = vis_idx.min(editor.num_tracks - 1);
 
     let raw_start = (drag.initial_start + dx).max(0.0);
     let clip_dur = drag.initial_duration;

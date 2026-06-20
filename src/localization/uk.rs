@@ -75,6 +75,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_effects" => "Ефекти",
         "montage_editor_clip_zoom" => "Зум",
         "montage_editor_clip_shake" => "Покачування",
+        "montage_editor_split_tool" => "✂ Розріз",
+        "montage_editor_split_at_playhead" => "Розрізати на плейхеді",
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",
