@@ -16,7 +16,7 @@ pub use types::{
 };
 pub use media::MediaItem;
 pub use frame_cache::FrameCache;
-pub use audio::{AudioPlayer, PlayingAudio};
+pub use audio::{AudioPlayer, PlayingAudio, embedded_audio_cache_path};
 pub use state::MontageEditorState;
 
 use std::collections::HashSet;
@@ -175,9 +175,17 @@ pub fn draw_montage_editor_window(
             for clip in &editor.clips {
                 if clip.kind == ClipKind::Audio {
                     if let Some(ref cp) = clip.path {
+                        // Вбудоване аудіо відеофайлу (.mp4) — rodio не декодує mp4,
+                        // тому грає з попередньо витягнутого WAV-кешу
+                        let play_path = if clip.is_embedded_audio {
+                            let cached = embedded_audio_cache_path(cp, &editor.save_path);
+                            if cached.exists() { cached } else { continue; }
+                        } else {
+                            cp.clone()
+                        };
                         let vol = editor.track_volumes.get(clip.track_idx).copied().unwrap_or(1.0);
                         targets.push(TargetAudio {
-                            path: cp.clone(),
+                            path: play_path,
                             start: clip.start_secs,
                             duration: clip.duration,
                             volume: vol,

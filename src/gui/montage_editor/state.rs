@@ -135,6 +135,15 @@ impl MontageEditorState {
         while track_volumes.len() < num_tracks { track_volumes.push(1.0); }
         let voiceover_volume = load_voiceover_volume(save_path).unwrap_or(1.0);
 
+        // Запускаємо витягування WAV для всіх вбудованих аудіо-кліпів без кешу
+        for clip in &clips {
+            if clip.is_embedded_audio {
+                if let Some(ref path) = clip.path {
+                    super::audio::extract_embedded_audio_async(path.clone(), save_path.to_path_buf());
+                }
+            }
+        }
+
         Self {
             job_name: job_name.to_string(),
             save_path: save_path.to_path_buf(),
@@ -252,12 +261,16 @@ impl MontageEditorState {
                 "end_secs": seg_end as f64,
                 "media": media_rel,
                 "media_id": clip.media_id,
+                "clip_kind": match clip.kind { ClipKind::Video => "video", ClipKind::Audio => "audio", ClipKind::Image => "image" },
                 "zoom_enabled": clip.zoom_enabled,
                 "shake_enabled": clip.shake_enabled,
                 "trim_start": clip.trim_start as f64,
                 "stock_seg_idx": clip.stock_seg_idx,
                 "overlap_transition": clip.overlap_transition,
                 "opacity": clip.opacity as f64,
+                "pair_id": clip.pair_id,
+                "audio_linked": clip.audio_linked,
+                "is_embedded_audio": clip.is_embedded_audio,
             }));
             cursor = cursor.max(seg_end);
         }
@@ -278,6 +291,7 @@ impl MontageEditorState {
                     "end_secs": clip.end_secs() as f64,
                     "media": media_rel,
                     "media_id": clip.media_id,
+                    "clip_kind": match clip.kind { ClipKind::Video => "video", ClipKind::Audio => "audio", ClipKind::Image => "image" },
                     "scale": clip.scale as f64,
                     "pos_x": clip.pos_x as f64,
                     "pos_y": clip.pos_y as f64,
@@ -286,6 +300,9 @@ impl MontageEditorState {
                     "stock_seg_idx": clip.stock_seg_idx,
                     "overlap_transition": clip.overlap_transition,
                     "opacity": clip.opacity as f64,
+                    "pair_id": clip.pair_id,
+                    "audio_linked": clip.audio_linked,
+                    "is_embedded_audio": clip.is_embedded_audio,
                 })
             }).collect();
             overlay_tracks.push(serde_json::json!({
@@ -310,6 +327,23 @@ impl MontageEditorState {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         std::fs::write(timeline_path, content)
     }
+
+    /// Зберігає тільки гучності у timeline.json — не чіпає segments/overlay_tracks.
+    /// Використовується для повзунка гучності щоб не перетирати дані агента.
+    pub fn save_volumes_only(&self) -> Result<(), std::io::Error> {
+        let timeline_path = self.save_path.join("timeline.json");
+        let content = std::fs::read_to_string(&timeline_path).unwrap_or_else(|_| "{}".to_string());
+        let mut json: serde_json::Value = serde_json::from_str(&content)
+            .unwrap_or_else(|_| serde_json::json!({}));
+
+        let track_vols_json: Vec<f64> = self.track_volumes.iter().map(|&v| v as f64).collect();
+        json["voiceover_volume"] = serde_json::json!(self.voiceover_volume as f64);
+        json["track_volumes"] = serde_json::json!(track_vols_json);
+
+        let updated = serde_json::to_string_pretty(&json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        std::fs::write(timeline_path, updated)
+    }
 }
 
 // ─── Завантаження даних ───────────────────────────────────────────────────────
@@ -327,12 +361,18 @@ fn clip_from_json_seg(
         .unwrap_or(media_str)
         .to_string();
     let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
-        ClipKind::Video
-    } else if matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac") {
-        ClipKind::Audio
-    } else {
-        ClipKind::Image
+    // Зберігаємо kind явно в JSON щоб відрізнити вбудоване аудіо (.mp4) від відеокліпу
+    let kind = match seg["clip_kind"].as_str().unwrap_or("") {
+        "audio" => ClipKind::Audio,
+        "image" => ClipKind::Image,
+        "video" => ClipKind::Video,
+        _ => if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
+            ClipKind::Video
+        } else if matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac") {
+            ClipKind::Audio
+        } else {
+            ClipKind::Image
+        }
     };
     let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
     let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
@@ -362,6 +402,9 @@ fn clip_from_json_seg(
         stock_seg_idx: seg["stock_seg_idx"].as_u64().map(|v| v as usize),
         overlap_transition: seg["overlap_transition"].as_str().unwrap_or("fade").to_string(),
         opacity: seg["opacity"].as_f64().unwrap_or(1.0) as f32,
+        pair_id: seg["pair_id"].as_str().map(|s| s.to_string()),
+        audio_linked: seg["audio_linked"].as_bool().unwrap_or(true),
+        is_embedded_audio: seg["is_embedded_audio"].as_bool().unwrap_or(false),
     }
 }
 
@@ -489,6 +532,9 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     stock_seg_idx: Some(i),
                     overlap_transition: "fade".to_string(),
                     opacity: 1.0,
+                    pair_id: None,
+                    audio_linked: false,
+                    is_embedded_audio: false,
                 });
             }
         }

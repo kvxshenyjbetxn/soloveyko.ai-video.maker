@@ -48,6 +48,23 @@ fn clean_windows_path(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 
+/// Перевіряє чи є аудіодоріжка у відеофайлі (через ffprobe)
+pub fn probe_has_audio(path: &Path) -> bool {
+    let clean_path = clean_windows_path(path);
+    let mut cmd = std::process::Command::new(crate::bundle::ffprobe_path());
+    cmd.args([
+        "-v", "error",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=nw=1:nk=1",
+    ])
+    .arg(&clean_path);
+    crate::bundle::set_no_window(&mut cmd);
+    cmd.output().ok()
+        .map(|o| !String::from_utf8_lossy(&o.stdout).trim().is_empty())
+        .unwrap_or(false)
+}
+
 /// Отримує тривалість медіафайлу через ffprobe
 pub fn probe_duration(path: &Path) -> Option<f32> {
     let clean_path = clean_windows_path(path);

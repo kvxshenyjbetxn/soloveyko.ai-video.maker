@@ -69,6 +69,9 @@ pub fn run_montage(
         pos_y: f64,
         #[serde(default = "default_opacity")]
         opacity: f64,
+        /// true = вбудоване аудіо відеофайлу; треба використовувати як аудіо-вхід
+        #[serde(default)]
+        is_embedded_audio: bool,
     }
     fn default_scale() -> f64 { 1.0 }
     fn default_opacity() -> f64 { 1.0 }
@@ -158,7 +161,8 @@ pub fn run_montage(
                     for seg in track.segments {
                         let dur = (seg.end_secs - seg.start_secs).max(0.05);
                         if let Some(ref media) = seg.media {
-                            if is_audio_ext(media) {
+                            if seg.is_embedded_audio || is_audio_ext(media) {
+                                // Вбудоване аудіо відео або звичайний аудіо-файл
                                 extra_audios.push(AudioClip {
                                     path: media.clone(),
                                     start_secs: seg.start_secs,

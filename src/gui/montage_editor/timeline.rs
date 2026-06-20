@@ -206,21 +206,28 @@ pub(super) fn draw_timeline(
                             let start = ((pos.x - rect.left()) / zoom).max(0.0);
                             if let Some(media) = editor.media_pool.iter().find(|m| m.id == drag_id) {
                                 let kind = media.kind.clone();
+                                let has_audio = media.has_audio;
                                 let name = media.name.clone();
-                                let path = Some(media.path.clone());
+                                let media_path = media.path.clone();
                                 let duration = media.duration_secs;
                                 let media_id = media.id.clone();
+                                // Якщо відео з аудіо — генеруємо спільний pair_id
+                                let pair_uuid = if matches!(kind, ClipKind::Video) && has_audio {
+                                    Some(uuid_str())
+                                } else {
+                                    None
+                                };
                                 let new_id = uuid_str();
                                 editor.selected_clip_id = Some(new_id.clone());
                                 editor.clips.push(EditorClip {
                                     id: new_id,
-                                    media_id,
-                                    path,
-                                    name,
+                                    media_id: media_id.clone(),
+                                    path: Some(media_path.clone()),
+                                    name: name.clone(),
                                     start_secs: start,
                                     duration,
                                     track_idx: t_idx,
-                                    kind,
+                                    kind: kind.clone(),
                                     scale: 1.0,
                                     pos_x: 0.0,
                                     pos_y: 0.0,
@@ -231,7 +238,52 @@ pub(super) fn draw_timeline(
                                     stock_seg_idx: None,
                                     overlap_transition: "fade".to_string(),
                                     opacity: 1.0,
+                                    pair_id: pair_uuid.clone(),
+                                    audio_linked: pair_uuid.is_some(),
+                                    is_embedded_audio: false,
                                 });
+                                // Автоматично додаємо аудіо-кліп для відео з вбудованим аудіо
+                                if let Some(ref pid) = pair_uuid {
+                                    let audio_track_idx = editor.track_kinds.iter()
+                                        .position(|k| *k == super::types::TrackKind::Audio)
+                                        .unwrap_or_else(|| {
+                                            let idx = editor.num_tracks;
+                                            editor.num_tracks += 1;
+                                            editor.track_kinds.push(super::types::TrackKind::Audio);
+                                            while editor.track_volumes.len() < editor.num_tracks {
+                                                editor.track_volumes.push(1.0);
+                                            }
+                                            idx
+                                        });
+                                    editor.clips.push(EditorClip {
+                                        id: uuid_str(),
+                                        media_id,
+                                        path: Some(media_path.clone()),
+                                        name: format!("A: {}", name),
+                                        start_secs: start,
+                                        duration,
+                                        track_idx: audio_track_idx,
+                                        kind: ClipKind::Audio,
+                                        scale: 1.0,
+                                        pos_x: 0.0,
+                                        pos_y: 0.0,
+                                        zoom_enabled: false,
+                                        shake_enabled: false,
+                                        is_placeholder: false,
+                                        trim_start: 0.0,
+                                        stock_seg_idx: None,
+                                        overlap_transition: "fade".to_string(),
+                                        opacity: 1.0,
+                                        pair_id: Some(pid.clone()),
+                                        audio_linked: true,
+                                        is_embedded_audio: true,
+                                    });
+                                    // Одразу запускаємо витягування WAV у фоні
+                                    super::audio::extract_embedded_audio_async(
+                                        media_path.clone(),
+                                        editor.save_path.clone(),
+                                    );
+                                }
                             }
                         }
                     }
@@ -309,19 +361,27 @@ pub(super) fn draw_timeline(
                 // Прозорість: мінімум 30% видимості, щоб кліп не зникав
                 let op = clip.opacity.clamp(0.0, 1.0);
                 let bg_alpha = ((op * 0.7 + 0.3) * 255.0) as u8;
-                let (bg, accent) = match clip.kind {
-                    ClipKind::Video => (
-                        Color32::from_rgba_unmultiplied(18, 32, 55, bg_alpha),
-                        Color32::from_rgb(9, 100, 220),
-                    ),
-                    ClipKind::Image => (
-                        Color32::from_rgba_unmultiplied(30, 22, 48, bg_alpha),
-                        Color32::from_rgb(120, 70, 200),
-                    ),
-                    ClipKind::Audio => (
-                        Color32::from_rgba_unmultiplied(20, 40, 28, bg_alpha),
-                        Color32::from_rgb(39, 160, 80),
-                    ),
+                let (bg, accent) = if clip.is_embedded_audio {
+                    // Вбудоване аудіо відеофайлу — бірюзовий відтінок
+                    (
+                        Color32::from_rgba_unmultiplied(18, 42, 50, bg_alpha),
+                        Color32::from_rgb(30, 155, 160),
+                    )
+                } else {
+                    match clip.kind {
+                        ClipKind::Video => (
+                            Color32::from_rgba_unmultiplied(18, 32, 55, bg_alpha),
+                            Color32::from_rgb(9, 100, 220),
+                        ),
+                        ClipKind::Image => (
+                            Color32::from_rgba_unmultiplied(30, 22, 48, bg_alpha),
+                            Color32::from_rgb(120, 70, 200),
+                        ),
+                        ClipKind::Audio => (
+                            Color32::from_rgba_unmultiplied(20, 40, 28, bg_alpha),
+                            Color32::from_rgb(39, 160, 80),
+                        ),
+                    }
                 };
                 let border = if is_sel { Color32::WHITE } else { accent.linear_multiply(op * 0.7 + 0.3) };
                 painter.rect(clip_rect, 3.0, bg, Stroke::new(if is_sel { 2.0 } else { 1.2 }, border));
@@ -398,11 +458,20 @@ pub(super) fn draw_timeline(
                 painter.rect_filled(strip_rect, 1.0, Color32::from_rgba_unmultiplied(255, 255, 255, strip_alpha));
 
                 if cw > 18.0 {
-                    let icon = match clip.kind { ClipKind::Video => "🎬", ClipKind::Image => "🖼", ClipKind::Audio => "🎵" };
-                    let label = if clip.name.chars().count() > 16 {
-                        format!("{} {}…", icon, clip.name.chars().take(13).collect::<String>())
+                    // Іконка з індикатором зв'язку для пар
+                    let base_icon = match clip.kind { ClipKind::Video => "🎬", ClipKind::Image => "🖼", ClipKind::Audio => "🎵" };
+                    let link_suffix = if clip.pair_id.is_some() {
+                        if clip.audio_linked { " 🔗" } else { " 🔓" }
+                    } else { "" };
+                    let display_name = if clip.is_embedded_audio {
+                        clip.name.strip_prefix("A: ").unwrap_or(&clip.name)
                     } else {
-                        format!("{} {}", icon, clip.name)
+                        &clip.name
+                    };
+                    let label = if display_name.chars().count() > 14 {
+                        format!("{} {}…{}", base_icon, display_name.chars().take(11).collect::<String>(), link_suffix)
+                    } else {
+                        format!("{} {}{}", base_icon, display_name, link_suffix)
                     };
                     painter.text(
                         Pos2::new(clip_rect.left() + handle_w + 2.0, clip_rect.top() + 5.0),
@@ -472,6 +541,14 @@ pub(super) fn draw_timeline(
                             } else {
                                 DragMode::Move
                             };
+                            // Шукаємо початкову позицію парного кліпу
+                            let paired_initial_start = clip.pair_id.as_ref()
+                                .filter(|_| clip.audio_linked)
+                                .and_then(|pid| {
+                                    clips_snapshot.iter()
+                                        .find(|c| c.pair_id.as_deref() == Some(pid.as_str()) && c.id != clip.id)
+                                        .map(|p| p.start_secs)
+                                });
                             editor.clip_drag_state = Some(ClipDragState {
                                 clip_id: clip.id.clone(),
                                 mode,
@@ -480,6 +557,7 @@ pub(super) fn draw_timeline(
                                 initial_mouse_x: pos.x,
                                 initial_track_idx: clip.track_idx,
                                 snap_line_secs: None,
+                                paired_initial_start,
                             });
                             editor.selected_clip_id = Some(clip.id.clone());
                         }
@@ -491,8 +569,73 @@ pub(super) fn draw_timeline(
                     let clip_path = path.clone();
                     let clip_kind = clip.kind.clone();
                     let clip_stock_seg = clip.stock_seg_idx;
+                    let clip_pair_id = clip.pair_id.clone();
+                    let clip_audio_linked = clip.audio_linked;
+                    let clip_is_embedded = clip.is_embedded_audio;
+                    let clip_id_str = clip.id.clone();
                     let is_animating = anim_loading.lock().unwrap().contains(&clip_path) || regen_paths.contains(&clip_path);
                     clip_resp.context_menu(|ui| {
+                        // Пункти для пов'язаних аудіо/відео пар
+                        if clip_pair_id.is_some() {
+                            if clip_audio_linked {
+                                if ui.button(translate(language, "montage_editor_unlink_audio")).clicked() {
+                                    // Розв'язуємо обидва кліпи пари
+                                    let pid = clip_pair_id.as_deref().unwrap_or("");
+                                    for c in &mut editor.clips {
+                                        if c.pair_id.as_deref() == Some(pid) {
+                                            c.audio_linked = false;
+                                        }
+                                    }
+                                    editor.save_to_timeline().ok();
+                                    ui.close_menu();
+                                }
+                            } else if ui.button(translate(language, "montage_editor_link_audio")).clicked() {
+                                let pid = clip_pair_id.as_deref().unwrap_or("");
+                                for c in &mut editor.clips {
+                                    if c.pair_id.as_deref() == Some(pid) {
+                                        c.audio_linked = true;
+                                    }
+                                }
+                                editor.save_to_timeline().ok();
+                                ui.close_menu();
+                            }
+                            if clip_is_embedded {
+                                // На аудіо-кліпі: "Видалити аудіо"
+                                if ui.button(translate(language, "montage_editor_delete_audio_clip")).clicked() {
+                                    editor.clips.retain(|c| c.id != clip_id_str);
+                                    // Знімаємо pair_id у відео-кліпу
+                                    if let Some(pid) = clip_pair_id.as_deref() {
+                                        for c in &mut editor.clips {
+                                            if c.pair_id.as_deref() == Some(pid) {
+                                                c.pair_id = None;
+                                                c.audio_linked = false;
+                                            }
+                                        }
+                                    }
+                                    editor.save_to_timeline().ok();
+                                    ui.close_menu();
+                                }
+                            } else {
+                                // На відео-кліпі: "Видалити аудіо" видаляє парний аудіо-кліп
+                                if ui.button(translate(language, "montage_editor_delete_audio_clip")).clicked() {
+                                    if let Some(pid) = clip_pair_id.as_deref() {
+                                        editor.clips.retain(|c| {
+                                            !(c.pair_id.as_deref() == Some(pid) && c.is_embedded_audio)
+                                        });
+                                        // Знімаємо pair_id у відео-кліпу
+                                        for c in &mut editor.clips {
+                                            if c.id == clip_id_str {
+                                                c.pair_id = None;
+                                                c.audio_linked = false;
+                                            }
+                                        }
+                                    }
+                                    editor.save_to_timeline().ok();
+                                    ui.close_menu();
+                                }
+                            }
+                            ui.separator();
+                        }
                         if let Some(seg_idx) = clip_stock_seg {
                             if ui.button(translate(language, "montage_editor_replace_stock")).clicked() {
                                 editor.pending_open_stock_picker = Some(seg_idx);
@@ -855,12 +998,24 @@ pub(super) fn draw_timeline(
                         editor.track_volumes[ti] = new_vol;
                     }
                     // Зупиняємо активне аудіо щоб воно перезапустилось з новою гучністю
+                    let save_path = editor.save_path.clone();
                     editor.active_audios.retain(|a| {
                         if is_vo_row {
                             editor.audio_path.as_deref() != Some(a.path.as_path())
                         } else if let Some(ti) = ti_opt {
-                            // Зупиняємо аудіо кліпи цієї доріжки
-                            !editor.clips.iter().any(|c| c.track_idx == ti && c.path.as_deref() == Some(a.path.as_path()))
+                            !editor.clips.iter().any(|c| {
+                                if c.track_idx != ti { return false; }
+                                // Прямий збіг шляху
+                                if c.path.as_deref() == Some(a.path.as_path()) { return true; }
+                                // Вбудоване аудіо: clip.path = .mp4, active.path = .wav кеш
+                                if c.is_embedded_audio {
+                                    if let Some(ref cp) = c.path {
+                                        let cached = super::audio::embedded_audio_cache_path(cp, &save_path);
+                                        return cached == a.path;
+                                    }
+                                }
+                                false
+                            })
                         } else {
                             true
                         }
@@ -869,7 +1024,8 @@ pub(super) fn draw_timeline(
                 ui.ctx().request_repaint();
             }
             if bar_resp.drag_stopped() {
-                editor.save_to_timeline().ok();
+                // Тільки гучності — не перезаписуємо весь timeline.json (щоб не знищити дані агента)
+                editor.save_volumes_only().ok();
             }
 
             // Tooltip з поточним значенням
@@ -989,6 +1145,7 @@ fn update_clip_drag(
             initial_mouse_x: d.initial_mouse_x,
             initial_track_idx: d.initial_track_idx,
             snap_line_secs: d.snap_line_secs,
+            paired_initial_start: d.paired_initial_start,
         },
         None => return,
     };
@@ -1057,6 +1214,12 @@ fn update_clip_drag(
         ds.snap_line_secs = best_snap.map(|s| if snap_is_end { s + clip_dur } else { s });
     }
 
+    // Зчитуємо дані пари до мутабельного запозичення
+    let (pair_id, is_linked, this_clip_id) = {
+        let c = &editor.clips[clip_idx];
+        (c.pair_id.clone(), c.audio_linked, c.id.clone())
+    };
+
     let clip = &mut editor.clips[clip_idx];
     match drag.mode {
         DragMode::Move => {
@@ -1071,6 +1234,18 @@ fn update_clip_drag(
         }
         DragMode::TrimRight => {
             clip.duration = (drag.initial_duration + dx).max(0.1);
+        }
+    }
+    // перше запозичення закінчилось
+
+    // Синхронно рухаємо парний кліп (якщо прив'язаний)
+    if matches!(drag.mode, DragMode::Move) && is_linked {
+        if let (Some(pid), Some(paired_init)) = (pair_id, drag.paired_initial_start) {
+            if let Some(paired) = editor.clips.iter_mut().find(|c| {
+                c.pair_id.as_deref() == Some(pid.as_str()) && c.id != this_clip_id
+            }) {
+                paired.start_secs = (paired_init + dx).max(0.0);
+            }
         }
     }
 

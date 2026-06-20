@@ -197,6 +197,8 @@ pub struct ClipDragState {
     pub initial_track_idx: usize,
     /// Позиція лінії снапу (секунди), якщо кліп приліп до чогось
     pub snap_line_secs: Option<f32>,
+    /// Початкова позиція парного кліпу на початку drag (для синхронного руху)
+    pub paired_initial_start: Option<f32>,
 }
 
 // ─── Стан перетягування смужки прозорості ────────────────────────────────────
@@ -238,10 +240,15 @@ pub struct EditorClip {
     /// Індекс сегменту в stock_cache.json (для кліпів обраних зі стоків; None = не стокове медіа).
     pub stock_seg_idx: Option<usize>,
     /// Тип xfade-переходу для overlap-зон ("fade", "wipeleft", "dissolve", …).
-    /// Визначає як прев'ю рендерить перехід при накладанні, так і FFmpeg-монтаж.
     pub overlap_transition: String,
     /// Прозорість кліпу від 0.0 (повністю прозорий) до 1.0 (непрозорий).
     pub opacity: f32,
+    /// Спільний UUID для пари (відео-кліп ↔ аудіо-кліп); None = без пари.
+    pub pair_id: Option<String>,
+    /// true = аудіо синхронізовано з відео (рухаються разом).
+    pub audio_linked: bool,
+    /// true = цей аудіо-кліп є вбудованим аудіопотоком відеофайлу.
+    pub is_embedded_audio: bool,
 }
 
 impl EditorClip {

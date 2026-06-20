@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use super::types::{ClipKind, PreviewRenderSettings};
-use super::utils::{frame_cache_dir, probe_duration, sharp_frame_cache_dir, uuid_str};
+use super::utils::{frame_cache_dir, probe_duration, probe_has_audio, sharp_frame_cache_dir, uuid_str};
 
 // ─── Медіа-файл у пулі ───────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ pub struct MediaItem {
     pub sharp_cache_dir: PathBuf,
     /// true = всі легкі кадри вже витягнуто на диск
     pub extraction_complete: Arc<AtomicBool>,
+    /// true = відеофайл містить вбудовану аудіодоріжку
+    pub has_audio: bool,
 }
 
 impl MediaItem {
@@ -60,6 +62,8 @@ impl MediaItem {
         } else {
             5.0
         };
+        // Перевіряємо аудіодоріжку тільки для відеофайлів
+        let has_audio = is_video && probe_has_audio(&path);
 
         // Стабільні папки кешу на основі хешу шляху + версії якості превʼю.
         let cache_dir = frame_cache_dir(cache_base, &path, preview);
@@ -149,6 +153,7 @@ impl MediaItem {
             cache_dir,
             sharp_cache_dir,
             extraction_complete,
+            has_audio,
         }
     }
 
