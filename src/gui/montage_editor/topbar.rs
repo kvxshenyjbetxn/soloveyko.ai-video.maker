@@ -20,30 +20,6 @@ pub(super) fn draw_topbar(
         ui.add(egui::Slider::new(&mut editor.timeline_zoom, 10.0..=300.0).show_value(false));
 
         ui.separator();
-
-        // Інструмент розрізу (лезо)
-        let split_btn_text = if editor.split_tool_active {
-            egui::RichText::new(translate(language, "montage_editor_split_tool"))
-                .strong()
-                .color(Color32::WHITE)
-        } else {
-            egui::RichText::new(translate(language, "montage_editor_split_tool"))
-                .weak()
-        };
-        let split_fill = if editor.split_tool_active {
-            Color32::from_rgb(200, 60, 40)
-        } else {
-            Color32::from_rgb(35, 35, 42)
-        };
-        if ui.add(egui::Button::new(split_btn_text).fill(split_fill)).clicked() {
-            editor.split_tool_active = !editor.split_tool_active;
-            // Вихід з інструменту розрізу при повторному натисканні
-            if !editor.split_tool_active {
-                // Курсор скинеться при наступному кадрі
-            }
-        }
-
-        ui.separator();
         draw_preview_settings(ui, language, editor);
 
         let total_dur = editor.total_dur();

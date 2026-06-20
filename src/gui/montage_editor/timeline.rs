@@ -120,6 +120,16 @@ fn split_clip_at(editor: &mut MontageEditorState, clip_id: &str, split_time: f32
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
 
+/// Перевіряє чи тип кліпу сумісний з типом доріжки.
+/// Відео та зображення — тільки на відео-доріжки, аудіо — тільки на аудіо.
+fn clip_fits_track(clip_kind: &ClipKind, track_kind: Option<&TrackKind>) -> bool {
+    match track_kind {
+        Some(TrackKind::Video) => matches!(clip_kind, ClipKind::Video | ClipKind::Image),
+        Some(TrackKind::Audio) => matches!(clip_kind, ClipKind::Audio),
+        None => false,
+    }
+}
+
 pub(super) fn draw_timeline(
     ui: &mut egui::Ui,
     language: Language,
@@ -169,9 +179,10 @@ pub(super) fn draw_timeline(
         editor.split_tool_active = false;
     }
 
-    // ─── Кнопки додавання доріжок (як у kadr) ────────────────────────────
+    // ─── Кнопки додавання доріжок + інструмент розрізу ──────────────────
     ui.horizontal(|ui| {
         let spacing = 6.0;
+
         // Кнопка "+ Відео"
         if ui.add_sized([70.0, 20.0], egui::Button::new(translate(language, "montage_editor_add_video_track"))).clicked() {
             // Зсуваємо всі кліпи вниз, щоб нова доріжка з'явилась зверху
@@ -189,6 +200,26 @@ pub(super) fn draw_timeline(
             editor.track_kinds.push(TrackKind::Audio);
         }
         ui.weak(format!("{} {}", editor.num_tracks, translate(language, "montage_editor_tracks_count")));
+
+        ui.separator();
+
+        // Кнопка інструменту розрізу (лезо) — справа від кнопок доріжок
+        let split_btn_text = if editor.split_tool_active {
+            egui::RichText::new(translate(language, "montage_editor_split_tool"))
+                .strong()
+                .color(Color32::WHITE)
+        } else {
+            egui::RichText::new(translate(language, "montage_editor_split_tool"))
+                .weak()
+        };
+        let split_fill = if editor.split_tool_active {
+            Color32::from_rgb(200, 60, 40)
+        } else {
+            Color32::from_rgb(35, 35, 42)
+        };
+        if ui.add_sized([80.0, 20.0], egui::Button::new(split_btn_text).fill(split_fill)).clicked() {
+            editor.split_tool_active = !editor.split_tool_active;
+        }
     });
 
     let avail_h = ui.available_height();
@@ -287,25 +318,31 @@ pub(super) fn draw_timeline(
                         let rel_y = pos.y - (rect.top() + ruler_h);
                         let vis_idx = ((rel_y / (track_h + 2.0)) as usize).min(total_rows - 1);
                         let t_idx = vis_idx;
-                        editor.drop_target_track = Some(t_idx);
+                        let target_kind = editor.track_kinds.get(t_idx);
 
                         if let Some(media) = editor.media_pool.iter().find(|m| &m.id == drag_id) {
-                            let preview_x = rect.left() + click_t * zoom;
-                            let preview_w = (media.duration_secs * zoom).max(4.0);
-                            let preview_vis = track_visual(t_idx);
-                            let preview_y = vis_y(rect, preview_vis) + 2.0;
-                            let preview_rect = Rect::from_min_size(
-                                Pos2::new(preview_x, preview_y),
-                                Vec2::new(preview_w, track_h - 4.0),
-                            );
-                            painter.rect_filled(preview_rect, 4.0, Color32::from_rgba_unmultiplied(9, 123, 244, 45));
-                            painter.rect_stroke(preview_rect, 4.0, Stroke::new(1.5, Color32::from_rgb(9, 123, 244)));
-                            painter.text(
-                                Pos2::new(preview_rect.left() + 6.0, preview_rect.top() + 4.0),
-                                Align2::LEFT_TOP,
-                                format!("{:.1}s → V{}", click_t, t_idx + 1),
-                                egui::FontId::proportional(10.0), Color32::WHITE,
-                            );
+                            // Перевіряємо сумісність медіа з доріжкою
+                            if clip_fits_track(&media.kind, target_kind) {
+                                editor.drop_target_track = Some(t_idx);
+                                let preview_x = rect.left() + click_t * zoom;
+                                let preview_w = (media.duration_secs * zoom).max(4.0);
+                                let preview_vis = track_visual(t_idx);
+                                let preview_y = vis_y(rect, preview_vis) + 2.0;
+                                let preview_rect = Rect::from_min_size(
+                                    Pos2::new(preview_x, preview_y),
+                                    Vec2::new(preview_w, track_h - 4.0),
+                                );
+                                painter.rect_filled(preview_rect, 4.0, Color32::from_rgba_unmultiplied(9, 123, 244, 45));
+                                painter.rect_stroke(preview_rect, 4.0, Stroke::new(1.5, Color32::from_rgb(9, 123, 244)));
+                                painter.text(
+                                    Pos2::new(preview_rect.left() + 6.0, preview_rect.top() + 4.0),
+                                    Align2::LEFT_TOP,
+                                    format!("{:.1}s → {}{}", click_t, if matches!(target_kind, Some(TrackKind::Audio)) { "A" } else { "V" }, t_idx + 1),
+                                    egui::FontId::proportional(10.0), Color32::WHITE,
+                                );
+                            } else {
+                                editor.drop_target_track = None;
+                            }
                         }
                         ui.ctx().request_repaint();
                     } else {
@@ -324,8 +361,14 @@ pub(super) fn draw_timeline(
                                 let vis_idx = ((rel_y / (track_h + 2.0)) as usize).min(total_rows - 1);
                                 vis_idx
                             };
+                            let target_kind = editor.track_kinds.get(t_idx);
                             let start = ((pos.x - rect.left()) / zoom).max(0.0);
                             if let Some(media) = editor.media_pool.iter().find(|m| m.id == drag_id) {
+                                // Перевіряємо сумісність медіа з доріжкою
+                                if !clip_fits_track(&media.kind, target_kind) {
+                                    editor.drop_target_track = None;
+                                    // Несумісна доріжка — нічого не робимо
+                                } else {
                                 let kind = media.kind.clone();
                                 let has_audio = media.has_audio;
                                 let name = media.name.clone();
@@ -405,6 +448,7 @@ pub(super) fn draw_timeline(
                                         editor.save_path.clone(),
                                     );
                                 }
+                                } // closes else
                             }
                         }
                     }
@@ -1264,8 +1308,30 @@ fn update_clip_drag(
 
     let dy = pos.y - (rect.top() + ruler_h);
     let vis_idx = (dy / (track_h + 2.0)).max(0.0) as usize;
-    // Конвертуємо візуальну позицію в track_idx, пропускаючи голосову
-    let new_track = vis_idx.min(editor.num_tracks - 1);
+    // Конвертуємо візуальну позицію в track_idx
+    let hovered_track = vis_idx.min(editor.num_tracks - 1);
+
+    // Перевіряємо сумісність типу кліпу з цільовою доріжкою
+    let clip_kind = editor.clips[clip_idx].kind.clone();
+    let target_kind = editor.track_kinds.get(hovered_track);
+    // Якщо доріжка несумісна — шукаємо найближчу сумісну
+    let new_track = if clip_fits_track(&clip_kind, target_kind) {
+        hovered_track
+    } else {
+        // Знаходимо найближчу сумісну доріжку
+        let mut best: Option<usize> = None;
+        let mut best_dist = usize::MAX;
+        for (ti, tk) in editor.track_kinds.iter().enumerate() {
+            if clip_fits_track(&clip_kind, Some(tk)) {
+                let dist = if ti > hovered_track { ti - hovered_track } else { hovered_track - ti };
+                if dist < best_dist {
+                    best_dist = dist;
+                    best = Some(ti);
+                }
+            }
+        }
+        best.unwrap_or(drag.initial_track_idx)
+    };
 
     let raw_start = (drag.initial_start + dx).max(0.0);
     let clip_dur = drag.initial_duration;
