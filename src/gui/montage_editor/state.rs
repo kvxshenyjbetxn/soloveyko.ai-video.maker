@@ -76,6 +76,10 @@ pub struct MontageEditorState {
     pub opacity_drag: Option<OpacityDragState>,
     /// Кеш мініатюр для медіа-пулу та таймлайну (media_id → текстура першого кадру)
     pub pool_thumbnails: HashMap<String, eframe::egui::TextureHandle>,
+    /// Гучність кожної доріжки (індекс = track_idx); 1.0 = норма, 0.0 = тиша
+    pub track_volumes: Vec<f32>,
+    /// Гучність голосової доріжки (1.0 = норма)
+    pub voiceover_volume: f32,
 }
 
 impl MontageEditorState {
@@ -126,6 +130,10 @@ impl MontageEditorState {
         // За замовчуванням всі доріжки — відео (V1, V2, ...)
         let track_kinds: Vec<TrackKind> = (0..num_tracks).map(|_| TrackKind::Video).collect();
         let voiceover_track_idx = load_voiceover_track_idx(save_path).unwrap_or(num_tracks);
+        let mut track_volumes = load_track_volumes(save_path).unwrap_or_default();
+        // Доповнюємо до поточної кількості доріжок
+        while track_volumes.len() < num_tracks { track_volumes.push(1.0); }
+        let voiceover_volume = load_voiceover_volume(save_path).unwrap_or(1.0);
 
         Self {
             job_name: job_name.to_string(),
@@ -167,6 +175,8 @@ impl MontageEditorState {
             pending_preview_render: None,
             opacity_drag: None,
             pool_thumbnails: HashMap::new(),
+            track_volumes,
+            voiceover_volume,
         }
     }
 
@@ -284,10 +294,13 @@ impl MontageEditorState {
             }));
         }
 
+        let track_vols_json: Vec<f64> = self.track_volumes.iter().map(|&v| v as f64).collect();
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
             "audio_start_secs": self.audio_start_secs as f64,
             "voiceover_track_idx": self.voiceover_track_idx,
+            "voiceover_volume": self.voiceover_volume as f64,
+            "track_volumes": track_vols_json,
             "segments": main_segments,
             "overlay_tracks": overlay_tracks,
         });
@@ -359,6 +372,24 @@ fn load_voiceover_track_idx(save_path: &Path) -> Option<usize> {
     let content = std::fs::read_to_string(&path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&content).ok()?;
     v["voiceover_track_idx"].as_u64().map(|n| n as usize)
+}
+
+fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
+    let path = save_path.join("timeline.json");
+    if !path.exists() { return None; }
+    let content = std::fs::read_to_string(&path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    v["track_volumes"].as_array().map(|arr| {
+        arr.iter().map(|x| x.as_f64().unwrap_or(1.0) as f32).collect()
+    })
+}
+
+fn load_voiceover_volume(save_path: &Path) -> Option<f32> {
+    let path = save_path.join("timeline.json");
+    if !path.exists() { return None; }
+    let content = std::fs::read_to_string(&path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    v["voiceover_volume"].as_f64().map(|x| x as f32)
 }
 
 fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {

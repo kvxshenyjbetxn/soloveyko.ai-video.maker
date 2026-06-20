@@ -8,9 +8,11 @@ pub struct AudioPlayer {
 
 impl AudioPlayer {
     /// Відкриває аудіо-файл і починає відтворення з позиції `start_secs`.
-    pub fn start(path: &Path, start_secs: f32) -> Option<Self> {
+    /// `volume` — коефіцієнт гучності (1.0 = норма, 0.0 = тиша, 2.0 = +100%).
+    pub fn start(path: &Path, start_secs: f32, volume: f32) -> Option<Self> {
         let (stream, handle) = rodio::OutputStream::try_default().ok()?;
         let sink = rodio::Sink::try_new(&handle).ok()?;
+        sink.set_volume(volume.max(0.0));
         let file = std::fs::File::open(path).ok()?;
         let decoder = rodio::Decoder::new(std::io::BufReader::new(file)).ok()?;
         use rodio::Source;

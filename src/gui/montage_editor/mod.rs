@@ -161,6 +161,7 @@ pub fn draw_montage_editor_window(
                 path: PathBuf,
                 start: f32,
                 duration: f32,
+                volume: f32,
             }
             let mut targets = Vec::new();
             if let Some(ref ap) = editor.audio_path {
@@ -168,15 +169,18 @@ pub fn draw_montage_editor_window(
                     path: ap.clone(),
                     start: editor.audio_start_secs,
                     duration: editor.audio_duration,
+                    volume: editor.voiceover_volume,
                 });
             }
             for clip in &editor.clips {
                 if clip.kind == ClipKind::Audio {
                     if let Some(ref cp) = clip.path {
+                        let vol = editor.track_volumes.get(clip.track_idx).copied().unwrap_or(1.0);
                         targets.push(TargetAudio {
                             path: cp.clone(),
                             start: clip.start_secs,
                             duration: clip.duration,
+                            volume: vol,
                         });
                     }
                 }
@@ -203,7 +207,7 @@ pub fn draw_montage_editor_window(
                     });
                     if !already_playing {
                         let offset = playhead - t.start;
-                        if let Some(player) = AudioPlayer::start(&t.path, offset) {
+                        if let Some(player) = AudioPlayer::start(&t.path, offset, t.volume) {
                             editor.active_audios.push(PlayingAudio {
                                 path: t.path,
                                 start_secs: t.start,

@@ -19,7 +19,7 @@ pub(super) fn draw_timeline(
 ) {
     let track_h = 40.0;
     let ruler_h = 22.0;
-    let label_w = 70.0;
+    let label_w = 110.0;
     let total_dur = editor.total_dur();
     let zoom = editor.timeline_zoom;
 
@@ -744,11 +744,12 @@ pub(super) fn draw_timeline(
             let track_y = vis_y(labels_rect, vis) - v_off;
             if track_y + track_h < labels_rect.top() || track_y > labels_rect.bottom() { continue; }
             let is_vo_row = has_vo && vis == vo_pos;
-            let (label, bg, border, text_color) = if is_vo_row {
+            let (label, bg, border, text_color, bar_color) = if is_vo_row {
                 ("♪ Voice".to_string(),
                  Color32::from_rgb(22, 32, 26),
                  Color32::from_rgb(35, 52, 40),
-                 Color32::from_rgb(100, 170, 120))
+                 Color32::from_rgb(100, 170, 120),
+                 Color32::from_rgb(39, 160, 80))
             } else {
                 let ti = if vis < vo_pos { vis } else { vis - 1 };
                 let kind = editor.track_kinds.get(ti).copied().unwrap_or(TrackKind::Video);
@@ -758,20 +759,125 @@ pub(super) fn draw_timeline(
                         (format!("V{}", video_num),
                          Color32::from_rgb(28, 28, 32),
                          Color32::from_rgb(42, 42, 48),
-                         Color32::from_rgb(160, 160, 170))
+                         Color32::from_rgb(160, 160, 170),
+                         Color32::from_rgb(9, 100, 220))
                     }
                     TrackKind::Audio => {
                         audio_num += 1;
                         (format!("A{}", audio_num),
                          Color32::from_rgb(22, 32, 26),
                          Color32::from_rgb(35, 52, 40),
-                         Color32::from_rgb(100, 170, 120))
+                         Color32::from_rgb(100, 170, 120),
+                         Color32::from_rgb(39, 160, 80))
                     }
                 }
             };
             let lrect = Rect::from_min_size(Pos2::new(labels_rect.left(), track_y), Vec2::new(label_w, track_h));
             painter.rect(lrect, 0.0, bg, Stroke::new(1.0, border));
-            painter.text(lrect.center(), Align2::CENTER_CENTER, &label, egui::FontId::proportional(11.0), text_color);
+
+            // Назва доріжки (верхня частина)
+            let name_rect = Rect::from_min_size(lrect.min, Vec2::new(label_w, track_h * 0.6));
+            painter.text(name_rect.center(), Align2::CENTER_CENTER, &label, egui::FontId::proportional(11.0), text_color);
+
+            // ─── Повзунок гучності (нижня частина лейблу) ────────────────────
+            let ti_opt = if is_vo_row {
+                None // голосова
+            } else {
+                Some(if vis < vo_pos { vis } else { vis - 1 })
+            };
+
+            // Поточне значення гучності
+            let current_vol = if is_vo_row {
+                editor.voiceover_volume
+            } else if let Some(ti) = ti_opt {
+                editor.track_volumes.get(ti).copied().unwrap_or(1.0)
+            } else {
+                1.0
+            };
+
+            // Малюємо фонову доріжку слайдера
+            let slider_y = lrect.top() + track_h * 0.62;
+            let slider_h = 3.0;
+            let pad_x = 6.0;
+            let slider_track = Rect::from_min_size(
+                Pos2::new(lrect.left() + pad_x, slider_y),
+                Vec2::new(label_w - pad_x * 2.0, slider_h),
+            );
+            painter.rect_filled(slider_track, 1.5, Color32::from_rgb(40, 40, 48));
+
+            // Заливка від 0 до поточного значення (max = 2.0 → 50% ширини = 100%)
+            let fill_w = (current_vol / 2.0).clamp(0.0, 1.0) * (label_w - pad_x * 2.0);
+            let fill_color = if (current_vol - 1.0).abs() < 0.05 {
+                bar_color
+            } else if current_vol > 1.0 {
+                Color32::from_rgb(230, 140, 30) // помаранчевий якщо > 100%
+            } else {
+                bar_color.linear_multiply(0.6)
+            };
+            if fill_w > 0.5 {
+                let fill_rect = Rect::from_min_size(
+                    Pos2::new(slider_track.left(), slider_y),
+                    Vec2::new(fill_w, slider_h),
+                );
+                painter.rect_filled(fill_rect, 1.5, fill_color);
+            }
+
+            // Мітка 100% (вертикальна лінія посередині)
+            let mid_x = slider_track.left() + (label_w - pad_x * 2.0) * 0.5;
+            painter.line_segment(
+                [Pos2::new(mid_x, slider_y - 2.0), Pos2::new(mid_x, slider_y + slider_h + 2.0)],
+                Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 60)),
+            );
+
+            // Ручка на поточній позиції
+            let handle_x = slider_track.left() + fill_w;
+            let handle_center = Pos2::new(handle_x, slider_y + slider_h * 0.5);
+            painter.circle_filled(handle_center, 5.0, fill_color);
+            painter.circle_stroke(handle_center, 5.0, Stroke::new(1.0, Color32::from_rgb(180, 180, 200)));
+
+            // Інтерактивна зона (трохи ширша за візуальний слайдер)
+            let interact_rect = Rect::from_min_size(
+                Pos2::new(lrect.left(), slider_y - 6.0),
+                Vec2::new(label_w, slider_h + 12.0),
+            );
+            let bar_resp = ui.allocate_rect(interact_rect, Sense::drag());
+
+            if bar_resp.dragged() {
+                // Обчислюємо нову гучність за x-позицією кліка/перетягування
+                if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                    let rel_x = (pos.x - slider_track.left()).clamp(0.0, label_w - pad_x * 2.0);
+                    let new_vol = (rel_x / (label_w - pad_x * 2.0)) * 2.0;
+                    let new_vol = new_vol.clamp(0.0, 2.0);
+                    if is_vo_row {
+                        editor.voiceover_volume = new_vol;
+                    } else if let Some(ti) = ti_opt {
+                        while editor.track_volumes.len() <= ti { editor.track_volumes.push(1.0); }
+                        editor.track_volumes[ti] = new_vol;
+                    }
+                    // Зупиняємо активне аудіо щоб воно перезапустилось з новою гучністю
+                    editor.active_audios.retain(|a| {
+                        if is_vo_row {
+                            editor.audio_path.as_deref() != Some(a.path.as_path())
+                        } else if let Some(ti) = ti_opt {
+                            // Зупиняємо аудіо кліпи цієї доріжки
+                            !editor.clips.iter().any(|c| c.track_idx == ti && c.path.as_deref() == Some(a.path.as_path()))
+                        } else {
+                            true
+                        }
+                    });
+                }
+                ui.ctx().request_repaint();
+            }
+            if bar_resp.drag_stopped() {
+                editor.save_to_timeline().ok();
+            }
+
+            // Tooltip з поточним значенням
+            // Курсор при наведенні на слайдер
+            if bar_resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            bar_resp.on_hover_text(format!("Vol: {:.0}%", current_vol * 100.0));
         }
     });
 

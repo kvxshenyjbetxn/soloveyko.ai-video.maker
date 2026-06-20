@@ -85,10 +85,15 @@ pub fn run_montage(
         total_duration_secs: f64,
         #[serde(default)]
         audio_start_secs: f64,
+        #[serde(default = "default_volume")]
+        voiceover_volume: f64,
+        #[serde(default)]
+        track_volumes: Vec<f64>,
         segments: Vec<SegTiming>,
         #[serde(default)]
         overlay_tracks: Vec<OverlayTrack>,
     }
+    fn default_volume() -> f64 { 1.0 }
 
     struct Clip {
         path: Option<String>, // None = чорна заставка (gap)
@@ -124,12 +129,16 @@ pub fn run_montage(
         path: String,
         start_secs: f64,
         duration: f64,
+        /// Індекс доріжки (для пошуку гучності в track_volumes)
+        track_idx: usize,
     }
 
     // ─── Зчитуємо timeline.json ───────────────────────────────────────────────
     let mut clips: Vec<Clip> = Vec::new();
     let mut total_dur = 0.0f64;
     let mut audio_start_secs = 0.0f64;
+    let mut voiceover_volume = 1.0f64;
+    let mut tl_track_volumes: Vec<f64> = Vec::new();
     let mut overlay_tracks: Vec<OverlayTrack> = Vec::new();
     let mut extra_audios: Vec<AudioClip> = Vec::new();
     let timeline_path = save_dir.join("timeline.json");
@@ -139,10 +148,13 @@ pub fn run_montage(
             if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
                 total_dur = tl.total_duration_secs;
                 audio_start_secs = tl.audio_start_secs;
-                
+                voiceover_volume = tl.voiceover_volume;
+                tl_track_volumes = tl.track_volumes;
+
                 let mut video_overlay_tracks = Vec::new();
                 for track in tl.overlay_tracks {
                     let mut video_segs = Vec::new();
+                    let track_ti = track.track_idx;
                     for seg in track.segments {
                         let dur = (seg.end_secs - seg.start_secs).max(0.05);
                         if let Some(ref media) = seg.media {
@@ -151,6 +163,7 @@ pub fn run_montage(
                                     path: media.clone(),
                                     start_secs: seg.start_secs,
                                     duration: dur,
+                                    track_idx: track_ti,
                                 });
                             } else {
                                 video_segs.push(seg);
@@ -159,7 +172,7 @@ pub fn run_montage(
                     }
                     if !video_segs.is_empty() {
                         video_overlay_tracks.push(OverlayTrack {
-                            track_idx: track.track_idx,
+                            track_idx: track_ti,
                             segments: video_segs,
                         });
                     }
@@ -175,6 +188,7 @@ pub fn run_montage(
                                 path: media.clone(),
                                 start_secs: seg.start_secs,
                                 duration: dur,
+                                track_idx: 0,
                             });
                         } else {
                             clips.push(Clip { path: Some(media.clone()), duration: dur, start_secs: seg.start_secs, is_video: is_video_ext(media), trim_start: seg.trim_start, overlap_transition: seg.overlap_transition.clone() });
@@ -646,33 +660,52 @@ pub fn run_montage(
 
     let audio_idx = media_file_count;
     let extra_audio_start_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
+
+    // Допоміжна функція: рядок фільтру гучності якщо відрізняється від 1.0
+    let vol_filter = |vol: f64| -> String {
+        if (vol - 1.0).abs() > 0.001 {
+            format!(",volume={:.4}", vol.max(0.0))
+        } else {
+            String::new()
+        }
+    };
+
     let audio_map_label = if extra_audios.is_empty() {
+        let vf = vol_filter(voiceover_volume);
         if audio_start_secs > 0.001 {
             let ms = (audio_start_secs * 1000.0).round() as i64;
             filter_parts.push(format!(
-                "[{audio_idx}:a]adelay={ms}|{ms}[a_delayed]"
+                "[{audio_idx}:a]{vf_stripped}adelay={ms}|{ms}[a_delayed]",
+                vf_stripped = if vf.is_empty() { String::new() } else { format!("{}," , &vf[1..]) },
             ));
             "[a_delayed]".to_string()
-        } else {
+        } else if vf.is_empty() {
             format!("{audio_idx}:a")
+        } else {
+            filter_parts.push(format!("[{audio_idx}:a]{}[a_vo_vol]", &vf[1..]));
+            "[a_vo_vol]".to_string()
         }
     } else {
+        let vf = vol_filter(voiceover_volume);
         if audio_start_secs > 0.001 {
             let ms = (audio_start_secs * 1000.0).round() as i64;
             filter_parts.push(format!(
-                "[{audio_idx}:a]adelay={ms}|{ms}[a_orig]"
+                "[{audio_idx}:a]{vf_stripped}adelay={ms}|{ms}[a_orig]",
+                vf_stripped = if vf.is_empty() { String::new() } else { format!("{},", &vf[1..]) },
             ));
+        } else if vf.is_empty() {
+            filter_parts.push(format!("[{audio_idx}:a]anull[a_orig]"));
         } else {
-            filter_parts.push(format!(
-                "[{audio_idx}:a]anull[a_orig]"
-            ));
+            filter_parts.push(format!("[{audio_idx}:a]{}[a_orig]", &vf[1..]));
         }
 
         for (i, ea) in extra_audios.iter().enumerate() {
             let input_idx = extra_audio_start_idx + i;
             let delay_ms = (ea.start_secs * 1000.0).round() as i64;
+            let track_vol = tl_track_volumes.get(ea.track_idx).copied().unwrap_or(1.0);
+            let vf = vol_filter(track_vol);
             filter_parts.push(format!(
-                "[{input_idx}:a]atrim=end={dur:.6},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
+                "[{input_idx}:a]atrim=end={dur:.6},asetpts=PTS-STARTPTS{vf},adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
                 dur = ea.duration,
             ));
         }
