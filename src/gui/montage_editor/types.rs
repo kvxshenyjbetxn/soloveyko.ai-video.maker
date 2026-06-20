@@ -193,6 +193,7 @@ pub struct ClipDragState {
     pub mode: DragMode,
     pub initial_start: f32,
     pub initial_duration: f32,
+    pub initial_trim_start: f32,
     pub initial_mouse_x: f32,
     pub initial_track_idx: usize,
     /// Позиція лінії снапу (секунди), якщо кліп приліп до чогось

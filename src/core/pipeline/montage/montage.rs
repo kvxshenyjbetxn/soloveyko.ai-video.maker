@@ -61,6 +61,8 @@ pub fn run_montage(
         start_secs: f64,
         end_secs: f64,
         media: Option<String>,
+        #[serde(default)]
+        trim_start: f64,
         #[serde(default = "default_scale")]
         scale: f64,
         #[serde(default)]
@@ -132,6 +134,7 @@ pub fn run_montage(
         path: String,
         start_secs: f64,
         duration: f64,
+        trim_start: f64,
         /// Індекс доріжки (для пошуку гучності в track_volumes)
         track_idx: usize,
     }
@@ -167,6 +170,7 @@ pub fn run_montage(
                                     path: media.clone(),
                                     start_secs: seg.start_secs,
                                     duration: dur,
+                                    trim_start: seg.trim_start,
                                     track_idx: track_ti,
                                 });
                             } else {
@@ -192,6 +196,7 @@ pub fn run_montage(
                                 path: media.clone(),
                                 start_secs: seg.start_secs,
                                 duration: dur,
+                                trim_start: seg.trim_start,
                                 track_idx: 0,
                             });
                         } else {
@@ -536,6 +541,7 @@ pub fn run_montage(
         input_idx: usize,
         start: f64,
         end: f64,
+        trim_start: f64,
         w: i32,
         h: i32,
         x: i32,
@@ -582,7 +588,7 @@ pub fn run_montage(
             log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s",
                 seg.start_secs, seg.end_secs));
 
-            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, w: w as i32, h: h as i32, x, y, is_video: is_vid, opacity: seg.opacity.clamp(0.0, 1.0) });
+            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, trim_start: seg.trim_start, w: w as i32, h: h as i32, x, y, is_video: is_vid, opacity: seg.opacity.clamp(0.0, 1.0) });
         }
     }
 
@@ -623,40 +629,110 @@ pub fn run_montage(
         }
 
         // ── Overlay-доріжки (track 1+) ────────────────────────────────────
-        for (i, ov) in overlay_items.iter().enumerate() {
-            let prep_label = format!("v_ov_{i}");
-            let out_label = format!("v_ov_out_{i}");
-            let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
-            let (w, h) = (ov.w, ov.h);
-            // colorchannelmixer=aa=<opacity> — множить альфа-канал на значення opacity
-            let alpha_filter = if ov.opacity < 0.999 {
-                format!(",colorchannelmixer=aa={:.4}", ov.opacity)
-            } else {
-                String::new()
+        // ПРАВИЛЬНИЙ Z-порядок: V1 (track 0) = найвищий шар (поверх усього).
+        // Overlay треки (track 1+) = нижче V1.
+        // Архітектура: [чорна_база] → [overlay treки знизу вгору] → [V1 зверху]
+        // V1 відображається поверх підкладки тільки де є реальний контент (не gap).
+        if !overlay_items.is_empty() {
+            // Enable-вираз: де V1 має реальний відео/зображення контент (не чорні gap)
+            let v1_enable: String = {
+                let ranges: Vec<String> = clips.iter()
+                    .filter(|c| c.path.is_some())
+                    .map(|c| format!("between(t,{:.6},{:.6})", c.start_secs, c.start_secs + c.duration))
+                    .collect();
+                if ranges.is_empty() { "0".to_string() } else { ranges.join("+") }
             };
 
-            if ov.is_video {
-                filter_parts.push(format!(
-                    "[{}:v]format=yuva420p{alpha_filter},scale={w}:{h}:force_original_aspect_ratio=decrease,\
-                    pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
-                    ov.input_idx, ov.start,
-                ));
-                filter_parts.push(format!(
-                    "[{current}][{prep_label}]overlay=x={x}:y={y}:eof_action=pass:enable='{enable_expr}'[{out_label}]",
-                    x = ov.x, y = ov.y,
-                ));
-            } else {
-                filter_parts.push(format!(
-                    "[{}:v]format=yuva420p{alpha_filter},scale={w}:{h}:force_original_aspect_ratio=decrease,\
-                    pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
-                    ov.input_idx, ov.start,
-                ));
-                filter_parts.push(format!(
-                    "[{current}][{prep_label}]overlay=x={x}:y={y}:enable='{enable_expr}'[{out_label}]",
-                    x = ov.x, y = ov.y,
-                ));
+            // Чорна база на весь total_dur (підкладка під усі overlay треки)
+            filter_parts.push(format!(
+                "color=c=black:s=1920x1080:r={fps}:d={total_dur:.6},\
+                format=yuv420p,setsar=1,settb=AVTB[v_underlay_black]"
+            ));
+            let mut underlay = "v_underlay_black".to_string();
+
+            // Накладаємо overlay-треки на базу (overlay_items відсортовані: нижчий трек першим)
+            for (i, ov) in overlay_items.iter().enumerate() {
+                let (w, h) = (ov.w, ov.h);
+                let alpha_filter = if ov.opacity < 0.999 {
+                    format!(",colorchannelmixer=aa={:.4}", ov.opacity)
+                } else {
+                    String::new()
+                };
+                let out_label = format!("v_ul_{i}");
+
+                if ov.is_video {
+                    let ov_dur = ov.end - ov.start;
+                    let pre_dur  = ov.start;
+                    let post_dur = (total_dur - ov.end).max(0.0);
+
+                    // Контент overlay кліпу (yuva420p з alpha для прозорих проміжків)
+                    let c_lbl = format!("v_ul_{i}_c");
+                    filter_parts.push(format!(
+                        "[{}:v]trim=start={trim:.6}:duration={ov_dur:.6},setpts=PTS-STARTPTS,\
+                        format=yuva420p{alpha_filter},scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps},setsar=1,settb=AVTB[{c_lbl}]",
+                        ov.input_idx, trim = ov.trim_start,
+                    ));
+
+                    // Прозорі проміжки до/після (alpha=0 → базова підкладка проглядається)
+                    let mut parts: Vec<String> = Vec::new();
+                    if pre_dur > 0.001 {
+                        let lbl = format!("v_ul_{i}_pre");
+                        filter_parts.push(format!(
+                            "color=c=black:s={w}x{h}:r={fps}:d={pre_dur:.6},\
+                            format=yuva420p,colorchannelmixer=aa=0.0,setsar=1,settb=AVTB[{lbl}]"
+                        ));
+                        parts.push(lbl);
+                    }
+                    parts.push(c_lbl);
+                    if post_dur > 0.001 {
+                        let lbl = format!("v_ul_{i}_post");
+                        filter_parts.push(format!(
+                            "color=c=black:s={w}x{h}:r={fps}:d={post_dur:.6},\
+                            format=yuva420p,colorchannelmixer=aa=0.0,setsar=1,settb=AVTB[{lbl}]"
+                        ));
+                        parts.push(lbl);
+                    }
+
+                    let ov_full = if parts.len() == 1 {
+                        parts.remove(0)
+                    } else {
+                        let n = parts.len();
+                        let inputs: String = parts.iter().map(|l| format!("[{l}]")).collect();
+                        let lbl = format!("v_ul_{i}_full");
+                        filter_parts.push(format!("{inputs}concat=n={n}:v=1:a=0[{lbl}]"));
+                        lbl
+                    };
+
+                    // Overlay на поточну підкладку
+                    filter_parts.push(format!(
+                        "[{underlay}][{ov_full}]overlay=x={x}:y={y}[{out_label}]",
+                        x = ov.x, y = ov.y,
+                    ));
+                } else {
+                    // Зображення: enable= для фіксованого часового діапазону
+                    let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
+                    let prep = format!("v_ul_{i}_prep");
+                    filter_parts.push(format!(
+                        "[{}:v]format=yuva420p{alpha_filter},scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep}]",
+                        ov.input_idx, ov.start,
+                    ));
+                    filter_parts.push(format!(
+                        "[{underlay}][{prep}]overlay=x={x}:y={y}:enable='{enable_expr}'[{out_label}]",
+                        x = ov.x, y = ov.y,
+                    ));
+                }
+
+                underlay = out_label;
             }
-            current = out_label;
+
+            // V1 (поточний відео-потік) поверх усіх підкладок
+            // enable= гарантує що V1 показується тільки де є реальний контент (не gap)
+            filter_parts.push(format!(
+                "[{underlay}][{current}]overlay=x=0:y=0:eof_action=pass:enable='{v1_enable}'[v_with_underlays]"
+            ));
+            current = "v_with_underlays".to_string();
         }
 
         format!("[{current}]")
@@ -709,8 +785,9 @@ pub fn run_montage(
             let track_vol = tl_track_volumes.get(ea.track_idx).copied().unwrap_or(1.0);
             let vf = vol_filter(track_vol);
             filter_parts.push(format!(
-                "[{input_idx}:a]atrim=end={dur:.6},asetpts=PTS-STARTPTS{vf},adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
-                dur = ea.duration,
+                "[{input_idx}:a]atrim=start={trim:.6}:end={end:.6},asetpts=PTS-STARTPTS{vf},adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
+                trim = ea.trim_start,
+                end = ea.trim_start + ea.duration,
             ));
         }
 

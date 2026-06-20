@@ -408,9 +408,21 @@ pub(super) fn draw_timeline(
                                 });
                                 // Автоматично додаємо аудіо-кліп для відео з вбудованим аудіо
                                 if let Some(ref pid) = pair_uuid {
-                                    let audio_track_idx = editor.track_kinds.iter()
-                                        .position(|k| *k == super::types::TrackKind::Audio)
-                                        .unwrap_or_else(|| {
+                                    let new_end = start + duration;
+                                    // Шукаємо аудіо-доріжку без перетину з новим кліпом,
+                                    // щоб аудіо різних відео не накладались на одну доріжку.
+                                    let audio_track_idx = {
+                                        let free = editor.track_kinds.iter().enumerate()
+                                            .find(|(ti, k)| {
+                                                **k == super::types::TrackKind::Audio
+                                                    && !editor.clips.iter().any(|c| {
+                                                        c.track_idx == *ti
+                                                            && c.start_secs < new_end
+                                                            && c.end_secs() > start
+                                                    })
+                                            })
+                                            .map(|(ti, _)| ti);
+                                        free.unwrap_or_else(|| {
                                             let idx = editor.num_tracks;
                                             editor.num_tracks += 1;
                                             editor.track_kinds.push(super::types::TrackKind::Audio);
@@ -418,7 +430,8 @@ pub(super) fn draw_timeline(
                                                 editor.track_volumes.push(1.0);
                                             }
                                             idx
-                                        });
+                                        })
+                                    };
                                     editor.clips.push(EditorClip {
                                         id: uuid_str(),
                                         media_id,
@@ -749,6 +762,7 @@ pub(super) fn draw_timeline(
                                 mode,
                                 initial_start: clip.start_secs,
                                 initial_duration: clip.duration,
+                                initial_trim_start: clip.trim_start,
                                 initial_mouse_x: pos.x,
                                 initial_track_idx: clip.track_idx,
                                 snap_line_secs: None,
@@ -1286,6 +1300,7 @@ fn update_clip_drag(
             mode: d.mode,
             initial_start: d.initial_start,
             initial_duration: d.initial_duration,
+            initial_trim_start: d.initial_trim_start,
             initial_mouse_x: d.initial_mouse_x,
             initial_track_idx: d.initial_track_idx,
             snap_line_secs: d.snap_line_secs,
@@ -1391,6 +1406,8 @@ fn update_clip_drag(
             let bounded_dx = dx.clamp(-drag.initial_start, max_dx);
             clip.start_secs = drag.initial_start + bounded_dx;
             clip.duration = drag.initial_duration - bounded_dx;
+            // Обрізка зліва = пізніший старт у вихідному файлі
+            clip.trim_start = (drag.initial_trim_start + bounded_dx).max(0.0);
         }
         DragMode::TrimRight => {
             clip.duration = (drag.initial_duration + dx).max(0.1);

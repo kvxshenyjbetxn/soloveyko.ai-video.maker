@@ -299,7 +299,10 @@ impl MontageEditorState {
                     "media": serde_json::Value::Null,
                 }));
             }
-            let media_rel = clip.path.as_ref().and_then(|p| self.path_to_rel(p));
+            let media_rel = clip.path.as_ref().map(|p| {
+                self.path_to_rel(p)
+                    .unwrap_or_else(|| p.to_string_lossy().replace('\\', "/"))
+            });
             let seg_end = seg_start + clip.duration;
             main_segments.push(serde_json::json!({
                 "start_secs": seg_start as f64,
@@ -331,13 +334,19 @@ impl MontageEditorState {
             if segs.is_empty() { continue; }
             segs.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
             let segments: Vec<serde_json::Value> = segs.iter().map(|clip| {
-                let media_rel = clip.path.as_ref().and_then(|p| self.path_to_rel(p));
+                // Якщо файл поза папкою проєкту — зберігаємо абсолютний шлях,
+                // щоб montage.rs міг знайти медіа при рендері.
+                let media_rel = clip.path.as_ref().map(|p| {
+                    self.path_to_rel(p)
+                        .unwrap_or_else(|| p.to_string_lossy().replace('\\', "/"))
+                });
                 serde_json::json!({
                     "start_secs": clip.start_secs as f64,
                     "end_secs": clip.end_secs() as f64,
                     "media": media_rel,
                     "media_id": clip.media_id,
                     "clip_kind": match clip.kind { ClipKind::Video => "video", ClipKind::Audio => "audio", ClipKind::Image => "image" },
+                    "trim_start": clip.trim_start as f64,
                     "scale": clip.scale as f64,
                     "pos_x": clip.pos_x as f64,
                     "pos_y": clip.pos_y as f64,

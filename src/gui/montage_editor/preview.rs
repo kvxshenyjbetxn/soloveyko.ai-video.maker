@@ -9,7 +9,10 @@ use super::media::MediaItem;
 
 struct OverlayRenderItem {
     path: std::path::PathBuf,
+    /// Зміщення всередині кліпу (для zoom/shake ефектів)
     t_off: f32,
+    /// Початок обрізки у вихідному файлі (для вибору правильного кадру)
+    trim_start: f32,
     scale: f32,
     pos_x: f32,
     pos_y: f32,
@@ -315,7 +318,61 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         let uv_prev = zoom_uv(compute_zoom(prev_offset, dur_prev, &settings, img_idx_prev, prev_zoom_on));
         let sh_prev = shake_uv(prev_offset, &settings, prev_shake_on);
 
-        // ── Рендер базової доріжки 0 (зі zoom/shake/переходами) ─────────────
+        // ── Overlay-доріжки (track 1+) рендеруємо ДО доріжки 0.
+        // Доріжка 0 (верх таймлінії) повинна бути зверху → рендеримо її ОСТАННЬОЮ.
+        // Більший track_idx = нижче у таймлінії = рендерується першим (фон).
+        let mut ov_sorted: Vec<&EditorClip> = editor.clips.iter()
+            .filter(|c| c.track_idx > 0 && c.path.is_some())
+            .filter(|c| c.start_secs <= ph && ph < c.end_secs())
+            .collect();
+        // Спадний порядок: найвищий track_idx (найнижче у UI) → рендерується першим (фон).
+        ov_sorted.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
+        let overlay_data: Vec<OverlayRenderItem> = ov_sorted.iter()
+            .map(|c| OverlayRenderItem {
+                path: c.path.clone().unwrap(),
+                t_off: (ph - c.start_secs).max(0.0),
+                trim_start: c.trim_start,
+                scale: c.scale, pos_x: c.pos_x, pos_y: c.pos_y,
+                duration: c.duration,
+                kind: c.kind.clone(),
+                zoom_enabled: c.zoom_enabled,
+                shake_enabled: c.shake_enabled,
+                opacity: c.opacity,
+            })
+            .collect();
+
+        for (ov_idx, item) in overlay_data.iter().enumerate() {
+            let ov_media = editor.media_pool.iter().find(|m| m.path == item.path).cloned();
+            if let Some(media) = ov_media {
+                if !media.is_extraction_complete() {
+                    ui.ctx().request_repaint();
+                    let dot_x = rect.left() + 10.0 + ov_idx as f32 * 14.0;
+                    painter.circle_filled(
+                        Pos2::new(dot_x, rect.top() + 10.0),
+                        5.0, Color32::from_rgba_unmultiplied(255, 200, 60, 220),
+                    );
+                }
+                let source_t = item.t_off + item.trim_start;
+                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, source_t, use_sharp_frame, editor.preview_render) {
+                    let clip_w = rect.width() * item.scale;
+                    let clip_h = rect.height() * item.scale;
+                    let clip_cx = rect.center().x + item.pos_x * rect.width() / 2.0;
+                    let clip_cy = rect.center().y + item.pos_y * rect.height() / 2.0;
+                    let container = Rect::from_center_size(
+                        Pos2::new(clip_cx, clip_cy),
+                        Vec2::new(clip_w, clip_h),
+                    );
+                    let is_ov_img = matches!(item.kind, ClipKind::Image);
+                    let ov_uv = zoom_uv(compute_zoom(item.t_off, item.duration, &settings, ov_idx,
+                        is_ov_img && item.zoom_enabled));
+                    let ov_shake = shake_uv(item.t_off, &settings,
+                        is_ov_img && item.shake_enabled);
+                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, (item.opacity.clamp(0.0, 1.0) * 255.0) as u8);
+                }
+            }
+        }
+
+        // ── Рендер базової доріжки 0 (зі zoom/shake/переходами) поверх overlay ─
         let trans_kind = if overlap_progress.is_some() {
             // overlap → використовуємо per-clip overlap_transition incoming кліпу
             transition_kind(&incoming.as_ref().map(|c| c.overlap_transition.as_str()).unwrap_or("fade"))
@@ -484,57 +541,6 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                 "Немає медіа під плейхедом",
                 egui::FontId::proportional(10.0), Color32::from_rgb(70, 70, 88),
             );
-        }
-
-        // ── Overlay-доріжки (track 1+) поверх базової доріжки 0 ─────────────
-        // Збираємо до Vec перед мутацією frame_cache (уникаємо borrow-конфлікту)
-        let mut ov_sorted: Vec<&EditorClip> = editor.clips.iter()
-            .filter(|c| c.track_idx > 0 && c.path.is_some())
-            .filter(|c| c.start_secs <= ph && ph < c.end_secs())
-            .collect();
-        // Менший track_idx = вищий в таймлінії = рендериться поверх → сортуємо спадно.
-        ov_sorted.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
-        let overlay_data: Vec<OverlayRenderItem> = ov_sorted.iter()
-            .map(|c| OverlayRenderItem {
-                path: c.path.clone().unwrap(),
-                t_off: (ph - c.start_secs).max(0.0),
-                scale: c.scale, pos_x: c.pos_x, pos_y: c.pos_y,
-                duration: c.duration,
-                kind: c.kind.clone(),
-                zoom_enabled: c.zoom_enabled,
-                shake_enabled: c.shake_enabled,
-                opacity: c.opacity,
-            })
-            .collect();
-
-        for (ov_idx, item) in overlay_data.iter().enumerate() {
-            let ov_media = editor.media_pool.iter().find(|m| m.path == item.path).cloned();
-            if let Some(media) = ov_media {
-                if !media.is_extraction_complete() {
-                    ui.ctx().request_repaint();
-                    let dot_x = rect.left() + 10.0 + ov_idx as f32 * 14.0;
-                    painter.circle_filled(
-                        Pos2::new(dot_x, rect.top() + 10.0),
-                        5.0, Color32::from_rgba_unmultiplied(255, 200, 60, 220),
-                    );
-                }
-                if let Some(tex) = editor.frame_cache.get_frame(ui.ctx(), &media, item.t_off, use_sharp_frame, editor.preview_render) {
-                    let clip_w = rect.width() * item.scale;
-                    let clip_h = rect.height() * item.scale;
-                    let clip_cx = rect.center().x + item.pos_x * rect.width() / 2.0;
-                    let clip_cy = rect.center().y + item.pos_y * rect.height() / 2.0;
-                    let container = Rect::from_center_size(
-                        Pos2::new(clip_cx, clip_cy),
-                        Vec2::new(clip_w, clip_h),
-                    );
-                    let is_ov_img = matches!(item.kind, ClipKind::Image);
-                    let ov_uv = zoom_uv(compute_zoom(item.t_off, item.duration, &settings, ov_idx,
-                        is_ov_img && item.zoom_enabled));
-                    let ov_shake = shake_uv(item.t_off, &settings,
-                        is_ov_img && item.shake_enabled);
-                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, (item.opacity.clamp(0.0, 1.0) * 255.0) as u8);
-                }
-            }
         }
 
         let any_shake_on = base_shake_on || overlay_data.iter().any(|item|
