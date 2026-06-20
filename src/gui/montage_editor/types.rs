@@ -211,6 +211,15 @@ pub struct OpacityDragState {
     pub clip_height: f32,
 }
 
+// ─── Стан перетягування доріжки (зміна порядку) ──────────────────────────────
+
+pub struct TrackDragState {
+    /// Індекс доріжки, яку перетягують
+    pub from_track: usize,
+    /// Індекс доріжки над якою зараз курсор
+    pub hover_track: usize,
+}
+
 // ─── Кліп на таймлінії ───────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]

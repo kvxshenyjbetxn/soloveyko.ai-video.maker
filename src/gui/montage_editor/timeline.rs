@@ -5,7 +5,7 @@ use eframe::egui;
 use egui::{Align2, Color32, Pos2, Rect, ScrollArea, Sense, Stroke, Vec2};
 use crate::localization::{Language, translate};
 use super::state::MontageEditorState;
-use super::types::{ClipKind, DragMode, ClipDragState, EditorClip, OpacityDragState, TrackKind};
+use super::types::{ClipKind, DragMode, ClipDragState, EditorClip, OpacityDragState, TrackDragState, TrackKind};
 use super::utils::uuid_str;
 
 // ─── Розріз кліпу ──────────────────────────────────────────────────────────
@@ -116,6 +116,42 @@ fn split_clip_at(editor: &mut MontageEditorState, clip_id: &str, split_time: f32
     // Зберігаємо зміни
     editor.save_to_timeline().ok();
     true
+}
+
+// ─── Переміщення доріжки (зміна порядку) ────────────────────────────────────
+
+/// Переміщує доріжку з позиції `from` на позицію `to`.
+/// Дозволяється тільки між доріжками одного типу (Video↔Video, Audio↔Audio).
+fn move_track(editor: &mut MontageEditorState, from: usize, to: usize) {
+    if from == to || from >= editor.track_kinds.len() || to >= editor.track_kinds.len() {
+        return;
+    }
+    if from < to {
+        editor.track_kinds[from..=to].rotate_left(1);
+        if editor.track_volumes.len() > to {
+            editor.track_volumes[from..=to].rotate_left(1);
+        }
+        for clip in &mut editor.clips {
+            if clip.track_idx == from {
+                clip.track_idx = to;
+            } else if clip.track_idx > from && clip.track_idx <= to {
+                clip.track_idx -= 1;
+            }
+        }
+    } else {
+        editor.track_kinds[to..=from].rotate_right(1);
+        if editor.track_volumes.len() > from {
+            editor.track_volumes[to..=from].rotate_right(1);
+        }
+        for clip in &mut editor.clips {
+            if clip.track_idx == from {
+                clip.track_idx = to;
+            } else if clip.track_idx >= to && clip.track_idx < from {
+                clip.track_idx += 1;
+            }
+        }
+    }
+    editor.save_to_timeline().ok();
 }
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
@@ -1100,9 +1136,40 @@ pub(super) fn draw_timeline(
             let lrect = Rect::from_min_size(Pos2::new(labels_rect.left(), track_y), Vec2::new(label_w, track_h));
             painter.rect(lrect, 0.0, bg, Stroke::new(1.0, border));
 
-            // Назва доріжки (верхня частина)
+            // Підсвічуємо фон доріжки, яку перетягують
+            let is_dragging_this = editor.track_drag.as_ref().map_or(false, |d| d.from_track == ti);
+            if is_dragging_this {
+                painter.rect_filled(lrect, 0.0, Color32::from_rgba_unmultiplied(9, 123, 244, 30));
+            }
+
+            // Назва доріжки + іконка захоплення (верхня частина)
             let name_rect = Rect::from_min_size(lrect.min, Vec2::new(label_w, track_h * 0.6));
+            let grab_alpha = if is_dragging_this { 220u8 } else { 70u8 };
+            painter.text(
+                Pos2::new(lrect.left() + 4.0, name_rect.center().y),
+                Align2::LEFT_CENTER,
+                "⠿",
+                egui::FontId::proportional(10.0),
+                Color32::from_rgba_unmultiplied(text_color.r(), text_color.g(), text_color.b(), grab_alpha),
+            );
             painter.text(name_rect.center(), Align2::CENTER_CENTER, &label, egui::FontId::proportional(11.0), text_color);
+
+            // Інтерактивна зона для перетягування доріжки (верхні 50% лейблу, над слайдером)
+            let track_drag_rect = Rect::from_min_size(lrect.min, Vec2::new(label_w, track_h * 0.50));
+            let drag_resp = ui.allocate_rect(track_drag_rect, Sense::drag());
+
+            if drag_resp.drag_started() && editor.track_drag.is_none() {
+                editor.track_drag = Some(TrackDragState {
+                    from_track: ti,
+                    hover_track: ti,
+                });
+            }
+
+            if is_dragging_this {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            } else if drag_resp.hovered() && editor.track_drag.is_none() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            }
 
             // ─── Повзунок гучності (нижня частина лейблу) ────────────────────
 
@@ -1195,6 +1262,59 @@ pub(super) fn draw_timeline(
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
             }
             bar_resp.on_hover_text(format!("Vol: {:.0}%", current_vol * 100.0));
+        }
+
+        // ─── Оновлення та обробка drag-перетягування доріжок ─────────────────
+        if editor.track_drag.is_some() {
+            // Оновлюємо hover_track за Y-позицією курсору
+            if let Some(hover_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                let raw = (hover_pos.y - labels_rect.top() - ruler_h + v_off) / (track_h + 2.0);
+                let hover_vis = (raw.max(0.0) as usize).min(total_rows.saturating_sub(1));
+                if let Some(ref mut drag) = editor.track_drag {
+                    drag.hover_track = hover_vis;
+                }
+            }
+
+            // Читаємо стан для малювання (перед мутацією)
+            let (from_track, to_track, is_valid) = if let Some(ref drag) = editor.track_drag {
+                let from_kind = editor.track_kinds.get(drag.from_track).copied();
+                let to_kind = editor.track_kinds.get(drag.hover_track).copied();
+                let valid = from_kind == to_kind && drag.from_track != drag.hover_track;
+                (drag.from_track, drag.hover_track, valid)
+            } else {
+                (0, 0, false)
+            };
+            let _ = from_track; // використовується вище
+
+            // Малюємо індикатор місця вставки
+            if is_valid {
+                let indicator_y = labels_rect.top() + ruler_h
+                    + (to_track as f32 + 0.5) * (track_h + 2.0) - v_off;
+                if indicator_y >= labels_rect.top() && indicator_y <= labels_rect.bottom() {
+                    painter.line_segment(
+                        [Pos2::new(labels_rect.left(), indicator_y),
+                         Pos2::new(labels_rect.right(), indicator_y)],
+                        Stroke::new(2.5, Color32::from_rgb(9, 123, 244)),
+                    );
+                }
+            }
+
+            // Відпускання кнопки — застосовуємо переміщення
+            if ui.input(|i| !i.pointer.any_down()) {
+                if let Some(drag) = editor.track_drag.take() {
+                    let from = drag.from_track;
+                    let to = drag.hover_track;
+                    if from != to {
+                        let from_kind = editor.track_kinds.get(from).copied();
+                        let to_kind = editor.track_kinds.get(to).copied();
+                        if from_kind.is_some() && from_kind == to_kind {
+                            move_track(editor, from, to);
+                        }
+                    }
+                }
+            }
+
+            ui.ctx().request_repaint();
         }
     });
 

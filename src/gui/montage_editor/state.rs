@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::{
     ClipKind, ClipDragState, EditorClip, MontagePreviewSettings, OpacityDragState,
-    PreviewDragState, PreviewQuality, PreviewRenderSettings, TrackKind, FRAME_CACHE_SIZE,
+    PreviewDragState, PreviewQuality, PreviewRenderSettings, TrackDragState, TrackKind, FRAME_CACHE_SIZE,
 };
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
@@ -75,6 +75,8 @@ pub struct MontageEditorState {
     pub track_volumes: Vec<f32>,
     /// Чи активний інструмент розрізу (як лезо в професійних редакторах)
     pub split_tool_active: bool,
+    /// Стан перетягування доріжки для зміни її порядку
+    pub track_drag: Option<TrackDragState>,
 }
 
 impl MontageEditorState {
@@ -228,6 +230,7 @@ impl MontageEditorState {
             pool_thumbnails: HashMap::new(),
             track_volumes,
             split_tool_active: false,
+            track_drag: None,
         }
     }
 
