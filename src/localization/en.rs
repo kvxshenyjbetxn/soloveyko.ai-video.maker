@@ -76,6 +76,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_clip_shake" => "Shake",
         "montage_editor_split_tool" => "✂ Split",
         "montage_editor_split_at_playhead" => "Split at playhead",
+        "montage_editor_undo" => "↩ Undo",
+        "montage_editor_redo" => "↪ Redo",
         "translation" => "Translation",
         "voiceover" => "Voiceover",
         "video" => "Video Sequence",

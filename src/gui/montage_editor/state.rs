@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::{
     ClipKind, ClipDragState, EditorClip, MontagePreviewSettings, OpacityDragState,
-    PreviewDragState, PreviewQuality, PreviewRenderSettings, TrackDragState, TrackKind, FRAME_CACHE_SIZE,
+    PreviewDragState, PreviewQuality, PreviewRenderSettings, TimelineSnapshot, TrackDragState, TrackKind, FRAME_CACHE_SIZE,
 };
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
@@ -83,6 +83,10 @@ pub struct MontageEditorState {
     pub timeline_scroll_x: f32,
     /// true поки користувач тягне плейхед (натиснув на лінійці і ще не відпустив)
     pub playhead_dragging: bool,
+    /// Стек для скасування дій (Ctrl+Z)
+    pub undo_stack: Vec<TimelineSnapshot>,
+    /// Стек для повтору дій (Ctrl+Y)
+    pub redo_stack: Vec<TimelineSnapshot>,
 }
 
 impl MontageEditorState {
@@ -240,7 +244,62 @@ impl MontageEditorState {
             track_drag: None,
             timeline_scroll_x: 0.0,
             playhead_dragging: false,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
+    }
+
+    /// Зберігає поточний стан у стек для скасування (Ctrl+Z).
+    /// Скидає redo_stack — нова дія скасовує можливість "повтору".
+    pub fn push_undo(&mut self) {
+        self.undo_stack.push(TimelineSnapshot {
+            clips: self.clips.clone(),
+            num_tracks: self.num_tracks,
+            track_kinds: self.track_kinds.clone(),
+            track_volumes: self.track_volumes.clone(),
+        });
+        self.redo_stack.clear();
+        // Обмежуємо глибину стеку (50 кроків)
+        if self.undo_stack.len() > 50 {
+            self.undo_stack.remove(0);
+        }
+    }
+
+    /// Скасовує останню дію (Ctrl+Z).
+    pub fn undo(&mut self) {
+        let Some(snapshot) = self.undo_stack.pop() else { return };
+        let current = TimelineSnapshot {
+            clips: self.clips.clone(),
+            num_tracks: self.num_tracks,
+            track_kinds: self.track_kinds.clone(),
+            track_volumes: self.track_volumes.clone(),
+        };
+        self.redo_stack.push(current);
+        self.apply_snapshot(snapshot);
+    }
+
+    /// Повторює скасовану дію (Ctrl+Y).
+    pub fn redo(&mut self) {
+        let Some(snapshot) = self.redo_stack.pop() else { return };
+        let current = TimelineSnapshot {
+            clips: self.clips.clone(),
+            num_tracks: self.num_tracks,
+            track_kinds: self.track_kinds.clone(),
+            track_volumes: self.track_volumes.clone(),
+        };
+        self.undo_stack.push(current);
+        self.apply_snapshot(snapshot);
+    }
+
+    fn apply_snapshot(&mut self, snapshot: TimelineSnapshot) {
+        self.clips = snapshot.clips;
+        self.num_tracks = snapshot.num_tracks;
+        self.track_kinds = snapshot.track_kinds;
+        self.track_volumes = snapshot.track_volumes;
+        self.selected_clip_id = None;
+        self.clip_drag_state = None;
+        self.opacity_drag = None;
+        self.save_to_timeline().ok();
     }
 
     pub fn set_preview_render(&mut self, quality: PreviewQuality, fps: f32) {

@@ -76,6 +76,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_clip_shake" => "Покачивание",
         "montage_editor_split_tool" => "✂ Разрез",
         "montage_editor_split_at_playhead" => "Разрезать на плейхеде",
+        "montage_editor_undo" => "↩ Отменить",
+        "montage_editor_redo" => "↪ Повторить",
         "translation" => "Перевод",
         "voiceover" => "Озвучка",
         "video" => "Видеоряд",

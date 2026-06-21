@@ -36,6 +36,8 @@ fn split_clip_at(editor: &mut MontageEditorState, clip_id: &str, split_time: f32
         return false;
     }
 
+    editor.push_undo();
+
     // Дані для створення правого кліпу (клонуємо)
     let right_clip = {
         let clip = &editor.clips[idx];
@@ -126,6 +128,7 @@ fn move_track(editor: &mut MontageEditorState, from: usize, to: usize) {
     if from == to || from >= editor.track_kinds.len() || to >= editor.track_kinds.len() {
         return;
     }
+    editor.push_undo();
     if from < to {
         editor.track_kinds[from..=to].rotate_left(1);
         if editor.track_volumes.len() > to {
@@ -231,12 +234,18 @@ pub(super) fn draw_timeline(
         editor.split_tool_active = false;
     }
 
+    // C — увімкнення/вимкнення інструменту розрізу
+    if ui.input(|i| i.key_pressed(egui::Key::C)) {
+        editor.split_tool_active = !editor.split_tool_active;
+    }
+
     // ─── Кнопки додавання доріжок + інструмент розрізу ──────────────────
     ui.horizontal(|ui| {
         let spacing = 6.0;
 
         // Кнопка "+ Відео"
         if ui.add_sized([70.0, 20.0], egui::Button::new(translate(language, "montage_editor_add_video_track"))).clicked() {
+            editor.push_undo();
             // Зсуваємо всі кліпи вниз, щоб нова доріжка з'явилась зверху
             for clip in &mut editor.clips {
                 clip.track_idx += 1;
@@ -247,6 +256,7 @@ pub(super) fn draw_timeline(
         ui.add_space(spacing);
         // Кнопка "+ Аудіо"
         if ui.add_sized([70.0, 20.0], egui::Button::new(translate(language, "montage_editor_add_audio_track"))).clicked() {
+            editor.push_undo();
             // Аудіо-доріжки додаються знизу (після відео)
             editor.num_tracks += 1;
             editor.track_kinds.push(TrackKind::Audio);
@@ -255,7 +265,32 @@ pub(super) fn draw_timeline(
 
         ui.separator();
 
-        // Кнопка інструменту розрізу (лезо) — справа від кнопок доріжок
+        // Кнопки скасування / повторення
+        let can_undo = !editor.undo_stack.is_empty();
+        let can_redo = !editor.redo_stack.is_empty();
+        let undo_btn = ui.add_enabled(
+            can_undo,
+            egui::Button::new(translate(language, "montage_editor_undo"))
+                .min_size([80.0, 20.0].into())
+                .fill(Color32::from_rgb(35, 35, 42)),
+        ).on_hover_text("Ctrl+Z");
+        if undo_btn.clicked() {
+            editor.undo();
+        }
+        ui.add_space(spacing);
+        let redo_btn = ui.add_enabled(
+            can_redo,
+            egui::Button::new(translate(language, "montage_editor_redo"))
+                .min_size([80.0, 20.0].into())
+                .fill(Color32::from_rgb(35, 35, 42)),
+        ).on_hover_text("Ctrl+Y");
+        if redo_btn.clicked() {
+            editor.redo();
+        }
+
+        ui.separator();
+
+        // Кнопка інструменту розрізу (лезо) — C для активації
         let split_btn_text = if editor.split_tool_active {
             egui::RichText::new(translate(language, "montage_editor_split_tool"))
                 .strong()
@@ -269,7 +304,10 @@ pub(super) fn draw_timeline(
         } else {
             Color32::from_rgb(35, 35, 42)
         };
-        if ui.add_sized([80.0, 20.0], egui::Button::new(split_btn_text).fill(split_fill)).clicked() {
+        if ui.add_sized([80.0, 20.0], egui::Button::new(split_btn_text).fill(split_fill))
+            .on_hover_text("C")
+            .clicked()
+        {
             editor.split_tool_active = !editor.split_tool_active;
         }
 
@@ -450,20 +488,23 @@ pub(super) fn draw_timeline(
                                 let vis_idx = ((rel_y / (track_h + 2.0)) as usize).min(total_rows - 1);
                                 vis_idx
                             };
-                            let target_kind = editor.track_kinds.get(t_idx);
                             let start = ((pos.x - rect.left()) / zoom).max(0.0);
-                            if let Some(media) = editor.media_pool.iter().find(|m| m.id == drag_id) {
-                                // Перевіряємо сумісність медіа з доріжкою
-                                if !clip_fits_track(&media.kind, target_kind) {
-                                    editor.drop_target_track = None;
-                                    // Несумісна доріжка — нічого не робимо
-                                } else {
-                                let kind = media.kind.clone();
-                                let has_audio = media.has_audio;
-                                let name = media.name.clone();
-                                let media_path = media.path.clone();
-                                let duration = media.duration_secs;
-                                let media_id = media.id.clone();
+                            // Збираємо дані до мутації (уникаємо конфлікту запозичень)
+                            let drop_info = {
+                                let tk = editor.track_kinds.get(t_idx).copied();
+                                editor.media_pool.iter().find(|m| m.id == drag_id).and_then(|media| {
+                                    if clip_fits_track(&media.kind, tk.as_ref()) {
+                                        Some((media.kind.clone(), media.has_audio, media.name.clone(),
+                                              media.path.clone(), media.duration_secs, media.id.clone(), tk))
+                                    } else {
+                                        None
+                                    }
+                                })
+                            };
+                            if let Some((kind, has_audio, name, media_path, duration, media_id, _target_kind)) = drop_info {
+                                {
+                                editor.push_undo();
+                                // (kind, has_audio, name, media_path, duration, media_id вже клоновані)
                                 // Якщо відео з аудіо — генеруємо спільний pair_id
                                 let pair_uuid = if matches!(kind, ClipKind::Video) && has_audio {
                                     Some(uuid_str())
@@ -824,6 +865,7 @@ pub(super) fn draw_timeline(
                     editor.selected_clip_id = Some(clip.id.clone());
                 }
                 if clip_resp.drag_started() {
+                    editor.push_undo();
                     // press_origin() — де саме натиснули, а не де зараз курсор
                     let start = ui.input(|i| i.pointer.press_origin()).or(mouse_pos);
                     if let Some(pos) = start {
@@ -890,6 +932,7 @@ pub(super) fn draw_timeline(
                         if clip_pair_id.is_some() {
                             if clip_audio_linked {
                                 if ui.button(translate(language, "montage_editor_unlink_audio")).clicked() {
+                                    editor.push_undo();
                                     // Розв'язуємо обидва кліпи пари
                                     let pid = clip_pair_id.as_deref().unwrap_or("");
                                     for c in &mut editor.clips {
@@ -901,6 +944,7 @@ pub(super) fn draw_timeline(
                                     ui.close_menu();
                                 }
                             } else if ui.button(translate(language, "montage_editor_link_audio")).clicked() {
+                                editor.push_undo();
                                 let pid = clip_pair_id.as_deref().unwrap_or("");
                                 for c in &mut editor.clips {
                                     if c.pair_id.as_deref() == Some(pid) {
@@ -913,6 +957,7 @@ pub(super) fn draw_timeline(
                             if clip_is_embedded {
                                 // На аудіо-кліпі: "Видалити аудіо"
                                 if ui.button(translate(language, "montage_editor_delete_audio_clip")).clicked() {
+                                    editor.push_undo();
                                     editor.clips.retain(|c| c.id != clip_id_str);
                                     // Знімаємо pair_id у відео-кліпу
                                     if let Some(pid) = clip_pair_id.as_deref() {
@@ -929,6 +974,7 @@ pub(super) fn draw_timeline(
                             } else {
                                 // На відео-кліпі: "Видалити аудіо" видаляє парний аудіо-кліп
                                 if ui.button(translate(language, "montage_editor_delete_audio_clip")).clicked() {
+                                    editor.push_undo();
                                     if let Some(pid) = clip_pair_id.as_deref() {
                                         editor.clips.retain(|c| {
                                             !(c.pair_id.as_deref() == Some(pid) && c.is_embedded_audio)
@@ -1473,6 +1519,7 @@ fn update_opacity_drag(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let released = ui.input(|i| !i.pointer.any_down());
     if released {
         editor.opacity_drag = None;
+        editor.save_to_timeline().ok();
         return;
     }
 
@@ -1507,6 +1554,9 @@ fn update_clip_drag(
     if editor.opacity_drag.is_some() { return; }
 
     if ctx.input(|i| i.pointer.any_released()) {
+        if editor.clip_drag_state.is_some() {
+            editor.save_to_timeline().ok();
+        }
         editor.clip_drag_state = None;
         return;
     }

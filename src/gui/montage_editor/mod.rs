@@ -157,6 +157,18 @@ pub fn draw_montage_editor_window(
         }
     }
 
+    // Ctrl/Cmd+Z — скасування, Ctrl/Cmd+Y або Ctrl/Cmd+Shift+Z — повторення
+    if !ctx.wants_keyboard_input() {
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z) && !i.modifiers.shift) {
+            editor.undo();
+        }
+        if ctx.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::Y))
+            || (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::Z)))
+        {
+            editor.redo();
+        }
+    }
+
     if editor.is_playing {
         let elapsed = editor.last_frame_time.elapsed().as_secs_f32();
         editor.playhead = (editor.playhead + elapsed).min(editor.total_dur());

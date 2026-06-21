@@ -286,6 +286,16 @@ pub struct PreviewDragState {
     pub frame_rect: Rect,
 }
 
+// ─── Знімок стану таймлайну (для undo/redo) ──────────────────────────────────
+
+#[derive(Clone)]
+pub struct TimelineSnapshot {
+    pub clips: Vec<EditorClip>,
+    pub num_tracks: usize,
+    pub track_kinds: Vec<TrackKind>,
+    pub track_volumes: Vec<f32>,
+}
+
 // ─── Дії редактора монтажу ────────────────────────────────────────────────────
 
 /// Дії що редактор монтажу повертає для обробки в app.rs за кожен кадр
