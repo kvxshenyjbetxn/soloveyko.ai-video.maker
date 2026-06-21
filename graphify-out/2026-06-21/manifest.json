@@ -45,9 +45,9 @@
     "semantic_hash": "359fd143568420043ae319d2bad1191d"
   },
   "src/api/ffmpeg.rs": {
-    "mtime": 1782039705.6441283,
-    "ast_hash": "16bc58b41c7517bcff723fb09b09fed4",
-    "semantic_hash": ""
+    "mtime": 1781602530.6569939,
+    "ast_hash": "00867c110a5d6d359904c132302cc4be",
+    "semantic_hash": "00867c110a5d6d359904c132302cc4be"
   },
   "src/api/gemini.rs": {
     "mtime": 1781602530.6569939,
@@ -95,9 +95,9 @@
     "semantic_hash": "5ada4479a804b7667875bcb5bc1f6263"
   },
   "src/app.rs": {
-    "mtime": 1782039692.5294702,
-    "ast_hash": "621dcdf62f1ec066ed615190132c4130",
-    "semantic_hash": ""
+    "mtime": 1781797198.6352303,
+    "ast_hash": "8f72ec59943a41d5be905bd73c4083fe",
+    "semantic_hash": "8f72ec59943a41d5be905bd73c4083fe"
   },
   "src/bundle.rs": {
     "mtime": 1781634015.0164697,
@@ -205,9 +205,9 @@
     "semantic_hash": "17ed568482855c78f5ffc5a21cf47aec"
   },
   "src/gui/gallery/video_player.rs": {
-    "mtime": 1782039664.2378953,
-    "ast_hash": "f24dc151b2f9aa463ae57c2367ccb82b",
-    "semantic_hash": ""
+    "mtime": 1781602530.6640942,
+    "ast_hash": "0920a9d0abc38377279e53623a5821c8",
+    "semantic_hash": "0920a9d0abc38377279e53623a5821c8"
   },
   "src/gui/logs.rs": {
     "mtime": 1781602530.6655965,
@@ -220,14 +220,14 @@
     "semantic_hash": "2e43082e379de73db625fc71610f4cc9"
   },
   "src/gui/montage_editor/audio.rs": {
-    "mtime": 1782039651.0943208,
-    "ast_hash": "41b75d9594c82b7ade04b279ec2f7f09",
+    "mtime": 1781951664.909987,
+    "ast_hash": "fb25b7d137b8f4f0be7a3d6a40055876",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/frame_cache.rs": {
-    "mtime": 1782039654.4352753,
-    "ast_hash": "20732bc1fe60eadba8562d6a3151f49a",
-    "semantic_hash": ""
+    "mtime": 1781782043.8599434,
+    "ast_hash": "d44b5956658d0b38a7a8e99702cf1a6a",
+    "semantic_hash": "d44b5956658d0b38a7a8e99702cf1a6a"
   },
   "src/gui/montage_editor/inspector.rs": {
     "mtime": 1781774648.0530035,
@@ -235,8 +235,8 @@
     "semantic_hash": "97bc2f254ba17947775b540b168294ee"
   },
   "src/gui/montage_editor/media.rs": {
-    "mtime": 1782039648.1763713,
-    "ast_hash": "99b8eb3daade796dd265e9d1d170218e",
+    "mtime": 1781949921.2637627,
+    "ast_hash": "95a4df32b8371aa7b0880288284e74c8",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/media_pool.rs": {

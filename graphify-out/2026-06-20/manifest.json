@@ -1,7 +1,7 @@
 {
   ".claude/settings.local.json": {
-    "mtime": 1782034650.2201543,
-    "ast_hash": "2fc0f52a15a96f9c62d4831be7710f44",
+    "mtime": 1781947525.6646938,
+    "ast_hash": "096cc51ce7d8b4e09cfb80862ba9383c",
     "semantic_hash": ""
   },
   "build.rs": {
@@ -45,9 +45,9 @@
     "semantic_hash": "359fd143568420043ae319d2bad1191d"
   },
   "src/api/ffmpeg.rs": {
-    "mtime": 1782039705.6441283,
-    "ast_hash": "16bc58b41c7517bcff723fb09b09fed4",
-    "semantic_hash": ""
+    "mtime": 1781602530.6569939,
+    "ast_hash": "00867c110a5d6d359904c132302cc4be",
+    "semantic_hash": "00867c110a5d6d359904c132302cc4be"
   },
   "src/api/gemini.rs": {
     "mtime": 1781602530.6569939,
@@ -95,9 +95,9 @@
     "semantic_hash": "5ada4479a804b7667875bcb5bc1f6263"
   },
   "src/app.rs": {
-    "mtime": 1782039692.5294702,
-    "ast_hash": "621dcdf62f1ec066ed615190132c4130",
-    "semantic_hash": ""
+    "mtime": 1781797198.6352303,
+    "ast_hash": "8f72ec59943a41d5be905bd73c4083fe",
+    "semantic_hash": "8f72ec59943a41d5be905bd73c4083fe"
   },
   "src/bundle.rs": {
     "mtime": 1781634015.0164697,
@@ -205,9 +205,9 @@
     "semantic_hash": "17ed568482855c78f5ffc5a21cf47aec"
   },
   "src/gui/gallery/video_player.rs": {
-    "mtime": 1782039664.2378953,
-    "ast_hash": "f24dc151b2f9aa463ae57c2367ccb82b",
-    "semantic_hash": ""
+    "mtime": 1781602530.6640942,
+    "ast_hash": "0920a9d0abc38377279e53623a5821c8",
+    "semantic_hash": "0920a9d0abc38377279e53623a5821c8"
   },
   "src/gui/logs.rs": {
     "mtime": 1781602530.6655965,
@@ -220,14 +220,14 @@
     "semantic_hash": "2e43082e379de73db625fc71610f4cc9"
   },
   "src/gui/montage_editor/audio.rs": {
-    "mtime": 1782039651.0943208,
-    "ast_hash": "41b75d9594c82b7ade04b279ec2f7f09",
+    "mtime": 1781951664.909987,
+    "ast_hash": "fb25b7d137b8f4f0be7a3d6a40055876",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/frame_cache.rs": {
-    "mtime": 1782039654.4352753,
-    "ast_hash": "20732bc1fe60eadba8562d6a3151f49a",
-    "semantic_hash": ""
+    "mtime": 1781782043.8599434,
+    "ast_hash": "d44b5956658d0b38a7a8e99702cf1a6a",
+    "semantic_hash": "d44b5956658d0b38a7a8e99702cf1a6a"
   },
   "src/gui/montage_editor/inspector.rs": {
     "mtime": 1781774648.0530035,
@@ -235,18 +235,18 @@
     "semantic_hash": "97bc2f254ba17947775b540b168294ee"
   },
   "src/gui/montage_editor/media.rs": {
-    "mtime": 1782039648.1763713,
-    "ast_hash": "99b8eb3daade796dd265e9d1d170218e",
+    "mtime": 1781949921.2637627,
+    "ast_hash": "95a4df32b8371aa7b0880288284e74c8",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/media_pool.rs": {
-    "mtime": 1782038222.8511305,
-    "ast_hash": "8cfebc3968b64495cb4882a82ae43698",
-    "semantic_hash": ""
+    "mtime": 1781802693.3835366,
+    "ast_hash": "6090e3281dd905dce0a82c61b4a0550a",
+    "semantic_hash": "6090e3281dd905dce0a82c61b4a0550a"
   },
   "src/gui/montage_editor/mod.rs": {
-    "mtime": 1782036546.9560907,
-    "ast_hash": "34e5b292f63fb2f786327ff842bc877f",
+    "mtime": 1781979532.7400355,
+    "ast_hash": "61e9a2fc55a82fed17fdcae329b5f5a6",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/preview.rs": {
@@ -255,23 +255,23 @@
     "semantic_hash": ""
   },
   "src/gui/montage_editor/state.rs": {
-    "mtime": 1782039185.1611314,
-    "ast_hash": "987f16d07c43fccf4e0c0988a7b7b1b6",
+    "mtime": 1781984416.4175177,
+    "ast_hash": "df649fcf0bc088099c34736fdfeb3d4e",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/timeline.rs": {
-    "mtime": 1782038493.9561791,
-    "ast_hash": "0259a115869e654436f08fd1f88d1f2d",
+    "mtime": 1781982404.570029,
+    "ast_hash": "8e99fb44bac0d6c8cca34ff1196283b8",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/topbar.rs": {
-    "mtime": 1782035044.5405183,
-    "ast_hash": "72b26e60f04c7c2a754298e1fffd134e",
+    "mtime": 1781979839.0200367,
+    "ast_hash": "a23738c2e09e362cee6c14ad0b62cd45",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/types.rs": {
-    "mtime": 1782036492.828298,
-    "ast_hash": "e4375cb4477f4926c4da5a88e2887a1e",
+    "mtime": 1781982378.0350735,
+    "ast_hash": "8b4ad8e38db87526e82f3142f9240d7d",
     "semantic_hash": ""
   },
   "src/gui/montage_editor/utils.rs": {
@@ -395,8 +395,8 @@
     "semantic_hash": "2f8af500384c5f25c7f45f9233b2b82e"
   },
   "src/localization/en.rs": {
-    "mtime": 1782036909.2982736,
-    "ast_hash": "9d2a16c348d4d2f6f114bd5fde319b97",
+    "mtime": 1781958791.3371778,
+    "ast_hash": "e14ff835374567e75f0cb0222743e0ed",
     "semantic_hash": ""
   },
   "src/localization/mod.rs": {
@@ -405,13 +405,13 @@
     "semantic_hash": "2bdc38877ba0c0d1dddb792d0fbfe2b9"
   },
   "src/localization/ru.rs": {
-    "mtime": 1782036905.5767663,
-    "ast_hash": "5314b57d304dc7a64df166eb43e63924",
+    "mtime": 1781958794.121594,
+    "ast_hash": "fc87a09c7f1f8a9389a37c9f694e4a1c",
     "semantic_hash": ""
   },
   "src/localization/uk.rs": {
-    "mtime": 1782036892.1535308,
-    "ast_hash": "127bec2ca358729187e9cf441830e7af",
+    "mtime": 1781958774.1968026,
+    "ast_hash": "7ce18470c59a8f4f7d80b3ebada8c78c",
     "semantic_hash": ""
   },
   "src/logger.rs": {

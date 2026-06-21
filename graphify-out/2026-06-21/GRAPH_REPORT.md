@@ -1,16 +1,16 @@
 # Graph Report - soloveyko.ai-video.maker  (2026-06-21)
 
 ## Corpus Check
-- 97 files · ~215,446 words
+- 97 files · ~215,212 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1606 nodes · 3090 edges · 90 communities (84 shown, 6 thin omitted)
+- 1600 nodes · 3070 edges · 96 communities (90 shown, 6 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 102 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bd4ecbcc`
+- Built from commit: `abb3f29e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -83,6 +83,7 @@
 - [[_COMMUNITY_Montage Editor Inspector|Montage Editor Inspector]]
 - [[_COMMUNITY_Pipeline Editing|Pipeline Editing]]
 - [[_COMMUNITY_Src Theme|Src Theme]]
+- [[_COMMUNITY_Pipelinetemplate|Pipelinetemplate]]
 - [[_COMMUNITY_Pixabay Md Api Response Schema|Pixabay Md Api Response Schema]]
 - [[_COMMUNITY_Src App|Src App]]
 - [[_COMMUNITY_Community 83|Community 83]]
@@ -90,11 +91,16 @@
 - [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
 - [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 93|Community 93]]
+- [[_COMMUNITY_Community 94|Community 94]]
+- [[_COMMUNITY_Community 95|Community 95]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `translate()` - 51 edges
-2. `VideoMakerApp` - 45 edges
+2. `VideoMakerApp` - 44 edges
 3. `String` - 39 edges
 4. `MontageEditorState` - 33 edges
 5. `Sync` - 29 edges
@@ -107,51 +113,51 @@
 ## Surprising Connections (you probably didn't know these)
 - `draw_media_pool()` --calls--> `translate()`  [INFERRED]
   src/gui/montage_editor/media_pool.rs → src/localization/mod.rs
+- `clip_from_json_seg()` --calls--> `uuid_str()`  [INFERRED]
+  src/gui/montage_editor/state.rs → src/gui/montage_editor/utils.rs
+- `load_timeline_clips()` --calls--> `uuid_str()`  [INFERRED]
+  src/gui/montage_editor/state.rs → src/gui/montage_editor/utils.rs
 - `split_clip_at()` --calls--> `uuid_str()`  [INFERRED]
   src/gui/montage_editor/timeline.rs → src/gui/montage_editor/utils.rs
 - `draw_timeline()` --calls--> `translate()`  [INFERRED]
   src/gui/montage_editor/timeline.rs → src/localization/mod.rs
-- `draw_timeline()` --calls--> `uuid_str()`  [INFERRED]
-  src/gui/montage_editor/timeline.rs → src/gui/montage_editor/utils.rs
-- `draw_topbar()` --calls--> `translate()`  [INFERRED]
-  src/gui/montage_editor/topbar.rs → src/localization/mod.rs
 
 ## Import Cycles
-- 1-file cycle: `src/gui/settings/storage.rs -> src/gui/settings/storage.rs`
-- 1-file cycle: `src/app.rs -> src/app.rs`
-- 1-file cycle: `src/gui/gallery/video_player.rs -> src/gui/gallery/video_player.rs`
-- 1-file cycle: `src/gui/montage_editor/audio.rs -> src/gui/montage_editor/audio.rs`
-- 1-file cycle: `src/gui/montage_editor/frame_cache.rs -> src/gui/montage_editor/frame_cache.rs`
 - 1-file cycle: `src/gui/montage_editor/media_pool.rs -> src/gui/montage_editor/media_pool.rs`
+- 1-file cycle: `src/gui/montage_editor/timeline.rs -> src/gui/montage_editor/timeline.rs`
 - 1-file cycle: `src/gui/montage_editor/state.rs -> src/gui/montage_editor/state.rs`
-- 1-file cycle: `src/gui/montage_editor/media.rs -> src/gui/montage_editor/media.rs`
 - 1-file cycle: `src/gui/montage_editor/mod.rs -> src/gui/montage_editor/mod.rs`
 - 1-file cycle: `src/gui/montage_editor/preview.rs -> src/gui/montage_editor/preview.rs`
 - 1-file cycle: `src/gui/montage_editor/topbar.rs -> src/gui/montage_editor/topbar.rs`
-- 1-file cycle: `src/gui/montage_editor/timeline.rs -> src/gui/montage_editor/timeline.rs`
 - 1-file cycle: `src/gui/montage_editor/types.rs -> src/gui/montage_editor/types.rs`
 - 1-file cycle: `src/core/pipeline/montage/montage.rs -> src/core/pipeline/montage/montage.rs`
+- 1-file cycle: `src/gui/gallery/video_player.rs -> src/gui/gallery/video_player.rs`
 - 1-file cycle: `src/gui/stock_picker.rs -> src/gui/stock_picker.rs`
 - 1-file cycle: `src/gui/update_dialog.rs -> src/gui/update_dialog.rs`
 - 1-file cycle: `src/gui/pipeline/subtitles.rs -> src/gui/pipeline/subtitles.rs`
 - 1-file cycle: `src/core/pipeline/voiceover/voiceover.rs -> src/core/pipeline/voiceover/voiceover.rs`
+- 1-file cycle: `src/app.rs -> src/app.rs`
 - 1-file cycle: `src/bundle.rs -> src/bundle.rs`
+- 1-file cycle: `src/gui/settings/storage.rs -> src/gui/settings/storage.rs`
 - 1-file cycle: `src/core/pipeline/capcut/mod.rs -> src/core/pipeline/capcut/mod.rs`
+- 1-file cycle: `src/core/pipeline/timeline/sync.rs -> src/core/pipeline/timeline/sync.rs`
+- 1-file cycle: `src/gui/montage_editor/audio.rs -> src/gui/montage_editor/audio.rs`
+- 1-file cycle: `src/gui/montage_editor/frame_cache.rs -> src/gui/montage_editor/frame_cache.rs`
 
 ## Hyperedges (group relationships)
 - **AI CLI Agent Dispatch System — Claude / Gemini / AGY / Codex** — antigravity_cli_md_agent_type_enum, antigravity_cli_md_call_claude_code, antigravity_cli_md_call_agy_new_session, claude_cli_md_claude_cli, gemini_cli_md_gemini_cli, codex_cli_md_codex_cli [INFERRED 0.85]
 - **CapCut Project File Set — draft_content + draft_meta_info + timelines/project** — capcut_project_format_md_draft_content, capcut_project_format_md_draft_meta_info, capcut_project_format_md_timelines_project, capcut_project_format_md_generation_schema [EXTRACTED 1.00]
 - **Pipeline Template Save/Load Cycle — PipelineTemplate + save_template + load_template** — claude_md_pipeline_template, claude_md_save_template, claude_md_load_template [EXTRACTED 1.00]
 
-## Communities (90 total, 6 thin omitted)
+## Communities (96 total, 6 thin omitted)
 
 ### Community 0 - "Stock Media Picker"
 Cohesion: 0.07
 Nodes (69): CachedPhoto, CachedVideo, ColorImage, From, build_skeleton_cache_from_timeline(), check_download_complete(), delete_frame_cache_for_file(), draw_photo_grid() (+61 more)
 
 ### Community 1 - "Montage Editor Media"
-Cohesion: 0.05
-Nodes (58): AtomicBool, ClipDragState, ClipKind, Error, FrameCache, HashMap, Instant, MediaItem (+50 more)
+Cohesion: 0.11
+Nodes (17): ClipDragState, Error, HashMap, MontageEditorState, MontagePreviewSettings, OpacityDragState, PlayingAudio, Pos2 (+9 more)
 
 ### Community 2 - "Claude API Client"
 Cohesion: 0.06
@@ -175,7 +181,7 @@ Nodes (23): Default, ClipDragState, ClipKind, DragMode, EditorClip, MontageEdito
 
 ### Community 7 - "Frame Cache System"
 Cohesion: 0.14
-Nodes (19): FrameLoadResult, MediaItem, FrameCache, FrameQuality, Receiver, Sender, Context, DynamicImage (+11 more)
+Nodes (19): FrameLoadResult, FrameCache, FrameQuality, Receiver, Sender, Context, DynamicImage, HashMap (+11 more)
 
 ### Community 8 - "Gallery UI Icons"
 Cohesion: 0.09
@@ -183,7 +189,7 @@ Nodes (33): draw_eye_icon(), draw_menu_icon(), draw_play_triangle(), draw_refres
 
 ### Community 9 - "App Core State"
 Cohesion: 0.06
-Nodes (31): AgentChatWindowState, App, AppSettings, BinaryDownload, Color32, EdgeTTSVoice, EditorStats, GooglerBalance (+23 more)
+Nodes (35): App, AppSettings, EditorStats, AgentChatWindowState, Arc, BinaryDownload, Color32, Default (+27 more)
 
 ### Community 10 - "Bundle & Deployment"
 Cohesion: 0.19
@@ -266,8 +272,8 @@ Cohesion: 0.13
 Nodes (18): PixabayImage, PixabayVideo, PixabayVideoSize, PixabayVideoSizes, Result, StockPhoto, StockProvider, StockVideo (+10 more)
 
 ### Community 30 - "Montage Editor Mod"
-Cohesion: 0.11
-Nodes (27): AudioPlayer, embedded_audio_cache_path(), extract_embedded_audio_async(), PlayingAudio, draw_montage_editor_window(), draw_montage_media_preview(), load_preview_texture(), MontageEditorActions (+19 more)
+Cohesion: 0.16
+Nodes (19): FrameCache, Instant, draw_montage_editor_window(), draw_montage_media_preview(), load_preview_texture(), MontageEditorActions, PipelineJob, Arc (+11 more)
 
 ### Community 31 - "Src Queue"
 Cohesion: 0.20
@@ -286,8 +292,8 @@ Cohesion: 0.17
 Nodes (15): draw_translation_control_windows(), TranslationControlWindowState, Arc, Context, HashMap, HashSet, Language, Mutex (+7 more)
 
 ### Community 35 - "Api Ffmpeg"
-Cohesion: 0.10
-Nodes (14): ChildTracker, FfmpegLimiter, FfmpegPermit, FfmpegPermit<'a>, kill_by_pid(), run_tracked(), Condvar, Drop (+6 more)
+Cohesion: 0.14
+Nodes (8): FfmpegLimiter, FfmpegPermit, FfmpegPermit<'a>, FfmpegPermit, Condvar, Drop, Mutex, Self
 
 ### Community 36 - "Api Updater"
 Cohesion: 0.20
@@ -302,8 +308,8 @@ Cohesion: 0.15
 Nodes (10): Display, Formatter, Language, translate(), draw_control_section(), Language, Ui, Default (+2 more)
 
 ### Community 39 - "Montage Editor Media Pool"
-Cohesion: 0.19
-Nodes (13): draw_media_pool(), load_thumb_texture(), Arc, Context, HashSet, Language, MontageEditorState, Mutex (+5 more)
+Cohesion: 0.23
+Nodes (15): refresh_placeholder_clips(), clean_windows_path(), frame_cache_dir(), path_hash(), probe_duration(), probe_has_audio(), sharp_frame_cache_dir(), uuid_str() (+7 more)
 
 ### Community 40 - "Settings Storage Append To Task History"
 Cohesion: 0.22
@@ -314,8 +320,8 @@ Cohesion: 0.05
 Nodes (38): CapCut Project Format — дослідження структури, `materials.audios[]` — аудіо матеріал, `materials.beats[]` (тільки аудіо-сегменти), `materials.canvases[]` (тільки відео-сегменти), `materials.material_colors[]` (тільки відео-сегменти), `materials.placeholder_infos[]`, `materials.sound_channel_mappings[]`, `materials.speeds[]` (+30 more)
 
 ### Community 42 - "Montage Editor Timeline"
-Cohesion: 0.18
-Nodes (19): clip_fits_track(), draw_timeline(), find_snap_secs(), move_track(), split_clip_at(), update_clip_drag(), update_opacity_drag(), Rect (+11 more)
+Cohesion: 0.09
+Nodes (33): ClipKind, draw_media_pool(), load_thumb_texture(), clip_fits_track(), draw_timeline(), find_snap_secs(), move_track(), split_clip_at() (+25 more)
 
 ### Community 43 - "Montage Montage"
 Cohesion: 0.24
@@ -334,8 +340,8 @@ Cohesion: 0.12
 Nodes (15): Gemini CLI — команди та флаги, `gemini extensions` — керування розширеннями (aliases: `extension`), `gemini gemma` — керування локальною моделлю Gemma, `gemini hooks` — керування хуками (aliases: `hook`), `gemini mcp` — керування MCP-серверами, `gemini skills` — керування навичками агента (aliases: `skill`), MCP (Model Context Protocol), Воркспейс та середовище (+7 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.07
-Nodes (48): draw_video_player(), extract_frames_file(), extract_single_frame_pipe(), get_video_dimensions(), start_fullscreen_extraction(), start_hover_extraction(), start_thumbnail_extraction(), VideoPlayer (+40 more)
+Cohesion: 0.26
+Nodes (19): draw_video_player(), extract_frames_file(), extract_single_frame_pipe(), get_video_dimensions(), start_fullscreen_extraction(), start_hover_extraction(), start_thumbnail_extraction(), VideoPlayer (+11 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.37
@@ -350,8 +356,8 @@ Cohesion: 0.13
 Nodes (14): `codex app-server` — сервер без TUI (experimental), Codex CLI — команди та флаги, `codex exec` — неінтерактивний режим (аналог `-p`), `codex mcp` — керування MCP-серверами, Дозволи та безпека, Значення `--ask-for-approval`, Конфігурація, Моделі (+6 more)
 
 ### Community 51 - "Creationcontext"
-Cohesion: 0.21
-Nodes (6): CreationContext, Frame, PipelineTemplate, Self, TaskHistoryEntry, Ui
+Cohesion: 0.28
+Nodes (5): CreationContext, Frame, Context, Self, Ui
 
 ### Community 52 - "Gui Logs"
 Cohesion: 0.33
@@ -368,6 +374,10 @@ Nodes (8): draw_task_history_panel(), format_ts(), stage_dots(), Language, Optio
 ### Community 55 - "Capcut Project Format Md Draft Content"
 Cohesion: 0.39
 Nodes (8): draft_content.json — CapCut Main Timeline File, draft_meta_info.json — CapCut Media Pool Metadata, CapCut Project Generation Schema — Steps to Build Project from timeline.json, CapCut materials{} — Video/Audio/Aux Material Objects, CapCut segments[] — Clip Placement on Timeline, CapCut Time Units — Microseconds as Base Unit, Timelines/project.json — CapCut Timeline Registry, CapCut tracks[] — Timeline Track Structure
+
+### Community 56 - "Community 56"
+Cohesion: 0.29
+Nodes (15): MediaItem, clip_from_json_seg(), find_audio_file(), load_external_media(), load_media_pool(), load_timeline_clips(), load_track_volumes(), load_voice_track_idx() (+7 more)
 
 ### Community 57 - "Pipeline Templates"
 Cohesion: 0.25
@@ -421,29 +431,49 @@ Nodes (3): Pixabay API Response Schema — hits, totalHits, image/video URLs, Pi
 Cohesion: 0.40
 Nodes (12): JobSettings, Path, PathBuf, Result, String, Vec, merge_audio_binary(), merge_audio_ffmpeg() (+4 more)
 
+### Community 88 - "Community 88"
+Cohesion: 0.20
+Nodes (10): AtomicBool, MediaItem, save_preview_jpeg(), Arc, ClipKind, DynamicImage, ImageResult, Path (+2 more)
+
+### Community 89 - "Community 89"
+Cohesion: 0.26
+Nodes (10): AudioPlayer, embedded_audio_cache_path(), extract_embedded_audio_async(), PlayingAudio, OutputStream, Sink, Option, Path (+2 more)
+
 ### Community 90 - "Community 90"
 Cohesion: 0.15
 Nodes (12): Claude Code CLI — команди та флаги, MCP (Model Context Protocol), Дозволи, Модель та сесія, Основні флаги, Плагіни та налаштування, Підкоманди, Режим "bare" (+4 more)
 
+### Community 93 - "Community 93"
+Cohesion: 0.17
+Nodes (11): draw_api_section(), Send, Arc, GooglerBalance, Language, Mutex, Option, String (+3 more)
+
+### Community 94 - "Community 94"
+Cohesion: 0.20
+Nodes (11): draw_voiceover_section(), VoiceBotTemplate, Arc, EdgeTTSVoice, Language, Mutex, Option, Result (+3 more)
+
+### Community 95 - "Community 95"
+Cohesion: 0.29
+Nodes (7): draw_update_dialog(), Arc, Context, Language, Mutex, Option, UpdateInfo
+
 ## Knowledge Gaps
-- **461 isolated node(s):** `Vec`, `Result`, `ExitStatus`, `Condvar`, `FfmpegPermit` (+456 more)
+- **468 isolated node(s):** `Context`, `Option`, `TextureHandle`, `Ui`, `Language` (+463 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Sync` connect `Community 47` to `Stock Media Picker`, `Claude API Client`, `Pipeline Orchestration`, `Googler Agent API`, `Video Generation UI`, `Edge TTS Service`, `AssemblyAI Transcription`, `Codex CLI Client`, `VoiceBot TTS Service`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Agypermit`, `Api Openrouter`, `Community 27`, `Montage Editor Mod`, `Src Queue`, `Pipeline Subtitles`, `Api Ffmpeg`, `Api Updater`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Community 87`?**
-  _High betweenness centrality (0.449) - this node is a cross-community bridge._
-- **Why does `translate()` connect `Display` to `Stock Media Picker`, `Gallery UI Icons`, `Video Generation UI`, `Agent Chat Window`, `Topbar Balance UI`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Pipeline Resume`, `Community 27`, `Gui Queue`, `Pipeline Subtitles`, `Pipeline Translation Control`, `Corebpe`, `Montage Editor Media Pool`, `Montage Editor Timeline`, `Community 47`, `Creationcontext`, `Gui Logs`, `Gui Task History`, `Pipeline Templates`, `Montage Editor Topbar`, `Pipeline Storage`, `Settings General`, `Montage Editor Inspector`, `Pipeline Editing`?**
-  _High betweenness centrality (0.268) - this node is a cross-community bridge._
-- **Why does `VideoMakerApp` connect `App Core State` to `Src App`, `Editor Data Types`, `Montage Montage`, `Creationcontext`, `Community 56`, `Montage Editor Mod`?**
-  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Why does `Sync` connect `Community 93` to `Stock Media Picker`, `Claude API Client`, `Pipeline Orchestration`, `Googler Agent API`, `Video Generation UI`, `Edge TTS Service`, `AssemblyAI Transcription`, `Codex CLI Client`, `VoiceBot TTS Service`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Agypermit`, `Api Openrouter`, `Community 27`, `Montage Editor Mod`, `Src Queue`, `Pipeline Subtitles`, `Api Ffmpeg`, `Api Updater`, `Montage Editor Timeline`, `Community 47`, `Community 87`, `Community 94`, `Community 95`?**
+  _High betweenness centrality (0.360) - this node is a cross-community bridge._
+- **Why does `translate()` connect `Display` to `Stock Media Picker`, `Gallery UI Icons`, `Video Generation UI`, `Agent Chat Window`, `Topbar Balance UI`, `Pipeline Mod Build Job Settings`, `Ffmpegdownload`, `Pipeline Resume`, `Community 27`, `Gui Queue`, `Pipeline Subtitles`, `Pipeline Translation Control`, `Corebpe`, `Montage Editor Timeline`, `Creationcontext`, `Gui Logs`, `Gui Task History`, `Pipeline Templates`, `Montage Editor Topbar`, `Pipeline Storage`, `Settings General`, `Montage Editor Inspector`, `Pipeline Editing`, `Pipelinetemplate`, `Community 93`, `Community 94`, `Community 95`?**
+  _High betweenness centrality (0.295) - this node is a cross-community bridge._
+- **Why does `save_settings()` connect `Settings Storage Clean Numeric Param` to `Settings Storage Append To Task History`, `Creationcontext`, `Settings & Storage`?**
+  _High betweenness centrality (0.095) - this node is a cross-community bridge._
 - **Are the 49 inferred relationships involving `translate()` (e.g. with `draw_media_regen_window()` and `draw_gallery_tab()`) actually correct?**
   _`translate()` has 49 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Vec`, `Result`, `ExitStatus` to the rest of the system?**
-  _461 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Context`, `Option`, `TextureHandle` to the rest of the system?**
+  _468 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Stock Media Picker` be split into smaller, more focused modules?**
   _Cohesion score 0.07243243243243243 - nodes in this community are weakly interconnected._
 - **Should `Montage Editor Media` be split into smaller, more focused modules?**
-  _Cohesion score 0.05441400304414003 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11 - nodes in this community are weakly interconnected._
