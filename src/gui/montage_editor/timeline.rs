@@ -1129,9 +1129,20 @@ pub(super) fn draw_timeline(
                 ));
             }
 
-            // Скраб плейхеда кліком по лінійці
+            // Скраб плейхеда кліком по лінійці.
+            // Натискання на лінійці починає drag; плейхед рухається поки кнопка затиснута,
+            // навіть якщо мишка вийшла на кліпи нижче.
+            let primary_down = ui.input(|i| i.pointer.primary_down());
             if let Some(pos) = mouse_pos {
-                if ruler_rect.contains(pos) && ui.input(|i| i.pointer.primary_down()) {
+                if ruler_rect.contains(pos) && ui.input(|i| i.pointer.primary_pressed()) {
+                    editor.playhead_dragging = true;
+                }
+            }
+            if !primary_down {
+                editor.playhead_dragging = false;
+            }
+            if editor.playhead_dragging && primary_down {
+                if let Some(pos) = mouse_pos {
                     let new_ph = ((pos.x - rect.left()) / zoom).clamp(0.0, total_dur);
                     if (new_ph - editor.playhead).abs() > 0.05 {
                         editor.active_audios.clear();

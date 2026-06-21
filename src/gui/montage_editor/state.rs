@@ -81,6 +81,8 @@ pub struct MontageEditorState {
     pub track_drag: Option<TrackDragState>,
     /// Поточне горизонтальне зміщення скролу таймлінії (для авто-прокрутки за плейхедом)
     pub timeline_scroll_x: f32,
+    /// true поки користувач тягне плейхед (натиснув на лінійці і ще не відпустив)
+    pub playhead_dragging: bool,
 }
 
 impl MontageEditorState {
@@ -237,6 +239,7 @@ impl MontageEditorState {
             split_snap_secs: None,
             track_drag: None,
             timeline_scroll_x: 0.0,
+            playhead_dragging: false,
         }
     }
 
