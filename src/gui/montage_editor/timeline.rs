@@ -1018,6 +1018,26 @@ pub(super) fn draw_timeline(
                             editor.pending_regen = Some((clip_path.clone(), true));
                             ui.close_menu();
                         }
+                        ui.separator();
+                        if ui.button(translate(language, "montage_editor_delete_clip")).clicked() {
+                            editor.push_undo();
+                            // Якщо відео з прив'язаним вбудованим аудіо — видаляємо і його
+                            if !clip_is_embedded {
+                                if let Some(pid) = clip_pair_id.as_deref() {
+                                    if clip_audio_linked {
+                                        editor.clips.retain(|c| {
+                                            !(c.pair_id.as_deref() == Some(pid) && c.is_embedded_audio)
+                                        });
+                                    }
+                                }
+                            }
+                            editor.clips.retain(|c| c.id != clip_id_str);
+                            if editor.selected_clip_id.as_deref() == Some(clip_id_str.as_str()) {
+                                editor.selected_clip_id = None;
+                            }
+                            editor.save_to_timeline().ok();
+                            ui.close_menu();
+                        }
                     });
                 }
             }
