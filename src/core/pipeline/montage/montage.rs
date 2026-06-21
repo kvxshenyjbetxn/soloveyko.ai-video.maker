@@ -291,6 +291,8 @@ pub fn run_montage(
         duration: f64,
         /// Назва переходу для xfade=transition=...
         name: String,
+        /// true = кліпи накладаються на таймлінії; false = глобальний перехід між послідовними кліпами
+        is_overlap: bool,
     }
     let mut pairs: Vec<PairTransition> = Vec::new();
     for k in 0..n.saturating_sub(1) {
@@ -314,6 +316,7 @@ pub fn run_montage(
             pairs.push(PairTransition {
                 duration: ov,
                 name: b.overlap_transition.clone(),
+                is_overlap: true,
             });
         } else if transition != "none" {
             // Нема накладання, але глобальний перехід увімкнено
@@ -323,23 +326,33 @@ pub fn run_montage(
             pairs.push(PairTransition {
                 duration: t,
                 name: transition.to_string(),
+                is_overlap: false,
             });
         } else {
             // Без переходу
-            pairs.push(PairTransition { duration: 0.0, name: String::new() });
+            pairs.push(PairTransition { duration: 0.0, name: String::new(), is_overlap: false });
         }
     }
 
     // ─── Будуємо фільтр-граф ─────────────────────────────────────────────────
     let mut filter_parts: Vec<String> = Vec::new();
+    // adj_dur[i] — скоригована тривалість кліпу для фільтру:
+    // для глобальних переходів (не overlap) кліп розтягується на тривалість переходу,
+    // щоб мати кадри для xfade. Для overlap-переходів розтягнення непотрібне —
+    // кліпи вже перекриваються на таймлінії.
+    let mut adj_durs: Vec<f64> = Vec::with_capacity(n);
 
     let mut file_idx = 0usize; // input-файл index (тільки для media-кліпів, не для black)
     let mut img_idx = 0usize;  // лічильник зображень для режиму "alternate"
     for (i, clip) in clips.iter().enumerate() {
-        // Кожен кліп подовжується на тривалість свого вихідного переходу (pairs[i])
-        // щоб зберегти синхронізацію
-        let ext = if i < pairs.len() { pairs[i].duration } else { 0.0 };
+        let ext = if i < pairs.len() && pairs[i].duration > 0.001 && !pairs[i].is_overlap {
+            // Глобальний перехід: подовжуємо кліп щоб xfade мав кадри для плавного переходу
+            pairs[i].duration
+        } else {
+            0.0
+        };
         let adj_dur = (clip.duration + ext).max(0.05);
+        adj_durs.push(adj_dur);
         let frames = (adj_dur * fps as f64).round().max(1.0) as u64;
 
         if clip.path.is_none() {
@@ -369,46 +382,61 @@ pub fn run_montage(
         }
     }
 
-    // ─── Ланцюг xfade-переходів (per-pair) + concat ────────────────────
-    // Підхід: спочатку xfade-склеюємо overlap-пари, потім concat-склеюємо все.
-    // Це простіше ніж змішувати xfade/concat всередині одного ланцюга.
-    let mut merged_labels: Vec<String> = Vec::new();
-    let mut i = 0usize;
-    while i < n {
-        if i < n - 1 && pairs[i].duration > 0.001 {
-            // Overlap-пара: xfade між i та i+1
-            let offset = clips[0..=i].iter().map(|c| c.duration).sum::<f64>();
-            let trans_name = if pairs[i].name == "random" {
-                pick_transition("random")
-            } else {
-                pick_transition(&pairs[i].name)
-            };
-            let label = format!("v_merge_{i}");
-            filter_parts.push(format!(
-                "[v{i}_final][v{next}_final]xfade=transition={trans}:\
-                duration={t:.6}:offset={offset:.6}[{label}]",
-                next = i + 1,
-                trans = trans_name,
-                t = pairs[i].duration,
-                offset = offset,
-                label = label,
-            ));
-            merged_labels.push(label);
-            i += 2;
-        } else {
-            // Без overlap — просто сам кліп
-            merged_labels.push(format!("v{i}_final"));
-            i += 1;
+    // ─── Послідовний ланцюг xfade-переходів + concat ───────────────────────────
+    // Будуємо ланцюг зліва направо: кожен новий кліп або приєднується через xfade
+    // до поточного ланцюга, або починає новий сегмент (якщо переходу немає).
+    // chain_dur відстежує поточну тривалість виходу ланцюга для правильного offset.
+    // offset = chain_dur - pair.duration (єдина формула для обох типів переходів):
+    //   - overlap: adj_dur = original (без розтягнення), offset = original - overlap
+    //   - global: adj_dur = original + trans (розтягнення), offset = (original+trans) - trans = original
+    let mut result_labels: Vec<String> = Vec::new();
+    let mut chain_label: Option<String> = None;
+    let mut chain_dur = 0.0f64;
+
+    for i in 0..n {
+        let clip_label = format!("v{i}_final");
+        match chain_label.take() {
+            None => {
+                chain_label = Some(clip_label);
+                chain_dur = adj_durs[i];
+            }
+            Some(prev_label) => {
+                let pair = &pairs[i - 1];
+                if pair.duration > 0.001 {
+                    let new_label = format!("v_merge_{i}");
+                    let offset = (chain_dur - pair.duration).max(0.0);
+                    let trans_name = if pair.name == "random" {
+                        pick_transition("random")
+                    } else {
+                        pick_transition(&pair.name)
+                    };
+                    filter_parts.push(format!(
+                        "[{prev_label}][{clip_label}]xfade=transition={trans}:\
+                        duration={dur:.6}:offset={offset:.6}[{new_label}]",
+                        trans = trans_name,
+                        dur = pair.duration,
+                    ));
+                    chain_dur = offset + adj_durs[i];
+                    chain_label = Some(new_label);
+                } else {
+                    result_labels.push(prev_label);
+                    chain_label = Some(clip_label);
+                    chain_dur = adj_durs[i];
+                }
+            }
         }
     }
+    if let Some(label) = chain_label {
+        result_labels.push(label);
+    }
 
-    if merged_labels.len() == 1 {
-        filter_parts.push(format!("[{}]null[v_montage_raw]", merged_labels[0]));
+    if result_labels.len() == 1 {
+        filter_parts.push(format!("[{}]null[v_montage_raw]", result_labels[0]));
     } else {
-        let inputs: String = merged_labels.iter()
+        let inputs: String = result_labels.iter()
             .map(|l| format!("[{l}]"))
             .collect();
-        let count = merged_labels.len();
+        let count = result_labels.len();
         filter_parts.push(format!("{inputs}concat=n={count}:v=1:a=0[v_montage_raw]"));
     }
 

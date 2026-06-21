@@ -330,7 +330,38 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             .filter(|c| c.start_secs <= ph && ph < c.end_secs())
             .collect();
         // Спадний порядок: вищий track_idx = ближче до фону; нижчий (0) = передній план.
-        ov_sorted.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
+        // Для кліпів на одному треку: висхідний start_secs (outgoing рендерується раніше incoming).
+        ov_sorted.sort_by(|a, b| {
+            b.track_idx.cmp(&a.track_idx)
+                .then(a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal))
+        });
+
+        // Попереднє обчислення blend-альфи для кожного overlay-кліпу:
+        // якщо два кліпи на одному треку одночасно активні — це overlap-перехід між ними.
+        let ov_blend_alphas: Vec<f32> = {
+            let mut alphas = vec![1.0f32; ov_sorted.len()];
+            for i in 0..ov_sorted.len() {
+                for j in (i + 1)..ov_sorted.len() {
+                    if ov_sorted[i].track_idx != ov_sorted[j].track_idx { continue; }
+                    let ca = ov_sorted[i];
+                    let cb = ov_sorted[j];
+                    // ov_sorted вже відсортований по start_secs всередині треку:
+                    // ca.start_secs ≤ cb.start_secs → ca = outgoing, cb = incoming
+                    let overlap_start = cb.start_secs;
+                    let overlap_end = (ca.start_secs + ca.duration).min(cb.start_secs + cb.duration);
+                    if overlap_end > overlap_start + 0.001 && ph >= overlap_start && ph < overlap_end {
+                        let tp = ((ph - overlap_start) / (overlap_end - overlap_start)).clamp(0.0, 1.0);
+                        alphas[i] = 1.0 - tp; // outgoing затухає
+                        alphas[j] = tp;        // incoming з'являється
+                    }
+                }
+            }
+            alphas
+        };
+        // Якщо є активний overlay-перехід — перемальовуємо кадр для анімації
+        if ov_blend_alphas.iter().any(|&a| a > 0.001 && a < 0.999) {
+            ui.ctx().request_repaint();
+        }
         let overlay_data: Vec<OverlayRenderItem> = ov_sorted.iter()
             .map(|c| OverlayRenderItem {
                 path: c.path.clone().unwrap(),
@@ -543,7 +574,8 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         is_ov_img && item.zoom_enabled));
                     let ov_shake = shake_uv(item.t_off, &settings,
                         is_ov_img && item.shake_enabled);
-                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, (item.opacity.clamp(0.0, 1.0) * 255.0) as u8);
+                    let alpha = (item.opacity * ov_blend_alphas[ov_idx]).clamp(0.0, 1.0);
+                    render_clip_frame(&painter, &tex, container, ov_uv, ov_shake, (alpha * 255.0) as u8);
                 }
             }
         }
