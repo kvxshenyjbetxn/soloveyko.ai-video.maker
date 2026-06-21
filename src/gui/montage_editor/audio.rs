@@ -57,6 +57,6 @@ pub fn extract_embedded_audio_async(video_path: PathBuf, save_path: PathBuf) {
             .args(["-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2"])
             .arg(&out_path);
         crate::bundle::set_no_window(&mut cmd);
-        let _ = cmd.status();
+        let _ = crate::api::ffmpeg::run_tracked(&mut cmd);
     });
 }

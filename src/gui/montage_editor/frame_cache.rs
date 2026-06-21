@@ -168,7 +168,7 @@ impl FrameCache {
                     out.to_string_lossy().as_ref(),
                 ]);
                 crate::bundle::set_no_window(&mut cmd);
-                matches!(cmd.status(), Ok(status) if status.success()) && out.exists()
+                matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success()) && out.exists()
             }
             ClipKind::Audio => false,
         }

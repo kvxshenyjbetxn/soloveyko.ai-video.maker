@@ -2638,4 +2638,8 @@ impl eframe::App for VideoMakerApp {
             }
         }
     }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        crate::api::ffmpeg::ChildTracker::get().kill_all();
+    }
 }

@@ -119,7 +119,7 @@ impl MediaItem {
                     out_str,
                 ]);
                 crate::bundle::set_no_window(&mut ffmpeg_preview);
-                let status = ffmpeg_preview.status();
+                let status = crate::api::ffmpeg::run_tracked(&mut ffmpeg_preview);
                 if matches!(status, Ok(s) if s.success()) {
                     std::fs::write(dir.join(".complete"), b"1").ok();
                     flag.store(true, Ordering::Relaxed);
@@ -135,7 +135,7 @@ impl MediaItem {
                         first_frame.to_str().unwrap_or(""),
                     ]);
                     crate::bundle::set_no_window(&mut ffmpeg_fallback);
-                    let _ = ffmpeg_fallback.status();
+                    let _ = crate::api::ffmpeg::run_tracked(&mut ffmpeg_fallback);
                     flag.store(true, Ordering::Relaxed);
                 }
             });

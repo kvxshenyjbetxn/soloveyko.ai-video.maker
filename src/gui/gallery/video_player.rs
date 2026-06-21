@@ -131,6 +131,8 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
                 return;
             }
         };
+        let child_pid = child.id();
+        crate::api::ffmpeg::ChildTracker::get().add(child_pid);
 
         if let Some(stdout) = child.stdout.take() {
             let mut reader = std::io::BufReader::new(stdout);
@@ -156,6 +158,7 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
         }
 
         let _ = child.wait();
+        crate::api::ffmpeg::ChildTracker::get().remove(child_pid);
         *done.lock().unwrap() = true;
         ctx.request_repaint();
     });
