@@ -47,14 +47,19 @@ pub(super) fn draw_media_pool(
         }).unwrap_or(true) // невідоме розширення — показуємо підказку
     });
 
+    let mut pool_changed = false;
     for file in &dropped_files {
         if let Some(path) = &file.path {
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             if VALID_EXTS.contains(&ext.as_str()) && !editor.media_pool.iter().any(|m| m.path == *path) {
                 let save_path = editor.save_path.clone();
                 editor.media_pool.push(MediaItem::new(path.clone(), &save_path, editor.preview_render));
+                pool_changed = true;
             }
         }
+    }
+    if pool_changed {
+        editor.save_to_timeline().ok();
     }
 
     ui.horizontal(|ui| {
@@ -66,10 +71,14 @@ pub(super) fn draw_media_pool(
                     .pick_files()
                 {
                     let save_path = editor.save_path.clone();
+                    let before = editor.media_pool.len();
                     for path in paths {
                         if !editor.media_pool.iter().any(|m| m.path == path) {
                             editor.media_pool.push(MediaItem::new(path, &save_path, editor.preview_render));
                         }
+                    }
+                    if editor.media_pool.len() != before {
+                        editor.save_to_timeline().ok();
                     }
                 }
             }
@@ -374,6 +383,7 @@ pub(super) fn draw_media_pool(
             let removed_id = editor.media_pool[idx].id.clone();
             editor.pool_thumbnails.remove(&removed_id);
             editor.media_pool.remove(idx);
+            editor.save_to_timeline().ok();
         }
     });
 

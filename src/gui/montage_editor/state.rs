@@ -100,6 +100,13 @@ impl MontageEditorState {
         };
         let mut media_pool = load_media_pool(save_path, preview_render);
 
+        // Відновлюємо зовнішні медіафайли з timeline.json (ті, що поза папкою проекту)
+        for item in load_external_media(save_path, preview_render) {
+            if !media_pool.iter().any(|m| m.path == item.path) {
+                media_pool.push(item);
+            }
+        }
+
         // Створюємо візуальний аудіо-кліп для голосової доріжки (без зміни audio_path для рендеру)
         let mut vo_clip_on_track = None;
         if let Some(ref ap) = audio_path {
@@ -112,15 +119,13 @@ impl MontageEditorState {
                 id
             };
             let vo_name = ap.file_name().and_then(|n| n.to_str()).unwrap_or("voice").to_string();
-            // Знаходимо існуючу аудіо-доріжку або створюємо нову
-            let has_audio_track = clips.iter().any(|c| matches!(c.kind, ClipKind::Audio));
-            let num_tracks_now = clips.iter().map(|c| c.track_idx + 1).max().unwrap_or(1).max(2);
-            let audio_track_idx = if has_audio_track {
-                clips.iter().filter(|c| matches!(c.kind, ClipKind::Audio))
-                    .map(|c| c.track_idx).min().unwrap_or(num_tracks_now)
-            } else {
-                num_tracks_now
-            };
+            // Визначаємо доріжку для голосового кліпу
+            let audio_track_idx = load_voice_track_idx(save_path).unwrap_or_else(|| {
+                // Fallback: перший індекс > 0 що не зайнятий іншими кліпами
+                let used: std::collections::HashSet<usize> =
+                    clips.iter().map(|c| c.track_idx).collect();
+                (1..).find(|&t| !used.contains(&t)).unwrap_or(1)
+            });
             vo_clip_on_track = Some(EditorClip {
                 id: uuid_str(),
                 media_id,
@@ -443,6 +448,15 @@ impl MontageEditorState {
             .find(|c| matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none())
             .map(|c| c.start_secs as f64)
             .unwrap_or(0.0);
+        // Зовнішні медіа-файли пулу (поза папкою проекту) — зберігаємо абсолютні шляхи
+        let external_media: Vec<serde_json::Value> = self.media_pool.iter()
+            .filter(|m| self.path_to_rel(&m.path).is_none())
+            .map(|m| serde_json::Value::String(m.path.to_string_lossy().replace('\\', "/").to_string()))
+            .collect();
+        // Індекс доріжки голосового кліпу — зберігаємо щоб відновити без конфліктів
+        let voice_track_idx: Option<u64> = self.clips.iter()
+            .find(|c| matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none())
+            .map(|c| c.track_idx as u64);
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
             "audio_start_secs": vo_start as f64,
@@ -450,6 +464,8 @@ impl MontageEditorState {
             "track_volumes": track_vols_json,
             "segments": main_segments,
             "overlay_tracks": overlay_tracks,
+            "external_media": external_media,
+            "voice_track_idx": voice_track_idx,
         });
 
         let timeline_path = self.save_path.join("timeline.json");
@@ -668,6 +684,30 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
     }
 
     (clips, total, audio_start)
+}
+
+fn load_voice_track_idx(save_path: &Path) -> Option<usize> {
+    let path = save_path.join("timeline.json");
+    let content = std::fs::read_to_string(&path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    v["voice_track_idx"].as_u64().map(|i| i as usize)
+}
+
+fn load_external_media(save_path: &Path, preview: PreviewRenderSettings) -> Vec<MediaItem> {
+    let timeline_path = save_path.join("timeline.json");
+    if !timeline_path.exists() { return Vec::new(); }
+    let content = std::fs::read_to_string(&timeline_path).unwrap_or_default();
+    let v: serde_json::Value = serde_json::from_str(&content).unwrap_or(serde_json::Value::Null);
+    v["external_media"].as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|p| p.as_str())
+                .map(PathBuf::from)
+                .filter(|p| p.exists())
+                .map(|p| MediaItem::new(p, save_path, preview))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn find_audio_file(save_path: &Path) -> Option<PathBuf> {

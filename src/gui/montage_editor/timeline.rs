@@ -591,6 +591,7 @@ pub(super) fn draw_timeline(
                                         editor.save_path.clone(),
                                     );
                                 }
+                                editor.save_to_timeline().ok();
                                 } // closes else
                             }
                         }
