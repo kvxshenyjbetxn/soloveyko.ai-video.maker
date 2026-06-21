@@ -714,6 +714,13 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                         let covered: std::collections::HashSet<usize> = clips.iter()
                             .filter_map(|c| c.stock_seg_idx)
                             .collect();
+                        // Плейсхолдери мають бути на тій самій доріжці де вже є вибрані stock-кліпи.
+                        // Якщо користувач додав відео на нову доріжку, bg_track_idx зміниться,
+                        // але агентські сегменти залишаються на своїй оригінальній доріжці.
+                        let stock_track = clips.iter()
+                            .find(|c| c.stock_seg_idx.is_some())
+                            .map(|c| c.track_idx)
+                            .unwrap_or(0);
                         for (i, seg) in segs.iter().enumerate() {
                             if covered.contains(&i) { continue; }
                             if seg["media"].as_str().is_some() { continue; } // вже є медіа
@@ -728,7 +735,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                                 name: text.chars().take(24).collect::<String>(),
                                 start_secs: start,
                                 duration: (end - start).max(0.5),
-                                track_idx: bg_track_idx,
+                                track_idx: stock_track,
                                 kind: ClipKind::Image,
                                 scale: 1.0, pos_x: 0.0, pos_y: 0.0,
                                 zoom_enabled: false, shake_enabled: false,
