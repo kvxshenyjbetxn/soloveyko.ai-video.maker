@@ -410,9 +410,9 @@ impl MontageEditorState {
             cursor = cursor.max(seg_end);
         }
 
-        // ── Overlay-доріжки (всі вище фону, track_idx < bg_track_idx) ─────────
+        // ── Overlay-доріжки (всі крім фонової: вище та нижче, включаючи аудіо-доріжки) ────
         let mut overlay_tracks: Vec<serde_json::Value> = Vec::new();
-        for t in 0..bg_track_idx {
+        for t in (0..self.num_tracks).filter(|&t| t != bg_track_idx) {
             let mut segs: Vec<&EditorClip> = self.clips.iter()
                 .filter(|c| c.track_idx == t && c.path.is_some()
                     && !(matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none()))
@@ -577,7 +577,13 @@ fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
 
 fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
     let path = save_path.join("timeline.json");
-    if !path.exists() { return (Vec::new(), 10.0, 0.0); }
+    // Fallback: якщо timeline.json ще немає, але є segments.json від агента — завантажуємо з нього
+    let path = if !path.exists() {
+        let seg_path = save_path.join("segments.json");
+        if seg_path.exists() { seg_path } else { return (Vec::new(), 10.0, 0.0); }
+    } else {
+        path
+    };
     let content = std::fs::read_to_string(&path).unwrap_or_default();
     let v: serde_json::Value = match serde_json::from_str(&content) {
         Ok(v) => v,
@@ -696,6 +702,51 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
         }
     }
 
+    // Якщо завантажили timeline.json (редакторський формат), добавляємо заглушки
+    // з segments.json для сегментів де медіа ще не обрано (щоб не зникали після перезапуску).
+    let tl_was_montage_format = path.file_name().map_or(false, |n| n == "timeline.json");
+    if tl_was_montage_format {
+        let seg_path = save_path.join("segments.json");
+        if seg_path.exists() {
+            if let Ok(seg_content) = std::fs::read_to_string(&seg_path) {
+                if let Ok(sv) = serde_json::from_str::<serde_json::Value>(&seg_content) {
+                    if let Some(segs) = sv["segments"].as_array() {
+                        let covered: std::collections::HashSet<usize> = clips.iter()
+                            .filter_map(|c| c.stock_seg_idx)
+                            .collect();
+                        for (i, seg) in segs.iter().enumerate() {
+                            if covered.contains(&i) { continue; }
+                            if seg["media"].as_str().is_some() { continue; } // вже є медіа
+                            let text = seg["text"].as_str().unwrap_or("").to_string();
+                            if text.is_empty() { continue; }
+                            let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
+                            let end   = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+                            clips.push(EditorClip {
+                                id: uuid_str(),
+                                media_id: format!("placeholder_{}", i),
+                                path: None,
+                                name: text.chars().take(24).collect::<String>(),
+                                start_secs: start,
+                                duration: (end - start).max(0.5),
+                                track_idx: bg_track_idx,
+                                kind: ClipKind::Image,
+                                scale: 1.0, pos_x: 0.0, pos_y: 0.0,
+                                zoom_enabled: false, shake_enabled: false,
+                                is_placeholder: true, trim_start: 0.0,
+                                stock_seg_idx: Some(i),
+                                overlap_transition: "fade".to_string(),
+                                opacity: 1.0,
+                                pair_id: None,
+                                audio_linked: false,
+                                is_embedded_audio: false,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     (clips, total, audio_start)
 }
 
@@ -802,9 +853,37 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
     // Зберігаємо timeline.json щоб stock_seg_idx пережив перезапуск
     if made_replacements {
         editor.save_to_timeline().ok();
+        // Оновлюємо segments.json: прописуємо шляхи до обраного медіа
+        update_segments_json_media(&editor.save_path, &editor.clips);
     }
 
     still_pending
+}
+
+/// Оновлює поле `media` у segments.json для сегментів що вже мають призначене медіа.
+fn update_segments_json_media(save_path: &Path, clips: &[EditorClip]) {
+    let seg_path = save_path.join("segments.json");
+    let Ok(content) = std::fs::read_to_string(&seg_path) else { return };
+    let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&content) else { return };
+    let Some(segs) = v["segments"].as_array_mut() else { return };
+
+    for seg in segs.iter_mut() {
+        let Some(idx) = seg["index"].as_u64().map(|i| i as usize) else { continue };
+        if let Some(clip) = clips.iter().find(|c| c.stock_seg_idx == Some(idx) && !c.is_placeholder) {
+            if let Some(path) = &clip.path {
+                let rel = if let Ok(r) = path.strip_prefix(save_path) {
+                    r.to_string_lossy().replace('\\', "/")
+                } else {
+                    path.to_string_lossy().replace('\\', "/")
+                };
+                seg["media"] = serde_json::Value::String(rel);
+            }
+        }
+    }
+
+    if let Ok(json) = serde_json::to_string_pretty(&v) {
+        let _ = std::fs::write(&seg_path, json);
+    }
 }
 
 fn load_media_pool(save_path: &Path, preview: PreviewRenderSettings) -> Vec<MediaItem> {

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::path::Path;
 
-/// Тайминг одного медіафайлу — виходить у timeline.json.
+/// Тайминг одного медіафайлу — виходить у segments.json.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SegmentTiming {
     pub index: usize,
@@ -19,7 +19,7 @@ pub struct SegmentTiming {
     pub trim_start: f64,
 }
 
-/// Маніфест синхронізації — зберігається як timeline.json.
+/// Маніфест синхронізації — зберігається як segments.json.
 #[derive(Serialize, Deserialize)]
 pub struct Timeline {
     pub total_duration_secs: f64,
@@ -406,7 +406,7 @@ struct ImageResult {
 
 // ─── Головна функція синхронізації ──────────────────────────────────────────
 
-/// Будує timeline.json для завершеної задачі.
+/// Будує segments.json для завершеної задачі.
 ///
 /// Алгоритм (портований з Go-програми-аналога):
 /// 1. Парсить subtitle.srt у текстовий потік з часовою картою.
@@ -414,7 +414,7 @@ struct ImageResult {
 /// 3. Нечітким пошуком (Левенштейн) знаходить позицію кожного сегменту в потоці.
 /// 4. Отримує реальний часовий діапазон через інтерполяцію всередині SRT-записів.
 /// 5. Для незнайдених сегментів — заповнення пропуску пропорційно до довжини тексту.
-/// 6. Зберігає результат як timeline.json і звіт sync_debug.txt.
+/// 6. Зберігає результат як segments.json і звіт sync_debug.txt.
 pub fn build_timeline(
     save_dir: &Path,
     segments: &[String],
@@ -670,7 +670,7 @@ pub fn build_timeline(
 
     let json = serde_json::to_string_pretty(&timeline)
         .map_err(|e| format!("JSON error: {}", e))?;
-    std::fs::write(save_dir.join("timeline.json"), json)
+    std::fs::write(save_dir.join("segments.json"), json)
         .map_err(|e| format!("Write error: {}", e))?;
 
     // ─── Debug-звіт ───────────────────────────────────────────────────────

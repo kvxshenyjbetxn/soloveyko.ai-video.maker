@@ -238,7 +238,7 @@ pub struct AppSettings {
     /// Промт для генерації зображень відеоряду
     #[serde(default)]
     pub video_prompt: String,
-    /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
+    /// Системна інструкція агенту для створення segments.json (лише для Claude Code / Gemini CLI)
     #[serde(default)]
     pub video_agent_prompt: String,
     /// Чи увімкнено поле стилю для генерації медіа
@@ -701,7 +701,7 @@ pub struct PipelineTemplate {
     /// Промт для генерації зображень відеоряду
     #[serde(default)]
     pub video_prompt: String,
-    /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
+    /// Системна інструкція агенту для створення segments.json (лише для Claude Code / Gemini CLI)
     #[serde(default)]
     pub video_agent_prompt: String,
     /// Чи увімкнено поле стилю для генерації медіа

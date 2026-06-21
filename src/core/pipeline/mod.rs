@@ -1037,7 +1037,7 @@ fn run_video_branch(
     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
     ctx.request_repaint();
 
-    // В агентному режимі сегменти беруться з timeline.json, LLM для промтів не викликається
+    // В агентному режимі сегменти беруться з segments.json, LLM для промтів не викликається
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
         || settings.video_llm_service == "Codex CLI"
@@ -1050,18 +1050,18 @@ fn run_video_branch(
         settings.text.clone()
     };
 
-    // Нарізаємо текст на сегменти: при агентному режимі — з timeline.json
+    // Нарізаємо текст на сегменти: при агентному режимі — з segments.json
     let save_dir = std::path::Path::new(&settings.save_path);
     let segments = if is_agent_mode {
         match read_segments_from_timeline(save_dir) {
             Ok(segs) if !segs.is_empty() => {
                 crate::logger::log_job(job_id, &job_name,
-                    &format!("Agent mode: {} segments from timeline.json", segs.len()));
+                    &format!("Agent mode: {} segments from segments.json", segs.len()));
                 segs
             }
             _ => {
                 crate::logger::log_job(job_id, &job_name,
-                    "Agent mode: timeline.json not ready, using text split.");
+                    "Agent mode: segments.json not ready, using text split.");
                 crate::core::pipeline::timeline::text_splitter::split_text(
                     &source_text, &settings.text_split_mode, settings.text_split_char_limit,
                 )
@@ -1379,13 +1379,13 @@ fn run_pexels_branch(
     let save_dir = std::path::Path::new(&settings.save_path);
 
     // 1. Отримуємо сегменти + ключові слова
-    // Агентний режим (є timeline.json): ключові слова = перші 5 слів кожного сегмента (без LLM)
+    // Агентний режим (є segments.json): ключові слова = перші 5 слів кожного сегмента (без LLM)
     // Звичайний режим: ключові слова через LLM або перші 5 слів
     let (segments, keywords): (Vec<String>, Vec<String>) = {
         match read_segments_from_timeline(save_dir) {
             Ok(segs) if !segs.is_empty() => {
                 crate::logger::log_job(job_id, &job_name,
-                    &format!("Pexels: using {} segments from timeline.json", segs.len()));
+                    &format!("Pexels: using {} segments from segments.json", segs.len()));
                 // Агент написав описи сцен — використовуємо напряму як запит до Pexels
                 let kws = segs.clone();
                 (segs, kws)
@@ -1457,7 +1457,7 @@ fn run_pexels_branch(
 
     let total = segments.len();
 
-    // Тривалості сегментів з timeline.json (якщо є)
+    // Тривалості сегментів з segments.json (якщо є)
     let seg_durations: Vec<f32> = read_segment_durations_from_timeline(save_dir)
         .unwrap_or_else(|| vec![0.0; total]);
 
@@ -1488,18 +1488,18 @@ fn run_pexels_branch(
     Ok(())
 }
 
-/// Читає сегменти тексту з timeline.json (для агентного режиму).
+/// Читає сегменти тексту з segments.json (для агентного режиму).
 fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>, String> {
-    let content = std::fs::read_to_string(save_dir.join("timeline.json"))
-        .map_err(|e| format!("Cannot read timeline.json: {}", e))?;
+    let content = std::fs::read_to_string(save_dir.join("segments.json"))
+        .map_err(|e| format!("Cannot read segments.json: {}", e))?;
     let timeline = serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
-        .map_err(|e| format!("Invalid timeline.json: {}", e))?;
+        .map_err(|e| format!("Invalid segments.json: {}", e))?;
     Ok(timeline.segments.into_iter().map(|s| s.text).collect())
 }
 
-/// Читає тривалості сегментів з timeline.json
+/// Читає тривалості сегментів з segments.json
 fn read_segment_durations_from_timeline(save_dir: &std::path::Path) -> Option<Vec<f32>> {
-    let content = std::fs::read_to_string(save_dir.join("timeline.json")).ok()?;
+    let content = std::fs::read_to_string(save_dir.join("segments.json")).ok()?;
     let v: serde_json::Value = serde_json::from_str(&content).ok()?;
     let segs = v["segments"].as_array()?;
     Some(segs.iter().map(|s| {
@@ -1509,7 +1509,7 @@ fn read_segment_durations_from_timeline(save_dir: &std::path::Path) -> Option<Ve
     }).collect())
 }
 
-/// Запускає агента для створення timeline.json.
+/// Запускає агента для створення segments.json.
 /// Після завершення роботи агента (успіх або помилка квоти) пайплайн переходить у стан
 /// AwaitingAgentControl — користувач підтверджує продовження кнопкою «Підтвердити».
 /// Це дозволяє дописати агенту «продовжи» через чат і лише тоді відновити пайплайн.
@@ -1528,13 +1528,13 @@ fn run_agent_timeline(
         return Err("subtitle.srt not found (run subtitles stage first)".to_string());
     }
 
-    let timeline_path = save_dir.join("timeline.json");
+    let segments_path = save_dir.join("segments.json");
     let system_instruction = agent_prompts::VIDEO_AGENT_SYSTEM_PROMPT
         .replace("{{srt}}", &srt_path.to_string_lossy())
-        .replace("{{path}}", &timeline_path.to_string_lossy());
+        .replace("{{path}}", &segments_path.to_string_lossy());
     let user_part = settings.video_agent_prompt
         .replace("{{srt}}", &srt_path.to_string_lossy())
-        .replace("{{path}}", &timeline_path.to_string_lossy());
+        .replace("{{path}}", &segments_path.to_string_lossy());
     let agent_prompt = if user_part.trim().is_empty() {
         system_instruction
     } else {
@@ -1542,7 +1542,7 @@ fn run_agent_timeline(
     };
 
     crate::logger::log_job(job_id, job_name,
-        &format!("Agent ({}): generating timeline.json...", settings.video_llm_service));
+        &format!("Agent ({}): generating segments.json...", settings.video_llm_service));
 
     let session_id = uuid_v4();
     crate::logger::log_job(job_id, job_name, &format!("Agent session: {}", session_id));
@@ -1619,15 +1619,15 @@ fn run_agent_timeline(
         save_agent_session_to_file(save_dir, sess);
     }
 
-    if !timeline_path.exists() {
-        return Err("Agent did not create timeline.json".to_string());
+    if !segments_path.exists() {
+        return Err("Agent did not create segments.json".to_string());
     }
-    let content = std::fs::read_to_string(&timeline_path)
-        .map_err(|e| format!("Cannot read agent timeline.json: {}", e))?;
+    let content = std::fs::read_to_string(&segments_path)
+        .map_err(|e| format!("Cannot read agent segments.json: {}", e))?;
     serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
-        .map_err(|e| format!("Agent timeline.json is invalid: {}", e))?;
+        .map_err(|e| format!("Agent segments.json is invalid: {}", e))?;
 
-    crate::logger::log_job(job_id, job_name, "Agent timeline.json created and validated.");
+    crate::logger::log_job(job_id, job_name, "Agent segments.json created and validated.");
     ctx.request_repaint();
     Ok(())
 }
@@ -1713,13 +1713,13 @@ fn save_agent_chat_to_file(save_dir: &std::path::Path, chat: &[crate::queue::Age
     let _ = std::fs::write(save_dir.join("agent_chat.json"), json);
 }
 
-/// Після генерації медіафайлів заповнює поле `media` в timeline.json фактичними шляхами.
+/// Після генерації медіафайлів заповнює поле `media` в segments.json фактичними шляхами.
 fn assign_media_to_timeline(save_dir: &std::path::Path) -> Result<(), String> {
-    let timeline_path = save_dir.join("timeline.json");
+    let timeline_path = save_dir.join("segments.json");
     let content = std::fs::read_to_string(&timeline_path)
-        .map_err(|e| format!("Cannot read timeline.json: {}", e))?;
+        .map_err(|e| format!("Cannot read segments.json: {}", e))?;
     let mut timeline = serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
-        .map_err(|e| format!("Invalid timeline.json: {}", e))?;
+        .map_err(|e| format!("Invalid segments.json: {}", e))?;
 
     let media_dir = save_dir.join("media");
     let mut files: Vec<String> = std::fs::read_dir(&media_dir)
@@ -1891,8 +1891,8 @@ pub fn run_pipeline(
                 }
             }
 
-            // Агент створює timeline.json на основі subtitle.srt
-            crate::logger::log_job(job_id, &job_name, "Agent mode: creating timeline.json...");
+            // Агент створює segments.json на основі subtitle.srt
+            crate::logger::log_job(job_id, &job_name, "Agent mode: creating segments.json...");
             *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
 
@@ -1909,7 +1909,7 @@ pub fn run_pipeline(
                 return;
             }
 
-            // Генерація медіа (сегменти читаються з timeline.json)
+            // Генерація медіа (сегменти читаються з segments.json)
             if let Err(e) = run_video_branch(
                 job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
                 Arc::clone(&video_stage), Arc::clone(&prompts_progress),
@@ -2026,13 +2026,13 @@ pub fn run_pipeline(
                 return;
             }
 
-            // Генеруємо timeline.json якщо відеоряд увімкнено і є тривалість аудіо
+            // Генеруємо segments.json якщо відеоряд увімкнено і є тривалість аудіо
             if settings.video_enabled {
                 let save_dir = std::path::Path::new(&settings.save_path);
 
-                // Pexels/Pixabay: якщо timeline.json ще немає (non-agent) — будуємо з SRT, потім патчимо
+                // Pexels/Pixabay: якщо segments.json ще немає (non-agent) — будуємо з SRT, потім патчимо
                 if settings.video_service == "Pexels" || settings.video_service == "Pixabay" {
-                    if !save_dir.join("timeline.json").exists() {
+                    if !save_dir.join("segments.json").exists() {
                         let source_text = if settings.translation_enabled {
                             translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
                         } else {
@@ -2062,7 +2062,7 @@ pub fn run_pipeline(
                     let audio_dur = *audio_duration.lock().unwrap();
 
                     match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
-                        Ok(_) => crate::logger::log_job(job_id, &job_name, "Timeline saved: timeline.json"),
+                        Ok(_) => crate::logger::log_job(job_id, &job_name, "Segments saved: segments.json"),
                         Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e)),
                     }
                 }
@@ -2198,7 +2198,7 @@ fn run_final_stages(
     capcut_mode_override: &Arc<Mutex<Option<bool>>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
-    // Timeline — в агентному режимі або при відновленні timeline.json вже є, не перезаписуємо
+    // Timeline — в агентному режимі або при відновленні segments.json вже є, не перезаписуємо
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
         || settings.video_llm_service == "Codex CLI"
@@ -2215,7 +2215,7 @@ fn run_final_stages(
         let audio_dur = *audio_duration.lock().unwrap();
         let save_dir = std::path::Path::new(&settings.save_path);
         match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, job_name) {
-            Ok(_) => crate::logger::log_job(job_id, job_name, "Timeline saved: timeline.json"),
+            Ok(_) => crate::logger::log_job(job_id, job_name, "Segments saved: segments.json"),
             Err(e) => crate::logger::log_job(job_id, job_name, &format!("Timeline warning: {}", e)),
         }
     }
@@ -2413,7 +2413,7 @@ pub fn retry_from_stage(
                 let video_already_done = *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
 
                 if is_agent_mode && !video_already_done {
-                    crate::logger::log_job(job_id, &job_name, "Agent mode: creating timeline.json...");
+                    crate::logger::log_job(job_id, &job_name, "Agent mode: creating segments.json...");
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
                     ctx.request_repaint();
 
@@ -2488,9 +2488,9 @@ pub fn retry_from_stage(
                         || settings.video_llm_service == "Codex CLI"
                         || settings.video_llm_service == "AGY CLI");
 
-                // В агентному режимі спочатку запускаємо агента для створення timeline.json
+                // В агентному режимі спочатку запускаємо агента для створення segments.json
                 if is_agent_mode {
-                    crate::logger::log_job(job_id, &job_name, "Retry Video (agent mode): creating timeline.json...");
+                    crate::logger::log_job(job_id, &job_name, "Retry Video (agent mode): creating segments.json...");
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
                     ctx.request_repaint();
                     if let Err(e) = run_agent_timeline(
@@ -2514,7 +2514,7 @@ pub fn retry_from_stage(
                     Arc::clone(&media_progress), Arc::clone(&total_cost), ctx.clone(),
                 );
 
-                // В агентному режимі патчимо timeline.json фактичними шляхами медіафайлів
+                // В агентному режимі патчимо segments.json фактичними шляхами медіафайлів
                 if is_agent_mode {
                     if let Ok(()) = &video_result {
                         let save_dir = std::path::Path::new(&settings.save_path);
@@ -2591,7 +2591,7 @@ pub fn retry_from_stage(
                 let video_already_done = *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
 
                 if is_agent_mode && !video_already_done {
-                    crate::logger::log_job(job_id, &job_name, "Agent mode: creating timeline.json...");
+                    crate::logger::log_job(job_id, &job_name, "Agent mode: creating segments.json...");
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
                     ctx.request_repaint();
 
@@ -2907,7 +2907,7 @@ pub fn regenerate_single_media(
     });
 }
 
-/// Порівнює тексти сегментів у timeline.json з segment_texts.json (сирі тексти до стилю).
+/// Порівнює тексти сегментів у segments.json з segment_texts.json (сирі тексти до стилю).
 /// Повертає список (шлях до медіафайлу, готовий промт) для сегментів де текст змінився.
 /// Одразу оновлює segment_texts.json — щоб наступний rebuild порівнював з новим станом.
 /// Повний промт будується як: video_style_prompt.replace("{{text}}", new_text).
@@ -2916,7 +2916,7 @@ pub fn find_changed_prompts_for_rebuild(
     video_style_enabled: bool,
     video_style_prompt: &str,
 ) -> Vec<(std::path::PathBuf, String)> {
-    let timeline_path = save_dir.join("timeline.json");
+    let timeline_path = save_dir.join("segments.json");
     let content = match std::fs::read_to_string(&timeline_path) {
         Ok(c) => c,
         Err(_) => return vec![],
@@ -2930,7 +2930,7 @@ pub fn find_changed_prompts_for_rebuild(
         None => return vec![],
     };
 
-    // Витягуємо тексти з timeline.json (лише pipeline-формат має поле "text")
+    // Витягуємо тексти з segments.json (лише pipeline-формат має поле "text")
     let new_texts: Vec<String> = segs.iter()
         .map(|seg| seg["text"].as_str().unwrap_or("").to_string())
         .collect();

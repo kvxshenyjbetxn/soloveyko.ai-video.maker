@@ -210,7 +210,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "video_agent_prompt_label" => "Інструкція агенту (timeline)",
         "video_style_label" => "Вказати стиль",
         "video_style_prompt_label" => "Промт стилю для генерації медіа",
-        "video_style_prompt_hint" => "{{text}} — текст з поля text у timeline.json підставиться сюди",
+        "video_style_prompt_hint" => "{{text}} — текст з поля text у segments.json підставиться сюди",
         "video_style_insert_placeholder" => "{{text}}",
         "video_insert_placeholder" => "{{text}}",
         "video_placeholder_hint" => "{{text}} — місце куди підставиться текст абзацу.",

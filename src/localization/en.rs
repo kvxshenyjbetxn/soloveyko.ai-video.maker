@@ -210,7 +210,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "video_agent_prompt_label" => "Agent instruction (timeline)",
         "video_style_label" => "Specify style",
         "video_style_prompt_label" => "Style prompt for media generation",
-        "video_style_prompt_hint" => "{{text}} — text from the 'text' field in timeline.json will be inserted here",
+        "video_style_prompt_hint" => "{{text}} — text from the 'text' field in segments.json will be inserted here",
         "video_style_insert_placeholder" => "{{text}}",
         "video_insert_placeholder" => "{{text}}",
         "video_placeholder_hint" => "{{text}} - place where the paragraph text will be inserted.",
