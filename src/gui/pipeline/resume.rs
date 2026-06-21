@@ -114,7 +114,9 @@ impl FoundFiles {
             let timeline_path = task_dir.join("timeline.json");
             std::fs::read_to_string(&timeline_path).ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-                .and_then(|v| v["segments"].as_array().map(|a| a.len()))
+                .and_then(|v| v["segments"].as_array().map(|a| {
+                    a.iter().filter(|seg| !seg["media"].is_null()).count()
+                }))
         } else {
             None
         };

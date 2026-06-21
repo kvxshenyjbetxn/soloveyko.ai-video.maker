@@ -2198,11 +2198,12 @@ fn run_final_stages(
     capcut_mode_override: &Arc<Mutex<Option<bool>>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
-    // Timeline — в агентному режимі timeline.json вже створений агентом, не перезаписуємо
+    // Timeline — в агентному режимі або при відновленні timeline.json вже є, не перезаписуємо
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
-        || settings.video_llm_service == "Codex CLI";
-    if settings.video_enabled && !is_agent_mode {
+        || settings.video_llm_service == "Codex CLI"
+        || settings.video_llm_service == "AGY CLI";
+    if settings.video_enabled && !is_agent_mode && !settings.skip_agent_on_resume {
         let source_text = if settings.translation_enabled {
             translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
         } else {
