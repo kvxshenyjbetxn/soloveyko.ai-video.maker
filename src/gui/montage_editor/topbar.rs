@@ -16,10 +16,6 @@ pub(super) fn draw_topbar(
 ) -> bool {
     let mut continue_clicked = false;
     ui.horizontal(|ui| {
-        ui.label(translate(language, "montage_editor_zoom"));
-        ui.add(egui::Slider::new(&mut editor.timeline_zoom, 10.0..=300.0).show_value(false));
-
-        ui.separator();
         draw_preview_settings(ui, language, editor);
 
         let total_dur = editor.total_dur();

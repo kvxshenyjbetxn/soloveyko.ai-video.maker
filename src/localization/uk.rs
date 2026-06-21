@@ -19,7 +19,6 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_play" => "Відтворити",
         "montage_editor_pause" => "Пауза",
         "montage_editor_stop" => "Стоп",
-        "montage_editor_zoom" => "Масштаб:",
         "montage_preview_settings" => "Превʼю:",
         "montage_preview_quality_performance" => "Швидко",
         "montage_preview_quality_balanced" => "Баланс",

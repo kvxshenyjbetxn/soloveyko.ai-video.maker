@@ -77,6 +77,8 @@ pub struct MontageEditorState {
     pub split_tool_active: bool,
     /// Стан перетягування доріжки для зміни її порядку
     pub track_drag: Option<TrackDragState>,
+    /// Поточне горизонтальне зміщення скролу таймлінії (для авто-прокрутки за плейхедом)
+    pub timeline_scroll_x: f32,
 }
 
 impl MontageEditorState {
@@ -231,6 +233,7 @@ impl MontageEditorState {
             track_volumes,
             split_tool_active: false,
             track_drag: None,
+            timeline_scroll_x: 0.0,
         }
     }
 

@@ -19,7 +19,6 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_play" => "Play",
         "montage_editor_pause" => "Pause",
         "montage_editor_stop" => "Stop",
-        "montage_editor_zoom" => "Zoom:",
         "montage_preview_settings" => "Preview:",
         "montage_preview_quality_performance" => "Fast",
         "montage_preview_quality_balanced" => "Balanced",

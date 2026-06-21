@@ -256,12 +256,35 @@ pub(super) fn draw_timeline(
         if ui.add_sized([80.0, 20.0], egui::Button::new(split_btn_text).fill(split_fill)).clicked() {
             editor.split_tool_active = !editor.split_tool_active;
         }
+
+        // Масштаб — правий край панелі
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_sized([80.0, 20.0], egui::Slider::new(&mut editor.timeline_zoom, 10.0..=500.0)
+                .logarithmic(true)
+                .show_value(false));
+            ui.weak("🔍");
+        });
     });
 
     let avail_h = ui.available_height();
     let total_rows = editor.num_tracks;
     let total_tracks_h = ruler_h + (track_h + 2.0) * total_rows as f32;
     let timeline_w = (total_dur + 10.0) * zoom;
+
+    // ─── Колесо миші → горизонтальний скрол таймлінії ───────────────────────────
+    if let Some(mouse_pos) = ui.ctx().pointer_hover_pos() {
+        if ui.clip_rect().contains(mouse_pos) {
+            let scroll_y = ui.input(|i| i.smooth_scroll_delta.y);
+            if scroll_y.abs() > 0.1 {
+                ui.ctx().input_mut(|i| {
+                    i.smooth_scroll_delta.x += i.smooth_scroll_delta.y;
+                    i.smooth_scroll_delta.y = 0.0;
+                    i.raw_scroll_delta.x += i.raw_scroll_delta.y;
+                    i.raw_scroll_delta.y = 0.0;
+                });
+            }
+        }
+    }
 
     // Візуальна позиція доріжки = track_idx (без зсуву)
     let track_visual = |ti: usize| -> usize { ti };
@@ -277,10 +300,24 @@ pub(super) fn draw_timeline(
             Sense::hover(),
         );
 
+        // Авто-скрол за плейхедом під час відтворення:
+        // якщо плейхед виходить за межі видимої зони — підтягуємо таймлінію.
+        let scroll_visible_w = ui.available_width();
+        if editor.is_playing {
+            let ph_x = editor.playhead * zoom;
+            let right_edge = editor.timeline_scroll_x + scroll_visible_w;
+            if ph_x > right_edge - 60.0 || ph_x < editor.timeline_scroll_x {
+                editor.timeline_scroll_x = (ph_x - scroll_visible_w * 0.25).max(0.0);
+            }
+        }
+
+        // scroll_offset передається кожного кадру: враховує авто-скрол, зум і ручний скрол.
+        // output.state.offset.x зберігається назад після show() щоб відстежити ручний скрол.
         let output = ScrollArea::both()
             .id_salt("editor_timeline_scroll")
             .max_height(avail_h)
             .auto_shrink([false, true])
+            .scroll_offset(egui::Vec2::new(editor.timeline_scroll_x, 0.0))
             .show(ui, |ui| {
 
             let (rect, resp) = ui.allocate_exact_size(Vec2::new(timeline_w, total_tracks_h), Sense::click_and_drag());
@@ -1098,6 +1135,9 @@ pub(super) fn draw_timeline(
                 }
             }
         });
+
+        // Запам'ятовуємо поточний горизонтальний scroll для авто-прокрутки наступного кадру
+        editor.timeline_scroll_x = output.state.offset.x;
 
         // Sticky лейбли доріжок — малюємо поверх через painter з урахуванням vertical offset
         let v_off = output.state.offset.y;

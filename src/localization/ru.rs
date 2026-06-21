@@ -19,7 +19,6 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_play" => "Воспроизвести",
         "montage_editor_pause" => "Пауза",
         "montage_editor_stop" => "Стоп",
-        "montage_editor_zoom" => "Масштаб:",
         "montage_preview_settings" => "Превью:",
         "montage_preview_quality_performance" => "Быстро",
         "montage_preview_quality_balanced" => "Баланс",

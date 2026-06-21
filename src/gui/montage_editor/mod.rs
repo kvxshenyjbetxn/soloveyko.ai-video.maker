@@ -148,6 +148,15 @@ pub fn draw_montage_editor_window(
         }
     }
 
+    // Пробіл: пауза/відтворення (не перехоплюємо коли фокус у текстовому полі)
+    if !ctx.wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+        editor.is_playing = !editor.is_playing;
+        editor.last_frame_time = Instant::now();
+        if !editor.is_playing {
+            editor.active_audios.clear();
+        }
+    }
+
     if editor.is_playing {
         let elapsed = editor.last_frame_time.elapsed().as_secs_f32();
         editor.playhead = (editor.playhead + elapsed).min(editor.total_dur());
