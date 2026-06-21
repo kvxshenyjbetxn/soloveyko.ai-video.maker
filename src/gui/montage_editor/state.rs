@@ -75,6 +75,8 @@ pub struct MontageEditorState {
     pub track_volumes: Vec<f32>,
     /// Чи активний інструмент розрізу (як лезо в професійних редакторах)
     pub split_tool_active: bool,
+    /// Снапнута позиція курсора в режимі розрізу (секунди). None = без снапу.
+    pub split_snap_secs: Option<f32>,
     /// Стан перетягування доріжки для зміни її порядку
     pub track_drag: Option<TrackDragState>,
     /// Поточне горизонтальне зміщення скролу таймлінії (для авто-прокрутки за плейхедом)
@@ -232,6 +234,7 @@ impl MontageEditorState {
             pool_thumbnails: HashMap::new(),
             track_volumes,
             split_tool_active: false,
+            split_snap_secs: None,
             track_drag: None,
             timeline_scroll_x: 0.0,
         }

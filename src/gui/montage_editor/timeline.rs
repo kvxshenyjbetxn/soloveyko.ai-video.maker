@@ -156,6 +156,22 @@ fn move_track(editor: &mut MontageEditorState, from: usize, to: usize) {
 
 // ─── Таймлінія ───────────────────────────────────────────────────────────────
 
+/// Знаходить найближчий край кліпу до `raw_secs` в межах `threshold` секунд.
+/// Перевіряє краї кліпів на всіх доріжках (cross-track snap).
+fn find_snap_secs(raw_secs: f32, clips: &[EditorClip], threshold: f32) -> Option<f32> {
+    let mut best: Option<f32> = None;
+    let mut best_dist = threshold;
+    for clip in clips {
+        if clip.is_placeholder { continue; }
+        let d_start = (raw_secs - clip.start_secs).abs();
+        if d_start < best_dist { best_dist = d_start; best = Some(clip.start_secs); }
+        let end = clip.end_secs();
+        let d_end = (raw_secs - end).abs();
+        if d_end < best_dist { best_dist = d_end; best = Some(end); }
+    }
+    best
+}
+
 /// Перевіряє чи тип кліпу сумісний з типом доріжки.
 /// Відео та зображення — тільки на відео-доріжки, аудіо — тільки на аудіо.
 fn clip_fits_track(clip_kind: &ClipKind, track_kind: Option<&TrackKind>) -> bool {
@@ -548,6 +564,16 @@ pub(super) fn draw_timeline(
             // Обробка drag смужки прозорості
             update_opacity_drag(ui, editor);
 
+            // Оновлюємо снапнуту позицію для інструменту розрізу (cross-track)
+            if editor.split_tool_active {
+                let threshold = 10.0 / zoom;
+                editor.split_snap_secs = mouse_pos
+                    .filter(|p| rect.contains(*p) && p.y >= rect.top() + ruler_h)
+                    .and_then(|p| find_snap_secs((p.x - rect.left()) / zoom, &editor.clips, threshold));
+            } else {
+                editor.split_snap_secs = None;
+            }
+
             // Кліпи
             let clips_snapshot: Vec<EditorClip> = editor.clips.clone();
             // Прапорець щоб не розрізати кілька кліпів за один кадр
@@ -775,7 +801,10 @@ pub(super) fn draw_timeline(
                     if !split_done_this_frame && clip_resp.clicked() {
                         if let Some(pos) = mouse_pos {
                             if clip_rect.contains(pos) && pos.y >= rect.top() + ruler_h {
-                                let click_time = ((pos.x - rect.left()) / zoom).max(0.0);
+                                // Використовуємо снапнуту позицію якщо є (cross-track snap)
+                                let click_time = editor.split_snap_secs
+                                    .unwrap_or_else(|| (pos.x - rect.left()) / zoom)
+                                    .max(0.0);
                                 let clip_id = clip.id.clone();
                                 split_clip_at(editor, &clip_id, click_time);
                                 split_done_this_frame = true;
@@ -1053,14 +1082,31 @@ pub(super) fn draw_timeline(
             if editor.split_tool_active {
                 if let Some(pos) = mouse_pos {
                     if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
-                        let split_x = pos.x;
+                        let is_snapped = editor.split_snap_secs.is_some();
+                        let secs = editor.split_snap_secs
+                            .unwrap_or_else(|| (pos.x - rect.left()) / zoom);
+                        let split_x = rect.left() + secs * zoom;
                         let top_y = rect.top() + ruler_h;
                         let total_rows = editor.num_tracks;
                         let bottom_y = top_y + total_rows as f32 * (track_h + 2.0);
+                        // Помаранчевий при снапі, червоний без нього
+                        let line_color = if is_snapped {
+                            Color32::from_rgb(255, 182, 72)
+                        } else {
+                            Color32::from_rgb(240, 50, 40)
+                        };
                         painter.line_segment(
                             [Pos2::new(split_x, top_y), Pos2::new(split_x, bottom_y)],
-                            Stroke::new(2.0, Color32::from_rgb(240, 50, 40)),
+                            Stroke::new(2.0, line_color),
                         );
+                        // Маленький кружок-індикатор на лінійці при снапі
+                        if is_snapped {
+                            painter.circle_filled(
+                                Pos2::new(split_x, top_y - 4.0),
+                                4.0,
+                                line_color,
+                            );
+                        }
                     }
                 }
             }
@@ -1508,45 +1554,70 @@ fn update_clip_drag(
         best.unwrap_or(drag.initial_track_idx)
     };
 
-    let raw_start = (drag.initial_start + dx).max(0.0);
     let clip_dur = drag.initial_duration;
-    let raw_end = raw_start + clip_dur;
+    // Сирі позиції лівого та правого краю для кожного режиму
+    let raw_left = (drag.initial_start + dx).max(0.0);   // Move / TrimLeft
+    let raw_right = drag.initial_start + clip_dur + dx;   // Move / TrimRight
 
-    // Магнітний snap до сусідніх кліпів + плейхеда
-    let snap_threshold = 10.0 / zoom; // ~10 px
-    let mut best_snap: Option<f32> = None;
-    let mut best_dist = snap_threshold;
-    let mut snap_is_end = false; // true якщо снап по кінцю кліпу
+    // Snap обох країв незалежно (cross-track, всі кліпи + плейхед)
+    let snap_threshold = 10.0 / zoom;
+    let mut snap_left: Option<f32> = None;
+    let mut snap_right: Option<f32> = None;
+    let mut dist_left = snap_threshold;
+    let mut dist_right = snap_threshold;
 
-    // Snap до плейхеда (початок або кінець кліпу)
-    let ph = editor.playhead;
-    let d_ph_start = (raw_start - ph).abs();
-    if d_ph_start < best_dist { best_dist = d_ph_start; best_snap = Some(ph); snap_is_end = false; }
-    let d_ph_end = (raw_end - ph).abs();
-    if d_ph_end < best_dist { best_dist = d_ph_end; best_snap = Some((ph - clip_dur).max(0.0)); snap_is_end = true; }
+    let check = |val: f32, candidate: f32, best: &mut Option<f32>, dist: &mut f32| {
+        let d = (val - candidate).abs();
+        if d < *dist { *dist = d; *best = Some(candidate); }
+    };
+
+    check(raw_left,  editor.playhead, &mut snap_left,  &mut dist_left);
+    check(raw_right, editor.playhead, &mut snap_right, &mut dist_right);
 
     for (i, other) in editor.clips.iter().enumerate() {
         if i == clip_idx { continue; }
-        // Снап тільки в межах тієї ж доріжки
-        if other.track_idx != new_track { continue; }
-
-        let other_end = other.start_secs + other.duration;
-
-        // Початок кліпу до кінця іншого (стиковка)
-        let d1 = (raw_start - other_end).abs();
-        if d1 < best_dist { best_dist = d1; best_snap = Some(other_end); snap_is_end = false; }
-        // Початок кліпу до початку іншого (вирівнювання)
-        let d2 = (raw_start - other.start_secs).abs();
-        if d2 < best_dist { best_dist = d2; best_snap = Some(other.start_secs); snap_is_end = false; }
-        // Кінець кліпу до початку іншого (стиковка справа)
-        let d3 = (raw_end - other.start_secs).abs();
-        if d3 < best_dist { best_dist = d3; best_snap = Some((other.start_secs - clip_dur).max(0.0)); snap_is_end = true; }
+        let other_end = other.end_secs();
+        for &candidate in &[other.start_secs, other_end] {
+            check(raw_left,  candidate, &mut snap_left,  &mut dist_left);
+            check(raw_right, candidate, &mut snap_right, &mut dist_right);
+        }
     }
 
-    // Візуальний індикатор снапу — позиція на таймлінії де краї збігаються
-    let snapped_start = best_snap.unwrap_or(raw_start);
+    // Вибираємо знапнуту позицію та snap_line залежно від режиму
+    let snapped_start;
+    let snapped_right; // тільки для TrimRight
+    let snap_line_secs;
+
+    match drag.mode {
+        DragMode::Move => {
+            // Беремо той край, що ближче
+            if snap_left.is_some() && (snap_right.is_none() || dist_left <= dist_right) {
+                snapped_start = snap_left.unwrap();
+                snap_line_secs = snap_left;
+            } else if let Some(sr) = snap_right {
+                snapped_start = (sr - clip_dur).max(0.0);
+                snap_line_secs = Some(sr);
+            } else {
+                snapped_start = raw_left;
+                snap_line_secs = None;
+            }
+            snapped_right = snapped_start + clip_dur;
+        }
+        DragMode::TrimLeft => {
+            snapped_start = snap_left.unwrap_or(raw_left);
+            snapped_right = drag.initial_start + clip_dur; // правий край незмінний
+            snap_line_secs = snap_left;
+        }
+        DragMode::TrimRight => {
+            snapped_start = raw_left;
+            snapped_right = snap_right.unwrap_or(raw_right);
+            snap_line_secs = snap_right;
+        }
+    }
+    let _ = snapped_right; // використовується нижче у TrimRight
+
     if let Some(ref mut ds) = editor.clip_drag_state {
-        ds.snap_line_secs = best_snap.map(|s| if snap_is_end { s + clip_dur } else { s });
+        ds.snap_line_secs = snap_line_secs;
     }
 
     // Зчитуємо дані пари до мутабельного запозичення
@@ -1562,15 +1633,16 @@ fn update_clip_drag(
             clip.track_idx = new_track;
         }
         DragMode::TrimLeft => {
+            let snapped_dx = snapped_start - drag.initial_start;
             let max_dx = drag.initial_duration - 0.1;
-            let bounded_dx = dx.clamp(-drag.initial_start, max_dx);
+            let bounded_dx = snapped_dx.clamp(-drag.initial_start, max_dx);
             clip.start_secs = drag.initial_start + bounded_dx;
             clip.duration = drag.initial_duration - bounded_dx;
-            // Обрізка зліва = пізніший старт у вихідному файлі
             clip.trim_start = (drag.initial_trim_start + bounded_dx).max(0.0);
         }
         DragMode::TrimRight => {
-            clip.duration = (drag.initial_duration + dx).max(0.1);
+            let new_dur = (snap_right.unwrap_or(raw_right) - drag.initial_start).max(0.1);
+            clip.duration = new_dur;
         }
     }
     // перше запозичення закінчилось
