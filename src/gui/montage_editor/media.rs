@@ -1,10 +1,17 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use super::types::{ClipKind, PREVIEW_FPS, PREVIEW_WIDTH};
-use super::utils::{path_hash, probe_duration, uuid_str};
+use super::types::{ClipKind, PreviewRenderSettings};
+use super::utils::{frame_cache_dir, probe_duration, probe_has_audio, sharp_frame_cache_dir, uuid_str};
 
 // ─── Медіа-файл у пулі ───────────────────────────────────────────────────────
+
+fn save_preview_jpeg(img: &image::DynamicImage, out: &Path, quality: u8) -> image::ImageResult<()> {
+    let rgb = img.to_rgb8();
+    let file = std::fs::File::create(out)?;
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
+    encoder.encode_image(&rgb)
+}
 
 #[derive(Clone)]
 pub struct MediaItem {
@@ -13,16 +20,20 @@ pub struct MediaItem {
     pub name: String,
     pub duration_secs: f32,
     pub kind: ClipKind,
-    /// Папка де зберігаються превью-кадри: .frame_cache/{path_hash}/
+    /// Папка де зберігаються легкі scrub-кадри: .frame_cache/{path_hash}_{version}/
     pub cache_dir: PathBuf,
-    /// true = всі кадри вже витягнуто на диск
+    /// Папка для чітких still-кадрів, які генеруються на вимогу.
+    pub sharp_cache_dir: PathBuf,
+    /// true = всі легкі кадри вже витягнуто на диск
     pub extraction_complete: Arc<AtomicBool>,
+    /// true = відеофайл містить вбудовану аудіодоріжку
+    pub has_audio: bool,
 }
 
 impl MediaItem {
     /// Створює медіа-елемент і запускає фонове витягування кадрів на диск.
     /// `cache_base` — базова папка задачі (save_path).
-    pub fn new(path: PathBuf, cache_base: &Path) -> Self {
+    pub fn new(path: PathBuf, cache_base: &Path, preview: PreviewRenderSettings) -> Self {
         let name = path.file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("?")
@@ -51,9 +62,12 @@ impl MediaItem {
         } else {
             5.0
         };
+        // Перевіряємо аудіодоріжку тільки для відеофайлів
+        let has_audio = is_video && probe_has_audio(&path);
 
-        // Стабільна папка кешу на основі хешу шляху
-        let cache_dir = cache_base.join(".frame_cache").join(path_hash(&path));
+        // Стабільні папки кешу на основі хешу шляху + версії якості превʼю.
+        let cache_dir = frame_cache_dir(cache_base, &path, preview);
+        let sharp_cache_dir = sharp_frame_cache_dir(cache_base, &path, preview);
         let extraction_complete = Arc::new(AtomicBool::new(false));
 
         if cache_dir.join(".complete").exists() {
@@ -76,8 +90,9 @@ impl MediaItem {
                     if out.exists() { break; }
                     if let Ok(bytes) = std::fs::read(&path_clone) {
                         if let Ok(img) = image::load_from_memory(&bytes) {
-                            let thumb = img.thumbnail(PREVIEW_WIDTH, PREVIEW_WIDTH * 2);
-                            if thumb.save(&out).is_ok() {
+                            let width = preview.quality.scrub_width();
+                            let thumb = img.thumbnail(width, width * 2);
+                            if save_preview_jpeg(&thumb, &out, preview.quality.jpeg_quality()).is_ok() {
                                 std::fs::write(dir.join(".complete"), b"1").ok();
                                 break;
                             }
@@ -99,12 +114,12 @@ impl MediaItem {
                 ffmpeg_preview.args([
                     "-y", "-v", "error", "-threads", "1",
                     "-i", &path_str,
-                    "-vf", &format!("scale=640:-2,fps={}", PREVIEW_FPS),
-                    "-q:v", "5",
+                    "-vf", &format!("scale={}:-2,fps={}", preview.quality.scrub_width(), preview.fps),
+                    "-q:v", preview.quality.ffmpeg_qscale(),
                     out_str,
                 ]);
                 crate::bundle::set_no_window(&mut ffmpeg_preview);
-                let status = ffmpeg_preview.status();
+                let status = crate::api::ffmpeg::run_tracked(&mut ffmpeg_preview);
                 if matches!(status, Ok(s) if s.success()) {
                     std::fs::write(dir.join(".complete"), b"1").ok();
                     flag.store(true, Ordering::Relaxed);
@@ -116,11 +131,11 @@ impl MediaItem {
                         "-y", "-v", "error", "-threads", "1",
                         "-i", &path_str,
                         "-vframes", "1",
-                        "-q:v", "5",
+                        "-q:v", preview.quality.ffmpeg_qscale(),
                         first_frame.to_str().unwrap_or(""),
                     ]);
                     crate::bundle::set_no_window(&mut ffmpeg_fallback);
-                    let _ = ffmpeg_fallback.status();
+                    let _ = crate::api::ffmpeg::run_tracked(&mut ffmpeg_fallback);
                     flag.store(true, Ordering::Relaxed);
                 }
             });
@@ -136,7 +151,9 @@ impl MediaItem {
             duration_secs,
             kind,
             cache_dir,
+            sharp_cache_dir,
             extraction_complete,
+            has_audio,
         }
     }
 

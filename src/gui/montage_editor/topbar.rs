@@ -2,6 +2,7 @@ use eframe::egui;
 use egui::{Color32, Layout};
 use crate::localization::{Language, translate};
 use super::state::MontageEditorState;
+use super::types::PreviewQuality;
 
 // ─── Топ-бар ─────────────────────────────────────────────────────────────────
 
@@ -15,8 +16,7 @@ pub(super) fn draw_topbar(
 ) -> bool {
     let mut continue_clicked = false;
     ui.horizontal(|ui| {
-        ui.label(translate(language, "montage_editor_zoom"));
-        ui.add(egui::Slider::new(&mut editor.timeline_zoom, 10.0..=300.0).show_value(false));
+        draw_preview_settings(ui, language, editor);
 
         let total_dur = editor.total_dur();
         let dm = (total_dur / 60.0) as u32;
@@ -130,4 +130,38 @@ pub(super) fn draw_topbar(
         });
     });
     continue_clicked
+}
+
+fn draw_preview_settings(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {
+    let mut quality = editor.preview_render.quality;
+    let mut fps = editor.preview_render.fps;
+
+    ui.label(egui::RichText::new(translate(language, "montage_preview_settings")).size(11.0));
+
+    egui::ComboBox::from_id_salt("montage_preview_quality")
+        .width(104.0)
+        .selected_text(translate(language, quality.label_key()))
+        .show_ui(ui, |ui| {
+            for option in [
+                PreviewQuality::Performance,
+                PreviewQuality::Balanced,
+                PreviewQuality::High,
+                PreviewQuality::Ultra,
+            ] {
+                ui.selectable_value(&mut quality, option, translate(language, option.label_key()));
+            }
+        });
+
+    egui::ComboBox::from_id_salt("montage_preview_fps")
+        .width(72.0)
+        .selected_text(format!("{} FPS", fps.round() as u32))
+        .show_ui(ui, |ui| {
+            for option in [15.0_f32, 30.0, 60.0] {
+                ui.selectable_value(&mut fps, option, format!("{} FPS", option as u32));
+            }
+        });
+
+    if quality != editor.preview_render.quality || (fps - editor.preview_render.fps).abs() > 0.1 {
+        editor.set_preview_render(quality, fps);
+    }
 }

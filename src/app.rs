@@ -186,6 +186,10 @@ pub struct VideoMakerApp {
     pub googler_video_upscale_resolution: String,
     /// Якість апскейлу ("fast", "balanced", "max")
     pub googler_video_upscale_quality: String,
+    /// Якість превʼю редактора монтажу ("performance", "balanced", "high", "ultra")
+    pub preview_quality: String,
+    /// FPS превʼю редактора монтажу (15.0, 30.0, 60.0)
+    pub preview_fps: f32,
     /// Системна інструкція агенту для створення timeline.json.
     pub video_agent_prompt: String,
     /// Чи увімкнено поле стилю для генерації медіа в агентному режимі.
@@ -486,6 +490,8 @@ impl Default for VideoMakerApp {
             googler_video_upscale_enabled: default_settings.googler_video_upscale_enabled,
             googler_video_upscale_resolution: default_settings.googler_video_upscale_resolution.clone(),
             googler_video_upscale_quality: default_settings.googler_video_upscale_quality.clone(),
+            preview_quality: default_settings.preview_quality.clone(),
+            preview_fps: default_settings.preview_fps,
             video_agent_prompt: String::new(),
             video_style_enabled: false,
             video_style_prompt: String::new(),
@@ -731,6 +737,8 @@ impl VideoMakerApp {
         let googler_video_upscale_enabled = saved.googler_video_upscale_enabled;
         let googler_video_upscale_resolution = saved.googler_video_upscale_resolution.clone();
         let googler_video_upscale_quality = saved.googler_video_upscale_quality.clone();
+        let preview_quality = saved.preview_quality.clone();
+        let preview_fps = saved.preview_fps;
         let translation_temperature = saved.translation_temperature;
         let save_path_macos = saved.save_path_macos.clone();
         let save_path_windows = saved.save_path_windows.clone();
@@ -875,6 +883,8 @@ impl VideoMakerApp {
             googler_video_upscale_enabled,
             googler_video_upscale_resolution,
             googler_video_upscale_quality,
+            preview_quality,
+            preview_fps,
             video_agent_prompt,
             video_style_enabled,
             video_style_prompt,
@@ -1917,9 +1927,10 @@ impl eframe::App for VideoMakerApp {
                         if let Some(ref mut editor) = self.montage_editor_state {
                             if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == path) {
                                 let _ = std::fs::remove_dir_all(&m.cache_dir);
+                                let _ = std::fs::remove_dir_all(&m.sharp_cache_dir);
                                 editor.frame_cache.clear_for_media_id(&m.id);
                                 let old_id = m.id.clone();
-                                *m = crate::gui::montage_editor::MediaItem::new(path.clone(), &editor.save_path);
+                                *m = crate::gui::montage_editor::MediaItem::new(path.clone(), &editor.save_path, editor.preview_render);
                                 m.id = old_id;
                             }
                             if editor.pool_preview.as_deref() == Some(path.as_path()) {
@@ -2131,8 +2142,12 @@ impl eframe::App for VideoMakerApp {
                         }
                     }
 
+                    let preview_render = crate::gui::montage_editor::PreviewRenderSettings {
+                        quality: crate::gui::montage_editor::PreviewQuality::from_storage(&self.preview_quality),
+                        fps: self.preview_fps.max(15.0).min(60.0),
+                    };
                     self.montage_editor_state = Some(
-                        crate::gui::montage_editor::MontageEditorState::load(save_path, &job.name)
+                        crate::gui::montage_editor::MontageEditorState::load(save_path, &job.name, preview_render)
                     );
                 }
             }
@@ -2143,6 +2158,10 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Редактор монтажу
+        let preview_render = crate::gui::montage_editor::PreviewRenderSettings {
+            quality: crate::gui::montage_editor::PreviewQuality::from_storage(&self.preview_quality),
+            fps: self.preview_fps.max(15.0).min(60.0),
+        };
         let montage_actions = crate::gui::montage_editor::draw_montage_editor_window(
             ctx,
             self.language,
@@ -2151,6 +2170,7 @@ impl eframe::App for VideoMakerApp {
             &self.jobs,
             &self.gallery_anim_loading,
             &regen_paths_snapshot,
+            preview_render,
         );
 
         // Оживлення зображень з редактора монтажу
@@ -2230,15 +2250,26 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Оновлюємо налаштування превʼю редактора, якщо користувач змінив їх у топбарі
+        if let Some(new_render) = montage_actions.preview_render_changed {
+            self.preview_quality = new_render.quality.storage_key().to_string();
+            self.preview_fps = new_render.fps;
+        }
+
         // Відкриваємо Stock Picker з редактора монтажу (клік на плейсхолдер)
         if let Some(seg_idx) = montage_actions.open_stock_picker {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                    let picker_render = crate::gui::montage_editor::PreviewRenderSettings {
+                        quality: crate::gui::montage_editor::PreviewQuality::from_storage(&self.preview_quality),
+                        fps: self.preview_fps.max(15.0).min(60.0),
+                    };
                     if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
                         job.settings.save_path.clone(),
                         job.settings.pexels_key.clone(),
                         job.settings.pixabay_key.clone(),
                         job.settings.video_service.clone(),
+                        picker_render,
                     ) {
                         state.active_segment = seg_idx;
                         state.edit_keyword = state.cache.get(seg_idx)
@@ -2367,6 +2398,8 @@ impl eframe::App for VideoMakerApp {
                 || self.googler_video_upscale_enabled != self.last_saved_settings.googler_video_upscale_enabled
                 || self.googler_video_upscale_resolution != self.last_saved_settings.googler_video_upscale_resolution
                 || self.googler_video_upscale_quality != self.last_saved_settings.googler_video_upscale_quality
+                || self.preview_quality != self.last_saved_settings.preview_quality
+                || (self.preview_fps - self.last_saved_settings.preview_fps).abs() > 0.1
             {
                 let new_settings = AppSettings {
 
@@ -2471,6 +2504,8 @@ impl eframe::App for VideoMakerApp {
                     googler_video_upscale_enabled: self.googler_video_upscale_enabled,
                     googler_video_upscale_resolution: self.googler_video_upscale_resolution.clone(),
                     googler_video_upscale_quality: self.googler_video_upscale_quality.clone(),
+                    preview_quality: self.preview_quality.clone(),
+                    preview_fps: self.preview_fps,
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
 
@@ -2602,5 +2637,9 @@ impl eframe::App for VideoMakerApp {
                 ctx.request_repaint();
             }
         }
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        crate::api::ffmpeg::ChildTracker::get().kill_all();
     }
 }

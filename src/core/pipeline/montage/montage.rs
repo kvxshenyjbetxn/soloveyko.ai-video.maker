@@ -51,21 +51,33 @@ pub fn run_montage(
         media: Option<String>,
         #[serde(default)]
         trim_start: f64,
+        #[serde(default = "default_fade")]
+        overlap_transition: String,
     }
+    fn default_fade() -> String { "fade".to_string() }
 
     #[derive(serde::Deserialize)]
     struct OverlaySeg {
         start_secs: f64,
         end_secs: f64,
         media: Option<String>,
+        #[serde(default)]
+        trim_start: f64,
         #[serde(default = "default_scale")]
         scale: f64,
         #[serde(default)]
         pos_x: f64,
         #[serde(default)]
         pos_y: f64,
+        #[serde(default = "default_opacity")]
+        #[allow(dead_code)]
+        opacity: f64,
+        /// true = вбудоване аудіо відеофайлу; треба використовувати як аудіо-вхід
+        #[serde(default)]
+        is_embedded_audio: bool,
     }
     fn default_scale() -> f64 { 1.0 }
+    fn default_opacity() -> f64 { 1.0 }
 
     #[derive(serde::Deserialize)]
     struct OverlayTrack {
@@ -79,17 +91,29 @@ pub fn run_montage(
         total_duration_secs: f64,
         #[serde(default)]
         audio_start_secs: f64,
+        #[serde(default = "default_volume")]
+        voiceover_volume: f64,
+        #[serde(default)]
+        track_volumes: Vec<f64>,
         segments: Vec<SegTiming>,
         #[serde(default)]
         overlay_tracks: Vec<OverlayTrack>,
+        /// Індекс фонової доріжки — є тільки в новому форматі (збережено save_to_timeline).
+        /// None = старий формат (до f496eae): segments містить overlay, overlay_tracks — фон.
+        background_track_idx: Option<u64>,
     }
+    fn default_volume() -> f64 { 1.0 }
 
     struct Clip {
         path: Option<String>, // None = чорна заставка (gap)
         duration: f64,
+        /// Абсолютний час початку кліпу на таймлінії (секунди)
+        start_secs: f64,
         is_video: bool,
         /// Початок обрізки у вихідному файлі (секунди); 0.0 = з початку
         trim_start: f64,
+        /// Тип xfade для переходу після цього кліпу ("fade", "wipeleft", …)
+        overlap_transition: String,
     }
 
     fn is_video_ext(path: &str) -> bool {
@@ -114,33 +138,87 @@ pub fn run_montage(
         path: String,
         start_secs: f64,
         duration: f64,
+        trim_start: f64,
+        /// Індекс доріжки (для пошуку гучності в track_volumes)
+        track_idx: usize,
     }
 
     // ─── Зчитуємо timeline.json ───────────────────────────────────────────────
     let mut clips: Vec<Clip> = Vec::new();
     let mut total_dur = 0.0f64;
     let mut audio_start_secs = 0.0f64;
+    let mut voiceover_volume = 1.0f64;
+    let mut tl_track_volumes: Vec<f64> = Vec::new();
     let mut overlay_tracks: Vec<OverlayTrack> = Vec::new();
     let mut extra_audios: Vec<AudioClip> = Vec::new();
     let timeline_path = save_dir.join("timeline.json");
 
     if timeline_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&timeline_path) {
-            if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
+            if let Ok(mut tl) = serde_json::from_str::<Timeline>(&content) {
+                // Міграція старого формату (до f496eae): background_track_idx відсутній →
+                // segments містив overlay (track 0), overlay_tracks[track_idx=1] — фонові кліпи.
+                // Якщо поле відсутнє І є overlay_track з track_idx > 0, міняємо місцями.
+                if tl.background_track_idx.is_none() {
+                    // Фон — завжди найнижчий шар = найбільший track_idx
+                    let bg_ot_pos = tl.overlay_tracks.iter()
+                        .enumerate()
+                        .filter(|(_, ot)| ot.track_idx > 0)
+                        .max_by_key(|(_, ot)| ot.track_idx)
+                        .map(|(i, _)| i);
+                    if let Some(bg_ot_pos) = bg_ot_pos {
+                        let bg_ot = tl.overlay_tracks.remove(bg_ot_pos);
+                        let old_segs = std::mem::replace(&mut tl.segments, bg_ot.segments
+                            .into_iter()
+                            .map(|s| SegTiming {
+                                start_secs: s.start_secs,
+                                end_secs: s.end_secs,
+                                media: s.media,
+                                trim_start: s.trim_start,
+                                overlap_transition: "fade".to_string(),
+                            })
+                            .collect());
+                        // Старі segments (overlay) → overlay_tracks[0]
+                        if !old_segs.is_empty() {
+                            tl.overlay_tracks.insert(0, OverlayTrack {
+                                track_idx: 0,
+                                segments: old_segs.into_iter().map(|s| OverlaySeg {
+                                    start_secs: s.start_secs,
+                                    end_secs: s.end_secs,
+                                    media: s.media,
+                                    trim_start: s.trim_start,
+                                    scale: 1.0,
+                                    pos_x: 0.0,
+                                    pos_y: 0.0,
+                                    opacity: 1.0,
+                                    is_embedded_audio: false,
+                                }).collect(),
+                            });
+                        }
+                        log_fn("timeline.json: старий формат виявлено — фон/overlay переставлено автоматично");
+                    }
+                }
+
                 total_dur = tl.total_duration_secs;
                 audio_start_secs = tl.audio_start_secs;
-                
+                voiceover_volume = tl.voiceover_volume;
+                tl_track_volumes = tl.track_volumes;
+
                 let mut video_overlay_tracks = Vec::new();
                 for track in tl.overlay_tracks {
                     let mut video_segs = Vec::new();
+                    let track_ti = track.track_idx;
                     for seg in track.segments {
                         let dur = (seg.end_secs - seg.start_secs).max(0.05);
                         if let Some(ref media) = seg.media {
-                            if is_audio_ext(media) {
+                            if seg.is_embedded_audio || is_audio_ext(media) {
+                                // Вбудоване аудіо відео або звичайний аудіо-файл
                                 extra_audios.push(AudioClip {
                                     path: media.clone(),
                                     start_secs: seg.start_secs,
                                     duration: dur,
+                                    trim_start: seg.trim_start,
+                                    track_idx: track_ti,
                                 });
                             } else {
                                 video_segs.push(seg);
@@ -149,7 +227,7 @@ pub fn run_montage(
                     }
                     if !video_segs.is_empty() {
                         video_overlay_tracks.push(OverlayTrack {
-                            track_idx: track.track_idx,
+                            track_idx: track_ti,
                             segments: video_segs,
                         });
                     }
@@ -165,15 +243,17 @@ pub fn run_montage(
                                 path: media.clone(),
                                 start_secs: seg.start_secs,
                                 duration: dur,
+                                trim_start: seg.trim_start,
+                                track_idx: 0,
                             });
                         } else {
-                            clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media), trim_start: seg.trim_start });
+                            clips.push(Clip { path: Some(media.clone()), duration: dur, start_secs: seg.start_secs, is_video: is_video_ext(media), trim_start: seg.trim_start, overlap_transition: seg.overlap_transition.clone() });
                         }
                     } else {
                         if matches!(clips.last(), Some(Clip { path: None, .. })) {
                             clips.last_mut().unwrap().duration += dur;
                         } else {
-                            clips.push(Clip { path: None, duration: dur, is_video: false, trim_start: 0.0 });
+                            clips.push(Clip { path: None, duration: dur, start_secs: seg.start_secs, is_video: false, trim_start: 0.0, overlap_transition: "fade".to_string() });
                         }
                     }
                 }
@@ -221,9 +301,9 @@ pub fn run_montage(
         }
 
         let clip_dur = total_dur / files.len() as f64;
-        for f in files {
-            let is_vid = is_video_ext(&f);
-            clips.push(Clip { path: Some(f), duration: clip_dur, is_video: is_vid, trim_start: 0.0 });
+        for (idx, f) in files.iter().enumerate() {
+            let is_vid = is_video_ext(f);
+            clips.push(Clip { path: Some(f.clone()), duration: clip_dur, start_secs: idx as f64 * clip_dur, is_video: is_vid, trim_start: 0.0, overlap_transition: "fade".to_string() });
         }
     }
 
@@ -250,32 +330,76 @@ pub fn run_montage(
     let n = clips.len();
     // Кількість реальних медіа-файлів (black-кліпи не мають input-файлу)
     let media_file_count = clips.iter().filter(|c| c.path.is_some()).count();
-    // Обмежуємо тривалість переходу до половини найкоротшого медіа-кліпу
-    let min_clip_dur = clips.iter()
-        .filter(|c| c.path.is_some())
-        .map(|c| c.duration)
-        .fold(f64::INFINITY, f64::min);
-    let t = if transition == "none" || n < 2 {
-        0.0f64
-    } else {
-        (transition_duration_secs as f64).clamp(0.05, min_clip_dur * 0.5)
-    };
-    let use_xfade = t > 0.0;
+
+    // Будуємо per-pair інформацію про переходи:
+    // Для кожної пари (i → i+1): чи є overlap, яка тривалість, який тип переходу
+    struct PairTransition {
+        /// Тривалість xfade в секундах (0 = без переходу)
+        duration: f64,
+        /// Назва переходу для xfade=transition=...
+        name: String,
+        /// true = кліпи накладаються на таймлінії; false = глобальний перехід між послідовними кліпами
+        is_overlap: bool,
+    }
+    let mut pairs: Vec<PairTransition> = Vec::new();
+    for k in 0..n.saturating_sub(1) {
+        let a = &clips[k];
+        let b = &clips[k + 1];
+        let a_end = a.start_secs + a.duration;
+        let b_start = b.start_secs;
+        let b_end = b.start_secs + b.duration;
+
+        // Чи є накладання?
+        let overlap_dur = if a_end > b_start + 0.001 {
+            (a_end.min(b_end) - b_start).max(0.0)
+        } else {
+            0.0
+        };
+
+        if overlap_dur > 0.0 {
+            // Overlap → використовуємо per-clip налаштування з редактора
+            let max_ov = (a.duration.min(b.duration) * 0.5).max(0.05);
+            let ov = overlap_dur.clamp(0.05, max_ov);
+            pairs.push(PairTransition {
+                duration: ov,
+                name: b.overlap_transition.clone(),
+                is_overlap: true,
+            });
+        } else if transition != "none" {
+            // Нема накладання, але глобальний перехід увімкнено
+            let min_dur = a.duration.min(b.duration);
+            let max_t = (min_dur * 0.5).max(0.05);
+            let t = (transition_duration_secs as f64).clamp(0.05, max_t);
+            pairs.push(PairTransition {
+                duration: t,
+                name: transition.to_string(),
+                is_overlap: false,
+            });
+        } else {
+            // Без переходу
+            pairs.push(PairTransition { duration: 0.0, name: String::new(), is_overlap: false });
+        }
+    }
 
     // ─── Будуємо фільтр-граф ─────────────────────────────────────────────────
     let mut filter_parts: Vec<String> = Vec::new();
+    // adj_dur[i] — скоригована тривалість кліпу для фільтру:
+    // для глобальних переходів (не overlap) кліп розтягується на тривалість переходу,
+    // щоб мати кадри для xfade. Для overlap-переходів розтягнення непотрібне —
+    // кліпи вже перекриваються на таймлінії.
+    let mut adj_durs: Vec<f64> = Vec::with_capacity(n);
 
     let mut file_idx = 0usize; // input-файл index (тільки для media-кліпів, не для black)
     let mut img_idx = 0usize;  // лічильник зображень для режиму "alternate"
     for (i, clip) in clips.iter().enumerate() {
-        // При xfade кожен кліп (крім останнього) потрібно подовжити на t,
-        // щоб зберегти синхронізацію: cumulative_dur[k] = start_secs[k+1].
-        let adj_dur = if use_xfade && i < n - 1 {
-            clip.duration + t
+        let ext = if i < pairs.len() && pairs[i].duration > 0.001 && !pairs[i].is_overlap {
+            // Глобальний перехід: подовжуємо кліп щоб xfade мав кадри для плавного переходу
+            pairs[i].duration
         } else {
-            clip.duration
+            0.0
         };
-        let adj_dur = adj_dur.max(0.05);
+        let adj_dur = (clip.duration + ext).max(0.05);
+        adj_durs.push(adj_dur);
         let frames = (adj_dur * fps as f64).round().max(1.0) as u64;
 
         if clip.path.is_none() {
@@ -305,38 +429,62 @@ pub fn run_montage(
         }
     }
 
-    if use_xfade {
-        // ─── Ланцюг xfade-переходів ───────────────────────────────────────────
-        // offset для k-го xfade = sum(orig_dur[0..=k]) = start_secs[k+1]
-        // Завдяки цьому cumulative відео-позиція кожного кліпу збігається
-        // з його start_secs із timeline.
-        let mut cumulative_offset = 0.0f64;
-        let mut prev_label = "v0_final".to_string();
+    // ─── Послідовний ланцюг xfade-переходів + concat ───────────────────────────
+    // Будуємо ланцюг зліва направо: кожен новий кліп або приєднується через xfade
+    // до поточного ланцюга, або починає новий сегмент (якщо переходу немає).
+    // chain_dur відстежує поточну тривалість виходу ланцюга для правильного offset.
+    // offset = chain_dur - pair.duration (єдина формула для обох типів переходів):
+    //   - overlap: adj_dur = original (без розтягнення), offset = original - overlap
+    //   - global: adj_dur = original + trans (розтягнення), offset = (original+trans) - trans = original
+    let mut result_labels: Vec<String> = Vec::new();
+    let mut chain_label: Option<String> = None;
+    let mut chain_dur = 0.0f64;
 
-        for k in 0..n - 1 {
-            cumulative_offset += clips[k].duration; // = start_secs[k+1]
-            let trans_name = pick_transition(transition);
-            let out_label = if k == n - 2 {
-                "v_montage_raw".to_string()
-            } else {
-                format!("vchain{}", k + 1)
-            };
-            filter_parts.push(format!(
-                "[{prev}][v{next}_final]xfade=transition={trans}:\
-                duration={t:.6}:offset={offset:.6}[{out}]",
-                prev = prev_label,
-                next = k + 1,
-                trans = trans_name,
-                t = t,
-                offset = cumulative_offset,
-                out = out_label,
-            ));
-            prev_label = out_label;
+    for i in 0..n {
+        let clip_label = format!("v{i}_final");
+        match chain_label.take() {
+            None => {
+                chain_label = Some(clip_label);
+                chain_dur = adj_durs[i];
+            }
+            Some(prev_label) => {
+                let pair = &pairs[i - 1];
+                if pair.duration > 0.001 {
+                    let new_label = format!("v_merge_{i}");
+                    let offset = (chain_dur - pair.duration).max(0.0);
+                    let trans_name = if pair.name == "random" {
+                        pick_transition("random")
+                    } else {
+                        pick_transition(&pair.name)
+                    };
+                    filter_parts.push(format!(
+                        "[{prev_label}][{clip_label}]xfade=transition={trans}:\
+                        duration={dur:.6}:offset={offset:.6}[{new_label}]",
+                        trans = trans_name,
+                        dur = pair.duration,
+                    ));
+                    chain_dur = offset + adj_durs[i];
+                    chain_label = Some(new_label);
+                } else {
+                    result_labels.push(prev_label);
+                    chain_label = Some(clip_label);
+                    chain_dur = adj_durs[i];
+                }
+            }
         }
+    }
+    if let Some(label) = chain_label {
+        result_labels.push(label);
+    }
+
+    if result_labels.len() == 1 {
+        filter_parts.push(format!("[{}]null[v_montage_raw]", result_labels[0]));
     } else {
-        // ─── Concat усіх кліпів (без переходів) ──────────────────────────────
-        let concat_inputs: String = (0..n).map(|i| format!("[v{i}_final]")).collect();
-        filter_parts.push(format!("{concat_inputs}concat=n={n}:v=1:a=0[v_montage_raw]"));
+        let inputs: String = result_labels.iter()
+            .map(|l| format!("[{l}]"))
+            .collect();
+        let count = result_labels.len();
+        filter_parts.push(format!("{inputs}concat=n={count}:v=1:a=0[v_montage_raw]"));
     }
 
     filter_parts.push("[v_montage_raw]tpad=stop_mode=clone:stop=-1[v_padded]".to_string());
@@ -468,18 +616,33 @@ pub fn run_montage(
         input_idx: usize,
         start: f64,
         end: f64,
+        trim_start: f64,
         w: i32,
         h: i32,
         x: i32,
         y: i32,
         is_video: bool,
+        /// Тривалість fade-in на початку кліпу (перекриття з попереднім), 0 = немає
+        fade_in_dur: f64,
+        /// Відносний час початку fade-out (від 0 = початок кліпу), 0 = немає
+        fade_out_start: f64,
+        /// Тривалість fade-out в кінці (перекриття з наступним), 0 = немає
+        fade_out_dur: f64,
     }
 
     let mut overlay_items: Vec<OverlayItem> = Vec::new();
     let mut overlay_input_paths: Vec<(String, bool)> = Vec::new();
 
+    // Вищий трек (менший track_idx) = візуально вище = рендериться ОСТАННІМ (поверх усіх).
+    // Тому сортуємо: спочатку більший track_idx (нижній), потім менший (верхній).
+    overlay_tracks.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
+
     for track in &overlay_tracks {
-        for seg in &track.segments {
+        // Відсортовані сегменти треку — потрібно для визначення overlap між сусідами
+        let mut track_segs: Vec<&OverlaySeg> = track.segments.iter().collect();
+        track_segs.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+
+        for (j, seg) in track_segs.iter().enumerate() {
             let media_path_str = match &seg.media {
                 Some(m) if !m.is_empty() => m.clone(),
                 _ => continue,
@@ -503,13 +666,31 @@ pub fn run_montage(
             let x = (cx - w as f64 / 2.0).round() as i32;
             let y = (cy - h as f64 / 2.0).round() as i32;
 
+            // Обчислюємо fade-параметри на основі overlap із сусідніми кліпами
+            let clip_dur = seg.end_secs - seg.start_secs;
+            let fade_in_dur = if j > 0 {
+                let prev = track_segs[j - 1];
+                let overlap = prev.end_secs - seg.start_secs;
+                if overlap > 0.001 { overlap.clamp(0.05, clip_dur * 0.49) } else { 0.0 }
+            } else { 0.0 };
+            let fade_out_dur = if j + 1 < track_segs.len() {
+                let next = track_segs[j + 1];
+                let overlap = seg.end_secs - next.start_secs;
+                if overlap > 0.001 { overlap.clamp(0.05, clip_dur * 0.49) } else { 0.0 }
+            } else { 0.0 };
+            let fade_out_start = if fade_out_dur > 0.0 { (clip_dur - fade_out_dur).max(0.0) } else { 0.0 };
+
             let input_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
             overlay_input_paths.push((media_path_str.clone(), is_vid));
 
-            log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s",
-                seg.start_secs, seg.end_secs));
+            log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s fade_in={:.2} fade_out={:.2}",
+                seg.start_secs, seg.end_secs, fade_in_dur, fade_out_dur));
 
-            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, w: w as i32, h: h as i32, x, y, is_video: is_vid });
+            overlay_items.push(OverlayItem {
+                input_idx, start: seg.start_secs, end: seg.end_secs,
+                trim_start: seg.trim_start, w: w as i32, h: h as i32, x, y, is_video: is_vid,
+                fade_in_dur, fade_out_start, fade_out_dur,
+            });
         }
     }
 
@@ -550,34 +731,71 @@ pub fn run_montage(
         }
 
         // ── Overlay-доріжки (track 1+) ────────────────────────────────────
-        for (i, ov) in overlay_items.iter().enumerate() {
-            let prep_label = format!("v_ov_{i}");
-            let out_label = format!("v_ov_out_{i}");
-            let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
-            let (w, h) = (ov.w, ov.h);
+        // Overlay-треки накладаються ПОВЕРХ V1 (current).
+        // Порядок: вищий track_idx — перший (нижній шар), менший — останній (верхній шар).
+        // overlay_items вже відсортовані: спочатку більший track_idx.
+        //
+        // Для відео: setpts=PTS-STARTPTS+{start}/TB зміщує PTS щоб overlay з'явився
+        // у правильний момент на таймлінії. FFmpeg overlay синхронізує по PTS,
+        // тому до ov.start V1 відображається без overlay, потім overlay з'являється.
+        // Для зображень: enable='between(t,start,end)' з -loop 1 робить те саме.
+        if !overlay_items.is_empty() {
+            for (i, ov) in overlay_items.iter().enumerate() {
+                let (w, h) = (ov.w, ov.h);
+                let out_label = format!("v_ol_{i}");
+                let prep = format!("v_ol_{i}_prep");
 
-            if ov.is_video {
-                filter_parts.push(format!(
-                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=decrease,\
-                    pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
-                    ov.input_idx, ov.start,
-                ));
-                filter_parts.push(format!(
-                    "[{current}][{prep_label}]overlay=x={x}:y={y}:eof_action=pass:enable='{enable_expr}'[{out_label}]",
-                    x = ov.x, y = ov.y,
-                ));
-            } else {
-                filter_parts.push(format!(
-                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=decrease,\
-                    pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS+{:.3}/TB[{prep_label}]",
-                    ov.input_idx, ov.start,
-                ));
-                filter_parts.push(format!(
-                    "[{current}][{prep_label}]overlay=x={x}:y={y}:enable='{enable_expr}'[{out_label}]",
-                    x = ov.x, y = ov.y,
-                ));
+                // Будуємо ланцюжок fade-фільтрів для alpha-crossfade в зонах overlap
+                let has_fade = ov.fade_in_dur > 0.001 || ov.fade_out_dur > 0.001;
+                let mut fade_chain = String::new();
+                if ov.fade_in_dur > 0.001 {
+                    fade_chain.push_str(&format!(
+                        ",fade=type=in:start_time=0:duration={:.6}:alpha=1",
+                        ov.fade_in_dur
+                    ));
+                }
+                if ov.fade_out_dur > 0.001 {
+                    fade_chain.push_str(&format!(
+                        ",fade=type=out:start_time={:.6}:duration={:.6}:alpha=1",
+                        ov.fade_out_start, ov.fade_out_dur
+                    ));
+                }
+                // yuva420p потрібен для alpha-blend через overlay; без fade використовуємо yuv420p
+                let pix_fmt = if has_fade { "yuva420p" } else { "yuv420p" };
+
+                if ov.is_video {
+                    let ov_dur = ov.end - ov.start;
+                    let enable_expr = format!("between(t,{:.6},{:.6})", ov.start, ov.end);
+                    // Порядок важливий: setpts=PTS-STARTPTS нормалізує до 0, потім scale/format/fade,
+                    // і лише наприкінці settb+зсув на таймлінію — щоб fade=start_time відносно початку кліпу.
+                    filter_parts.push(format!(
+                        "[{}:v]trim=start={trim:.6}:duration={ov_dur:.6},\
+                        setpts=PTS-STARTPTS,\
+                        scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format={pix_fmt},fps={fps},setsar=1\
+                        {fade_chain},settb=AVTB,setpts=PTS+{start:.6}/TB[{prep}]",
+                        ov.input_idx, trim = ov.trim_start, start = ov.start,
+                    ));
+                    filter_parts.push(format!(
+                        "[{current}][{prep}]overlay=x={x}:y={y}:enable='{enable_expr}':eof_action=pass[{out_label}]",
+                        x = ov.x, y = ov.y,
+                    ));
+                } else {
+                    // Зображення (-loop 1): PTS від 0, тому fade=start_time відносно початку зображення
+                    let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
+                    filter_parts.push(format!(
+                        "[{}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format={pix_fmt},setsar=1{fade_chain}[{prep}]",
+                        ov.input_idx,
+                    ));
+                    filter_parts.push(format!(
+                        "[{current}][{prep}]overlay=x={x}:y={y}:enable='{enable_expr}':eof_action=pass[{out_label}]",
+                        x = ov.x, y = ov.y,
+                    ));
+                }
+
+                current = out_label;
             }
-            current = out_label;
         }
 
         format!("[{current}]")
@@ -585,34 +803,54 @@ pub fn run_montage(
 
     let audio_idx = media_file_count;
     let extra_audio_start_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
+
+    // Допоміжна функція: рядок фільтру гучності якщо відрізняється від 1.0
+    let vol_filter = |vol: f64| -> String {
+        if (vol - 1.0).abs() > 0.001 {
+            format!(",volume={:.4}", vol.max(0.0))
+        } else {
+            String::new()
+        }
+    };
+
     let audio_map_label = if extra_audios.is_empty() {
+        let vf = vol_filter(voiceover_volume);
         if audio_start_secs > 0.001 {
             let ms = (audio_start_secs * 1000.0).round() as i64;
             filter_parts.push(format!(
-                "[{audio_idx}:a]adelay={ms}|{ms}[a_delayed]"
+                "[{audio_idx}:a]{vf_stripped}adelay={ms}|{ms}[a_delayed]",
+                vf_stripped = if vf.is_empty() { String::new() } else { format!("{}," , &vf[1..]) },
             ));
             "[a_delayed]".to_string()
-        } else {
+        } else if vf.is_empty() {
             format!("{audio_idx}:a")
+        } else {
+            filter_parts.push(format!("[{audio_idx}:a]{}[a_vo_vol]", &vf[1..]));
+            "[a_vo_vol]".to_string()
         }
     } else {
+        let vf = vol_filter(voiceover_volume);
         if audio_start_secs > 0.001 {
             let ms = (audio_start_secs * 1000.0).round() as i64;
             filter_parts.push(format!(
-                "[{audio_idx}:a]adelay={ms}|{ms}[a_orig]"
+                "[{audio_idx}:a]{vf_stripped}adelay={ms}|{ms}[a_orig]",
+                vf_stripped = if vf.is_empty() { String::new() } else { format!("{},", &vf[1..]) },
             ));
+        } else if vf.is_empty() {
+            filter_parts.push(format!("[{audio_idx}:a]anull[a_orig]"));
         } else {
-            filter_parts.push(format!(
-                "[{audio_idx}:a]anull[a_orig]"
-            ));
+            filter_parts.push(format!("[{audio_idx}:a]{}[a_orig]", &vf[1..]));
         }
 
         for (i, ea) in extra_audios.iter().enumerate() {
             let input_idx = extra_audio_start_idx + i;
             let delay_ms = (ea.start_secs * 1000.0).round() as i64;
+            let track_vol = tl_track_volumes.get(ea.track_idx).copied().unwrap_or(1.0);
+            let vf = vol_filter(track_vol);
             filter_parts.push(format!(
-                "[{input_idx}:a]atrim=end={dur:.6},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
-                dur = ea.duration,
+                "[{input_idx}:a]atrim=start={trim:.6}:end={end:.6},asetpts=PTS-STARTPTS{vf},adelay={delay_ms}|{delay_ms}[a_extra_{i}]",
+                trim = ea.trim_start,
+                end = ea.trim_start + ea.duration,
             ));
         }
 

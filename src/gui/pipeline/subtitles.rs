@@ -58,6 +58,11 @@ pub fn draw_subtitles_section(
     available_subtitle_fonts: &[String],
     ctx: egui::Context,
 ) {
+    // На non-Windows WhisperAMD недоступний — скидаємо на Whisper
+    if !cfg!(target_os = "windows") && subtitles_service == "WhisperAMD" {
+        *subtitles_service = "Whisper".to_string();
+    }
+
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
@@ -69,7 +74,9 @@ pub fn draw_subtitles_section(
             .width(ui.available_width())
             .show_ui(ui, |ui| {
                 ui.selectable_value(subtitles_service, "Whisper".to_string(), "Whisper");
-                ui.selectable_value(subtitles_service, "WhisperAMD".to_string(), "Whisper AMD");
+                if cfg!(target_os = "windows") {
+                    ui.selectable_value(subtitles_service, "WhisperAMD".to_string(), "Whisper AMD");
+                }
                 ui.selectable_value(subtitles_service, "WhisperX".to_string(), "WhisperX");
                 ui.selectable_value(subtitles_service, "AssemblyAI".to_string(), "AssemblyAI");
             });

@@ -380,13 +380,18 @@ fn run_whisper_amd(
     let save_dir = std::path::Path::new(&settings.save_path);
     let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
     if !model_path.exists() {
-        let msg = format!(
-            "Subtitles error: model '{}' not found. Download it in the subtitles settings.",
-            settings.whisper_model
-        );
-        crate::logger::log_job(job_id, job_name, &msg);
-        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-        return Err(msg);
+        crate::logger::log_job(job_id, job_name, &format!(
+            "Model '{}' not found — downloading...", settings.whisper_model
+        ));
+        if let Err(e) = crate::bundle::download_whisper_model(&settings.whisper_model, |label| {
+            crate::logger::log_job(job_id, job_name, &label);
+        }) {
+            let msg = format!("Subtitles error: failed to download model '{}': {}", settings.whisper_model, e);
+            crate::logger::log_job(job_id, job_name, &msg);
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            return Err(msg);
+        }
+        crate::logger::log_job(job_id, job_name, &format!("Model '{}' downloaded.", settings.whisper_model));
     }
 
     let audio_path = if save_dir.join("voice.wav").exists() {
@@ -472,13 +477,20 @@ fn run_subtitles_only(
     subtitles_stage: &Arc<Mutex<crate::queue::StageStatus>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
-    if settings.subtitles_service == "WhisperX" {
+    // На non-Windows WhisperAMD недоступний — використовуємо Whisper як запасний варіант
+    let effective_service: &str = if !cfg!(target_os = "windows") && settings.subtitles_service == "WhisperAMD" {
+        "Whisper"
+    } else {
+        &settings.subtitles_service
+    };
+
+    if effective_service == "WhisperX" {
         run_whisperx(settings, job_id, job_name, subtitles_stage, ctx)?;
-    } else if settings.subtitles_service == "AssemblyAI" {
+    } else if effective_service == "AssemblyAI" {
         run_assemblyai(settings, job_id, job_name, subtitles_stage, ctx)?;
-    } else if settings.subtitles_service == "WhisperAMD" {
+    } else if effective_service == "WhisperAMD" {
         run_whisper_amd(settings, job_id, job_name, subtitles_stage, ctx)?;
-    } else if settings.subtitles_service == "Whisper" {
+    } else if effective_service == "Whisper" {
         let reason = if settings.subtitles_enabled {
             "Starting subtitle generation via Whisper (burn-in enabled)..."
         } else {
@@ -491,13 +503,18 @@ fn run_subtitles_only(
         let save_dir = std::path::Path::new(&settings.save_path);
         let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
         if !model_path.exists() {
-            let msg = format!(
-                "Subtitles error: model '{}' not found at '{}'. Download it in the subtitles settings.",
-                settings.whisper_model, model_path.display()
-            );
-            crate::logger::log_job(job_id, job_name, &msg);
-            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-            return Err(msg);
+            crate::logger::log_job(job_id, job_name, &format!(
+                "Model '{}' not found — downloading...", settings.whisper_model
+            ));
+            if let Err(e) = crate::bundle::download_whisper_model(&settings.whisper_model, |label| {
+                crate::logger::log_job(job_id, job_name, &label);
+            }) {
+                let msg = format!("Subtitles error: failed to download model '{}': {}", settings.whisper_model, e);
+                crate::logger::log_job(job_id, job_name, &msg);
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                return Err(msg);
+            }
+            crate::logger::log_job(job_id, job_name, &format!("Model '{}' downloaded.", settings.whisper_model));
         }
 
         let audio_path = if save_dir.join("voice.wav").exists() {
@@ -526,7 +543,7 @@ fn run_subtitles_only(
             (tmp_audio, tmp_stem, Some(tmp))
         };
         #[cfg(not(target_os = "windows"))]
-        let (whisper_audio, whisper_out_stem, whisper_temp) = {
+        let (whisper_audio, whisper_out_stem, _whisper_temp) = {
             let stem = save_dir.join("subtitle");
             (audio_path.clone(), stem, None::<std::path::PathBuf>)
         };
@@ -1502,8 +1519,6 @@ fn run_agent_timeline(
     settings: &crate::queue::JobSettings,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
-    agent_control_resume: Arc<(Mutex<bool>, std::sync::Condvar)>,
-    status: Arc<Mutex<crate::queue::JobStatus>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
     let save_dir = std::path::Path::new(&settings.save_path);
@@ -1595,23 +1610,14 @@ fn run_agent_timeline(
         }
         Err(e) => {
             crate::logger::log_job(job_id, job_name,
-                &format!("Agent error: {} — чат доступний для продовження, очікую підтвердження", e));
+                &format!("Agent error: {} — чат доступний для продовження", e));
         }
     }
 
-    // Пауза — чекаємо поки користувач натисне «Підтвердити» в чаті
-    *status.lock().unwrap() = crate::queue::JobStatus::AwaitingAgentControl;
-    ctx.request_repaint();
-    let (lock, cvar) = &*agent_control_resume;
-    let mut resumed = lock.lock().unwrap();
-    while !*resumed {
-        resumed = cvar.wait(resumed).unwrap();
+    // Зберігаємо фінальний session_id на диск (для відновлення після перезапуску)
+    if let Some(ref sess) = *agent_session.lock().unwrap() {
+        save_agent_session_to_file(save_dir, sess);
     }
-    *resumed = false;
-
-    crate::logger::log_job(job_id, job_name, "Agent confirmed. Resuming pipeline...");
-    *status.lock().unwrap() = crate::queue::JobStatus::Running;
-    ctx.request_repaint();
 
     if !timeline_path.exists() {
         return Err("Agent did not create timeline.json".to_string());
@@ -1686,6 +1692,16 @@ pub fn call_agent_resume(
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
+}
+
+/// Зберігає інформацію про сесію агента у файл agent_session.json у папці задачі.
+fn save_agent_session_to_file(save_dir: &std::path::Path, session: &crate::queue::AgentSessionInfo) {
+    let json = serde_json::to_string_pretty(&serde_json::json!({
+        "session_id": session.session_id,
+        "service": session.service,
+        "model": session.model,
+    })).unwrap_or_default();
+    let _ = std::fs::write(save_dir.join("agent_session.json"), json);
 }
 
 /// Зберігає историю чату агента у файл agent_chat.json у папці задачі.
@@ -1767,7 +1783,7 @@ pub fn run_pipeline(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
-    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    _agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     capcut_mode_override: Arc<Mutex<Option<bool>>>,
@@ -1884,8 +1900,6 @@ pub fn run_pipeline(
                 job_id, &job_name, &settings,
                 Arc::clone(&agent_chat),
                 Arc::clone(&agent_session),
-                Arc::clone(&agent_control_resume),
-                Arc::clone(&status),
                 &ctx,
             ) {
                 crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2184,11 +2198,12 @@ fn run_final_stages(
     capcut_mode_override: &Arc<Mutex<Option<bool>>>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
-    // Timeline — в агентному режимі timeline.json вже створений агентом, не перезаписуємо
+    // Timeline — в агентному режимі або при відновленні timeline.json вже є, не перезаписуємо
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
-        || settings.video_llm_service == "Codex CLI";
-    if settings.video_enabled && !is_agent_mode {
+        || settings.video_llm_service == "Codex CLI"
+        || settings.video_llm_service == "AGY CLI";
+    if settings.video_enabled && !is_agent_mode && !settings.skip_agent_on_resume {
         let source_text = if settings.translation_enabled {
             translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
         } else {
@@ -2406,8 +2421,6 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
-                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2484,8 +2497,6 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
-                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2588,8 +2599,6 @@ pub fn retry_from_stage(
                         job_id, &job_name, &settings,
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
-                        Arc::clone(&agent_control_resume),
-                        Arc::clone(&status),
                         &ctx,
                     ) {
                         crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
@@ -2938,41 +2947,18 @@ pub fn find_changed_prompts_for_rebuild(
         .and_then(|c| serde_json::from_str::<Vec<String>>(&c).ok())
         .unwrap_or_default();
 
-    let mut files: Vec<String> = std::fs::read_dir(&media_dir)
-        .ok().into_iter().flatten()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            let name = e.file_name();
-            let s = name.to_string_lossy();
-            let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
-            matches!(ext.as_str(), "jpg"|"jpeg"|"png"|"webp"|"gif"|"mp4"|"mov"|"webm")
-        })
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
-    files.sort();
-
-    if files.is_empty() {
-        return vec![];
-    }
-
-    let n_segs = new_texts.len();
-    let n_files = files.len();
     let mut changed = vec![];
 
     for (i, new_text) in new_texts.iter().enumerate() {
         if new_text.trim().is_empty() { continue; }
 
-        let file_idx = if n_files <= n_segs {
-            (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
-        } else {
-            i.min(n_files - 1)
-        };
-
         let old_text = old_texts.get(i).map(|s| s.as_str()).unwrap_or("");
 
         if new_text.trim() != old_text.trim() {
-            if let Some(filename) = files.get(file_idx) {
-                let file_path = media_dir.join(filename);
+            // Використовуємо реальний шлях медіа з сегменту, а не сортований індекс файлу.
+            // Якщо media == null (агент не зберіг шляхи) — не регенеруємо нічого.
+            if let Some(media_str) = segs[i]["media"].as_str() {
+                let file_path = save_dir.join(media_str);
                 if file_path.exists() {
                     // Будуємо повний промт так само як при початковій генерації
                     let full_prompt = if video_style_enabled && !video_style_prompt.is_empty() {

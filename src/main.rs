@@ -25,6 +25,13 @@ fn load_icon() -> egui::IconData {
     egui::IconData { rgba: img.into_raw(), width, height }
 }
 
+fn renderer_backend() -> eframe::Renderer {
+    match std::env::var("SOLOVEYKO_RENDERER") {
+        Ok(value) if value.eq_ignore_ascii_case("wgpu") => eframe::Renderer::Wgpu,
+        _ => eframe::Renderer::Glow,
+    }
+}
+
 fn main() -> eframe::Result {
     // Конфігуруємо параметри вікна нашого додатку
     let options = eframe::NativeOptions {
@@ -33,6 +40,9 @@ fn main() -> eframe::Result {
             .with_min_inner_size([800.0, 600.0])       // Встановлюємо мінімальний розмір вікна для зручності
             .with_title(format!("Soloveyko.AI-Video.Maker.v{}", APP_VERSION))   // Заголовок вікна програми
             .with_icon(std::sync::Arc::new(load_icon())),
+        // За замовчуванням лишаємо стабільний glow-бекенд.
+        // Експериментальний wgpu можна увімкнути через SOLOVEYKO_RENDERER=wgpu.
+        renderer: renderer_backend(),
         ..Default::default()
     };
 

@@ -10,9 +10,13 @@ mod preview;
 mod inspector;
 mod timeline;
 
-pub use types::{ClipKind, MontagePreviewSettings, MontageEditorActions};
+pub use types::{
+    ClipKind, MontagePreviewSettings, MontageEditorActions,
+    PreviewQuality, PreviewRenderSettings,
+};
 pub use media::MediaItem;
-pub use audio::{AudioPlayer, PlayingAudio};
+pub use frame_cache::FrameCache;
+pub use audio::{AudioPlayer, PlayingAudio, embedded_audio_cache_path};
 pub use state::MontageEditorState;
 
 use std::collections::HashSet;
@@ -33,6 +37,7 @@ pub fn draw_montage_editor_window(
     jobs: &[crate::queue::PipelineJob],
     anim_loading: &Arc<Mutex<HashSet<PathBuf>>>,
     regen_paths: &HashSet<PathBuf>,
+    preview_render: PreviewRenderSettings,
 ) -> MontageEditorActions {
     let job_id = match *open_job {
         Some(id) => id,
@@ -44,6 +49,7 @@ pub fn draw_montage_editor_window(
             *state = Some(MontageEditorState::load(
                 std::path::Path::new(&job.settings.save_path),
                 &job.name,
+                preview_render,
             ));
         } else {
             *open_job = None;
@@ -107,7 +113,7 @@ pub fn draw_montage_editor_window(
             }
             if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == old) {
                 let old_id = m.id.clone();
-                *m = MediaItem::new(new.clone(), &save_path);
+                *m = MediaItem::new(new.clone(), &save_path, editor.preview_render);
                 m.id = old_id; // зберігаємо ID щоб кліпи знаходили медіа по media_id
             }
             if editor.pool_preview.as_deref() == Some(old.as_path()) {
@@ -142,6 +148,27 @@ pub fn draw_montage_editor_window(
         }
     }
 
+    // Пробіл: пауза/відтворення (не перехоплюємо коли фокус у текстовому полі)
+    if !ctx.wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+        editor.is_playing = !editor.is_playing;
+        editor.last_frame_time = Instant::now();
+        if !editor.is_playing {
+            editor.active_audios.clear();
+        }
+    }
+
+    // Ctrl/Cmd+Z — скасування, Ctrl/Cmd+Y або Ctrl/Cmd+Shift+Z — повторення
+    if !ctx.wants_keyboard_input() {
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z) && !i.modifiers.shift) {
+            editor.undo();
+        }
+        if ctx.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::Y))
+            || (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::Z)))
+        {
+            editor.redo();
+        }
+    }
+
     if editor.is_playing {
         let elapsed = editor.last_frame_time.elapsed().as_secs_f32();
         editor.playhead = (editor.playhead + elapsed).min(editor.total_dur());
@@ -155,22 +182,28 @@ pub fn draw_montage_editor_window(
                 path: PathBuf,
                 start: f32,
                 duration: f32,
+                volume: f32,
+                trim_start: f32,
             }
             let mut targets = Vec::new();
-            if let Some(ref ap) = editor.audio_path {
-                targets.push(TargetAudio {
-                    path: ap.clone(),
-                    start: editor.audio_start_secs,
-                    duration: editor.audio_duration,
-                });
-            }
             for clip in &editor.clips {
                 if clip.kind == ClipKind::Audio {
                     if let Some(ref cp) = clip.path {
+                        // Вбудоване аудіо відеофайлу (.mp4) — rodio не декодує mp4,
+                        // тому грає з попередньо витягнутого WAV-кешу
+                        let play_path = if clip.is_embedded_audio {
+                            let cached = embedded_audio_cache_path(cp, &editor.save_path);
+                            if cached.exists() { cached } else { continue; }
+                        } else {
+                            cp.clone()
+                        };
+                        let vol = editor.track_volumes.get(clip.track_idx).copied().unwrap_or(1.0);
                         targets.push(TargetAudio {
-                            path: cp.clone(),
+                            path: play_path,
                             start: clip.start_secs,
                             duration: clip.duration,
+                            volume: vol,
+                            trim_start: clip.trim_start,
                         });
                     }
                 }
@@ -196,8 +229,8 @@ pub fn draw_montage_editor_window(
                         active.path == t.path && (active.start_secs - t.start).abs() < 0.001
                     });
                     if !already_playing {
-                        let offset = playhead - t.start;
-                        if let Some(player) = AudioPlayer::start(&t.path, offset) {
+                        let offset = playhead - t.start + t.trim_start;
+                        if let Some(player) = AudioPlayer::start(&t.path, offset, t.volume) {
                             editor.active_audios.push(PlayingAudio {
                                 path: t.path,
                                 start_secs: t.start,
@@ -304,6 +337,7 @@ pub fn draw_montage_editor_window(
     let animate_paths = std::mem::take(&mut editor.pending_animate_paths);
     let regen_opt = editor.pending_regen.take();
     let open_stock_picker = editor.pending_open_stock_picker.take();
+    let preview_render_changed = editor.pending_preview_render.take();
     let regen_action = regen_opt.and_then(|(path, is_custom)| {
         jobs.iter().find(|j| j.id == job_id).map(|job| {
             (path, job.settings.clone(), is_custom, job_id, job.name.clone())
@@ -313,7 +347,12 @@ pub fn draw_montage_editor_window(
     if !is_open || close_after {
         *open_job = None;
         *state = None;
-        return MontageEditorActions { animate_paths, regen_action, open_stock_picker: None };
+        return MontageEditorActions {
+            animate_paths,
+            regen_action,
+            open_stock_picker: None,
+            preview_render_changed,
+        };
     }
 
     // Fullscreen preview (подвійний клік на медіа в пулі або кліп у таймлінії)
@@ -366,7 +405,7 @@ pub fn draw_montage_editor_window(
         }
     }
 
-    MontageEditorActions { animate_paths, regen_action, open_stock_picker }
+    MontageEditorActions { animate_paths, regen_action, open_stock_picker, preview_render_changed }
 }
 
 /// Завантажує текстуру для fullscreen preview: зображення читає напряму,

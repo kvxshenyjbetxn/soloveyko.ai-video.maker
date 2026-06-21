@@ -1,9 +1,136 @@
 use std::path::PathBuf;
 use eframe::egui::{Pos2, Rect};
 
-pub const PREVIEW_FPS: f32 = 15.0;
-pub const PREVIEW_WIDTH: u32 = 640;
-pub const FRAME_CACHE_SIZE: usize = 200;
+pub const PREVIEW_FPS: f32 = 30.0;
+/// Кількість GPU-текстур у RAM/GPU LRU.
+pub const FRAME_CACHE_SIZE: usize = 80;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PreviewQuality {
+    Performance,
+    Balanced,
+    High,
+    Ultra,
+}
+
+impl PreviewQuality {
+    pub fn storage_key(self) -> &'static str {
+        match self {
+            Self::Performance => "performance",
+            Self::Balanced => "balanced",
+            Self::High => "high",
+            Self::Ultra => "ultra",
+        }
+    }
+
+    pub fn from_storage(value: &str) -> Self {
+        match value {
+            "performance" => Self::Performance,
+            "high" => Self::High,
+            "ultra" => Self::Ultra,
+            _ => Self::Balanced,
+        }
+    }
+
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Performance => "montage_preview_quality_performance",
+            Self::Balanced => "montage_preview_quality_balanced",
+            Self::High => "montage_preview_quality_high",
+            Self::Ultra => "montage_preview_quality_ultra",
+        }
+    }
+
+    pub fn scrub_width(self) -> u32 {
+        match self {
+            Self::Performance => 640,
+            Self::Balanced => 960,
+            Self::High => 1280,
+            Self::Ultra => 1600,
+        }
+    }
+
+    pub fn sharp_width(self) -> u32 {
+        match self {
+            Self::Performance => 1280,
+            Self::Balanced => 1920,
+            Self::High => 1920,
+            Self::Ultra => 2560,
+        }
+    }
+
+    pub fn jpeg_quality(self) -> u8 {
+        match self {
+            Self::Performance => 82,
+            Self::Balanced => 88,
+            Self::High => 92,
+            Self::Ultra => 94,
+        }
+    }
+
+    pub fn sharp_jpeg_quality(self) -> u8 {
+        match self {
+            Self::Performance => 90,
+            Self::Balanced => 96,
+            Self::High => 97,
+            Self::Ultra => 98,
+        }
+    }
+
+    pub fn ffmpeg_qscale(self) -> &'static str {
+        match self {
+            Self::Performance => "6",
+            Self::Balanced => "4",
+            Self::High => "3",
+            Self::Ultra => "2",
+        }
+    }
+
+    pub fn sharp_ffmpeg_qscale(self) -> &'static str {
+        match self {
+            Self::Performance => "4",
+            Self::Balanced => "2",
+            Self::High => "2",
+            Self::Ultra => "1",
+        }
+    }
+
+    pub fn cache_tag(self) -> &'static str {
+        match self {
+            Self::Performance => "perf_w640_q6",
+            Self::Balanced => "bal_w960_q4",
+            Self::High => "high_w1280_q3",
+            Self::Ultra => "ultra_w1600_q2",
+        }
+    }
+
+    pub fn sharp_cache_tag(self) -> &'static str {
+        match self {
+            Self::Performance => "still_w1280_q4",
+            Self::Balanced => "still_w1920_q2",
+            Self::High => "still_w1920_q2",
+            Self::Ultra => "still_w2560_q1",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PreviewRenderSettings {
+    pub quality: PreviewQuality,
+    pub fps: f32,
+}
+
+impl Default for PreviewRenderSettings {
+    fn default() -> Self {
+        Self { quality: PreviewQuality::Balanced, fps: PREVIEW_FPS }
+    }
+}
+
+impl PreviewRenderSettings {
+    pub fn fps_tag(self) -> String {
+        format!("f{}", self.fps.round() as u32)
+    }
+}
 
 // ─── Налаштування превью (синхронізуються з JobSettings) ─────────────────────
 
@@ -32,6 +159,15 @@ impl Default for MontagePreviewSettings {
     }
 }
 
+// ─── Тип доріжки ────────────────────────────────────────────────────────────
+
+/// Визначає тип доріжки на таймлінії: відео або аудіо.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrackKind {
+    Video,
+    Audio,
+}
+
 // ─── Типи кліпів ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, PartialEq)]
@@ -57,8 +193,31 @@ pub struct ClipDragState {
     pub mode: DragMode,
     pub initial_start: f32,
     pub initial_duration: f32,
+    pub initial_trim_start: f32,
     pub initial_mouse_x: f32,
     pub initial_track_idx: usize,
+    /// Позиція лінії снапу (секунди), якщо кліп приліп до чогось
+    pub snap_line_secs: Option<f32>,
+    /// Початкова позиція парного кліпу на початку drag (для синхронного руху)
+    pub paired_initial_start: Option<f32>,
+}
+
+// ─── Стан перетягування смужки прозорості ────────────────────────────────────
+
+pub struct OpacityDragState {
+    pub clip_id: String,
+    pub initial_opacity: f32,
+    pub initial_mouse_y: f32,
+    pub clip_height: f32,
+}
+
+// ─── Стан перетягування доріжки (зміна порядку) ──────────────────────────────
+
+pub struct TrackDragState {
+    /// Індекс доріжки, яку перетягують
+    pub from_track: usize,
+    /// Індекс доріжки над якою зараз курсор
+    pub hover_track: usize,
 }
 
 // ─── Кліп на таймлінії ───────────────────────────────────────────────────────
@@ -90,6 +249,16 @@ pub struct EditorClip {
     pub trim_start: f32,
     /// Індекс сегменту в stock_cache.json (для кліпів обраних зі стоків; None = не стокове медіа).
     pub stock_seg_idx: Option<usize>,
+    /// Тип xfade-переходу для overlap-зон ("fade", "wipeleft", "dissolve", …).
+    pub overlap_transition: String,
+    /// Прозорість кліпу від 0.0 (повністю прозорий) до 1.0 (непрозорий).
+    pub opacity: f32,
+    /// Спільний UUID для пари (відео-кліп ↔ аудіо-кліп); None = без пари.
+    pub pair_id: Option<String>,
+    /// true = аудіо синхронізовано з відео (рухаються разом).
+    pub audio_linked: bool,
+    /// true = цей аудіо-кліп є вбудованим аудіопотоком відеофайлу.
+    pub is_embedded_audio: bool,
 }
 
 impl EditorClip {
@@ -117,6 +286,16 @@ pub struct PreviewDragState {
     pub frame_rect: Rect,
 }
 
+// ─── Знімок стану таймлайну (для undo/redo) ──────────────────────────────────
+
+#[derive(Clone)]
+pub struct TimelineSnapshot {
+    pub clips: Vec<EditorClip>,
+    pub num_tracks: usize,
+    pub track_kinds: Vec<TrackKind>,
+    pub track_volumes: Vec<f32>,
+}
+
 // ─── Дії редактора монтажу ────────────────────────────────────────────────────
 
 /// Дії що редактор монтажу повертає для обробки в app.rs за кожен кадр
@@ -127,10 +306,12 @@ pub struct MontageEditorActions {
     pub regen_action: Option<crate::gui::gallery::RegenAction>,
     /// Запит на відкриття Stock Picker для вказаного індексу сегмента
     pub open_stock_picker: Option<usize>,
+    /// Нові налаштування якості/FPS превʼю, якщо користувач змінив їх у топбарі
+    pub preview_render_changed: Option<PreviewRenderSettings>,
 }
 
 impl Default for MontageEditorActions {
     fn default() -> Self {
-        Self { animate_paths: vec![], regen_action: None, open_stock_picker: None }
+        Self { animate_paths: vec![], regen_action: None, open_stock_picker: None, preview_render_changed: None }
     }
 }
