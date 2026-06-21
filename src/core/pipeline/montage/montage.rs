@@ -98,6 +98,9 @@ pub fn run_montage(
         segments: Vec<SegTiming>,
         #[serde(default)]
         overlay_tracks: Vec<OverlayTrack>,
+        /// Індекс фонової доріжки — є тільки в новому форматі (збережено save_to_timeline).
+        /// None = старий формат (до f496eae): segments містить overlay, overlay_tracks — фон.
+        background_track_idx: Option<u64>,
     }
     fn default_volume() -> f64 { 1.0 }
 
@@ -152,7 +155,50 @@ pub fn run_montage(
 
     if timeline_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&timeline_path) {
-            if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
+            if let Ok(mut tl) = serde_json::from_str::<Timeline>(&content) {
+                // Міграція старого формату (до f496eae): background_track_idx відсутній →
+                // segments містив overlay (track 0), overlay_tracks[track_idx=1] — фонові кліпи.
+                // Якщо поле відсутнє І є overlay_track з track_idx > 0, міняємо місцями.
+                if tl.background_track_idx.is_none() {
+                    // Фон — завжди найнижчий шар = найбільший track_idx
+                    let bg_ot_pos = tl.overlay_tracks.iter()
+                        .enumerate()
+                        .filter(|(_, ot)| ot.track_idx > 0)
+                        .max_by_key(|(_, ot)| ot.track_idx)
+                        .map(|(i, _)| i);
+                    if let Some(bg_ot_pos) = bg_ot_pos {
+                        let bg_ot = tl.overlay_tracks.remove(bg_ot_pos);
+                        let old_segs = std::mem::replace(&mut tl.segments, bg_ot.segments
+                            .into_iter()
+                            .map(|s| SegTiming {
+                                start_secs: s.start_secs,
+                                end_secs: s.end_secs,
+                                media: s.media,
+                                trim_start: s.trim_start,
+                                overlap_transition: "fade".to_string(),
+                            })
+                            .collect());
+                        // Старі segments (overlay) → overlay_tracks[0]
+                        if !old_segs.is_empty() {
+                            tl.overlay_tracks.insert(0, OverlayTrack {
+                                track_idx: 0,
+                                segments: old_segs.into_iter().map(|s| OverlaySeg {
+                                    start_secs: s.start_secs,
+                                    end_secs: s.end_secs,
+                                    media: s.media,
+                                    trim_start: s.trim_start,
+                                    scale: 1.0,
+                                    pos_x: 0.0,
+                                    pos_y: 0.0,
+                                    opacity: 1.0,
+                                    is_embedded_audio: false,
+                                }).collect(),
+                            });
+                        }
+                        log_fn("timeline.json: старий формат виявлено — фон/overlay переставлено автоматично");
+                    }
+                }
+
                 total_dur = tl.total_duration_secs;
                 audio_start_secs = tl.audio_start_secs;
                 voiceover_volume = tl.voiceover_volume;
@@ -576,6 +622,12 @@ pub fn run_montage(
         x: i32,
         y: i32,
         is_video: bool,
+        /// Тривалість fade-in на початку кліпу (перекриття з попереднім), 0 = немає
+        fade_in_dur: f64,
+        /// Відносний час початку fade-out (від 0 = початок кліпу), 0 = немає
+        fade_out_start: f64,
+        /// Тривалість fade-out в кінці (перекриття з наступним), 0 = немає
+        fade_out_dur: f64,
     }
 
     let mut overlay_items: Vec<OverlayItem> = Vec::new();
@@ -586,7 +638,11 @@ pub fn run_montage(
     overlay_tracks.sort_by(|a, b| b.track_idx.cmp(&a.track_idx));
 
     for track in &overlay_tracks {
-        for seg in &track.segments {
+        // Відсортовані сегменти треку — потрібно для визначення overlap між сусідами
+        let mut track_segs: Vec<&OverlaySeg> = track.segments.iter().collect();
+        track_segs.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+
+        for (j, seg) in track_segs.iter().enumerate() {
             let media_path_str = match &seg.media {
                 Some(m) if !m.is_empty() => m.clone(),
                 _ => continue,
@@ -610,13 +666,31 @@ pub fn run_montage(
             let x = (cx - w as f64 / 2.0).round() as i32;
             let y = (cy - h as f64 / 2.0).round() as i32;
 
+            // Обчислюємо fade-параметри на основі overlap із сусідніми кліпами
+            let clip_dur = seg.end_secs - seg.start_secs;
+            let fade_in_dur = if j > 0 {
+                let prev = track_segs[j - 1];
+                let overlap = prev.end_secs - seg.start_secs;
+                if overlap > 0.001 { overlap.clamp(0.05, clip_dur * 0.49) } else { 0.0 }
+            } else { 0.0 };
+            let fade_out_dur = if j + 1 < track_segs.len() {
+                let next = track_segs[j + 1];
+                let overlap = seg.end_secs - next.start_secs;
+                if overlap > 0.001 { overlap.clamp(0.05, clip_dur * 0.49) } else { 0.0 }
+            } else { 0.0 };
+            let fade_out_start = if fade_out_dur > 0.0 { (clip_dur - fade_out_dur).max(0.0) } else { 0.0 };
+
             let input_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
             overlay_input_paths.push((media_path_str.clone(), is_vid));
 
-            log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s",
-                seg.start_secs, seg.end_secs));
+            log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s fade_in={:.2} fade_out={:.2}",
+                seg.start_secs, seg.end_secs, fade_in_dur, fade_out_dur));
 
-            overlay_items.push(OverlayItem { input_idx, start: seg.start_secs, end: seg.end_secs, trim_start: seg.trim_start, w: w as i32, h: h as i32, x, y, is_video: is_vid });
+            overlay_items.push(OverlayItem {
+                input_idx, start: seg.start_secs, end: seg.end_secs,
+                trim_start: seg.trim_start, w: w as i32, h: h as i32, x, y, is_video: is_vid,
+                fade_in_dur, fade_out_start, fade_out_dur,
+            });
         }
     }
 
@@ -671,15 +745,35 @@ pub fn run_montage(
                 let out_label = format!("v_ol_{i}");
                 let prep = format!("v_ol_{i}_prep");
 
+                // Будуємо ланцюжок fade-фільтрів для alpha-crossfade в зонах overlap
+                let has_fade = ov.fade_in_dur > 0.001 || ov.fade_out_dur > 0.001;
+                let mut fade_chain = String::new();
+                if ov.fade_in_dur > 0.001 {
+                    fade_chain.push_str(&format!(
+                        ",fade=type=in:start_time=0:duration={:.6}:alpha=1",
+                        ov.fade_in_dur
+                    ));
+                }
+                if ov.fade_out_dur > 0.001 {
+                    fade_chain.push_str(&format!(
+                        ",fade=type=out:start_time={:.6}:duration={:.6}:alpha=1",
+                        ov.fade_out_start, ov.fade_out_dur
+                    ));
+                }
+                // yuva420p потрібен для alpha-blend через overlay; без fade використовуємо yuv420p
+                let pix_fmt = if has_fade { "yuva420p" } else { "yuv420p" };
+
                 if ov.is_video {
                     let ov_dur = ov.end - ov.start;
                     let enable_expr = format!("between(t,{:.6},{:.6})", ov.start, ov.end);
-                    // settb до setpts — нормалізуємо timebase перед обчисленням /TB
+                    // Порядок важливий: setpts=PTS-STARTPTS нормалізує до 0, потім scale/format/fade,
+                    // і лише наприкінці settb+зсув на таймлінію — щоб fade=start_time відносно початку кліпу.
                     filter_parts.push(format!(
                         "[{}:v]trim=start={trim:.6}:duration={ov_dur:.6},\
-                        setpts=PTS-STARTPTS,settb=AVTB,setpts=PTS+{start:.6}/TB,\
+                        setpts=PTS-STARTPTS,\
                         scale={w}:{h}:force_original_aspect_ratio=decrease,\
-                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps={fps},setsar=1[{prep}]",
+                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format={pix_fmt},fps={fps},setsar=1\
+                        {fade_chain},settb=AVTB,setpts=PTS+{start:.6}/TB[{prep}]",
                         ov.input_idx, trim = ov.trim_start, start = ov.start,
                     ));
                     filter_parts.push(format!(
@@ -687,11 +781,11 @@ pub fn run_montage(
                         x = ov.x, y = ov.y,
                     ));
                 } else {
-                    // Зображення (-loop 1): enable= обмежує видимість часовим діапазоном
+                    // Зображення (-loop 1): PTS від 0, тому fade=start_time відносно початку зображення
                     let enable_expr = format!("between(t,{:.3},{:.3})", ov.start, ov.end);
                     filter_parts.push(format!(
                         "[{}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,\
-                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1[{prep}]",
+                        pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format={pix_fmt},setsar=1{fade_chain}[{prep}]",
                         ov.input_idx,
                     ));
                     filter_parts.push(format!(
