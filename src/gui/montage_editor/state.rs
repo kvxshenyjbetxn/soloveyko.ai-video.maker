@@ -348,15 +348,26 @@ impl MontageEditorState {
     /// Доріжка 0 → "segments" (з null-gap заглушками для чорного екрану).
     /// Доріжки 1+ → "overlay_tracks" (з трансформ-даними scale/pos_x/pos_y).
     pub fn save_to_timeline(&self) -> Result<(), std::io::Error> {
+        // Рахуємо від реального кінця кліпів — self.total_duration може містити
+        // застаріле значення з попередньої сесії і заважати скорочувати відео.
         let total_duration_secs = self.clips.iter()
             .map(|c| c.end_secs() as f64)
             .fold(0.0f64, f64::max)
-            .max(self.total_dur() as f64);
+            .max(10.0);
 
-        // ── Доріжка 0: основна послідовність ────────────────────────────────
+        // Фонова доріжка = найнижча відео-доріжка (найбільший track_idx серед відео/зображень).
+        // У редакторі нові доріжки додаються ЗВЕРХУ (index 0), тому оригінальна фонова
+        // доріжка завжди має найвищий track_idx.
+        let bg_track_idx = self.clips.iter()
+            .filter(|c| c.path.is_some() && matches!(c.kind, ClipKind::Video | ClipKind::Image))
+            .map(|c| c.track_idx)
+            .max()
+            .unwrap_or(0);
+
+        // ── Фонова доріжка (bg_track_idx): основна послідовність ────────────
         // Виключаємо візуальний кліп голосової доріжки (він обробляється окремо)
         let mut sorted0: Vec<&EditorClip> = self.clips.iter()
-            .filter(|c| c.track_idx == 0 && c.path.is_some()
+            .filter(|c| c.track_idx == bg_track_idx && c.path.is_some()
                 // Не включаємо візуальний голосовий кліп
                 && !(matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none()))
             .collect();
@@ -399,10 +410,9 @@ impl MontageEditorState {
             cursor = cursor.max(seg_end);
         }
 
-        // ── Overlay-доріжки (1+) ─────────────────────────────────────────────
-        let max_track = self.clips.iter().map(|c| c.track_idx).max().unwrap_or(0);
+        // ── Overlay-доріжки (всі вище фону, track_idx < bg_track_idx) ─────────
         let mut overlay_tracks: Vec<serde_json::Value> = Vec::new();
-        for t in 1..=max_track {
+        for t in 0..bg_track_idx {
             let mut segs: Vec<&EditorClip> = self.clips.iter()
                 .filter(|c| c.track_idx == t && c.path.is_some()
                     && !(matches!(c.kind, ClipKind::Audio) && !c.is_embedded_audio && c.pair_id.is_none()))
@@ -464,6 +474,7 @@ impl MontageEditorState {
             "track_volumes": track_vols_json,
             "segments": main_segments,
             "overlay_tracks": overlay_tracks,
+            "background_track_idx": bg_track_idx as u64,
             "external_media": external_media,
             "voice_track_idx": voice_track_idx,
         });
@@ -574,6 +585,8 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
     };
     let total = v["total_duration_secs"].as_f64().unwrap_or(10.0) as f32;
     let audio_start = v["audio_start_secs"].as_f64().unwrap_or(0.0) as f32;
+    // Індекс фонової доріжки: збережений при save_to_timeline. Для старого формату = 0.
+    let bg_track_idx = v["background_track_idx"].as_u64().unwrap_or(0) as usize;
     let mut clips = Vec::new();
 
     // Доріжка 0 з "segments"
@@ -635,7 +648,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                 });
 
             if let Some(media) = media_str {
-                let mut clip = clip_from_json_seg(seg, &media, save_path, 0);
+                let mut clip = clip_from_json_seg(seg, &media, save_path, bg_track_idx);
                 // Pipeline-формат (є "text") не містить stock_seg_idx у JSON — відновлюємо з індексу сегменту
                 if clip.stock_seg_idx.is_none() && seg["text"].as_str().is_some() {
                     clip.stock_seg_idx = Some(i);
@@ -653,7 +666,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     name: text.chars().take(24).collect::<String>(),
                     start_secs: start,
                     duration: (end - start).max(0.5),
-                    track_idx: 0,
+                    track_idx: bg_track_idx,
                     kind: ClipKind::Image,
                     scale: 1.0, pos_x: 0.0, pos_y: 0.0,
                     zoom_enabled: false, shake_enabled: false,

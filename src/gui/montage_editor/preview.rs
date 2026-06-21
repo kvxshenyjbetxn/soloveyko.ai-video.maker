@@ -613,11 +613,16 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
         draw_frame_overlay(&painter, rect, &settings, any_shake_on);
 
+        let was_dragging = editor.preview_drag.is_some();
         if sel_transform.is_some() {
             let (sel_rect, corners, _) = sel_transform.as_ref().unwrap();
             update_preview_drag(ui.ctx(), editor, rect, *sel_rect, corners);
         } else if editor.preview_drag.is_some() {
             update_preview_drag(ui.ctx(), editor, rect, Rect::NOTHING, &[]);
+        }
+        // Drag щойно завершився — зберігаємо нове position/scale у timeline.json
+        if was_dragging && editor.preview_drag.is_none() {
+            editor.save_to_timeline().ok();
         }
     });
 
