@@ -6,12 +6,14 @@ pub struct FoundFiles {
     pub text_txt: bool,
     pub voice_file: bool,
     pub subtitle_srt: bool,
-    /// Файл таймлайну агента — якщо є, агент вже відпрацював
+    /// Вихідний файл агента — якщо є, агент вже відпрацював
+    pub segments_json: bool,
+    /// Повний таймлайн з медіа (після assign_media_to_timeline)
     pub timeline_json: bool,
     pub media_images: usize,
     pub media_videos: usize,
     pub output_video: bool,
-    /// Кількість сегментів у timeline.json (очікувана кількість медіафайлів)
+    /// Кількість сегментів (очікувана кількість медіафайлів)
     pub expected_media: Option<usize>,
 }
 
@@ -35,30 +37,31 @@ impl ResumePendingData {
     pub fn new(task_name: String, found: FoundFiles, settings: crate::queue::JobSettings) -> Self {
         let keep_voiceover = found.voice_file;
         let keep_subtitles = found.subtitle_srt;
-        let keep_timeline = found.timeline_json;
+        // keep_timeline = true якщо є хоч один з файлів агента (segments.json або timeline.json)
+        let keep_timeline = found.segments_json || found.timeline_json;
         let keep_video = found.media_images > 0 || found.media_videos > 0;
         Self { task_name, found, settings, keep_voiceover, keep_subtitles, keep_timeline, keep_video }
     }
 
     /// Визначає з якого етапу фактично запустити пайплайн, з урахуванням чекбоксів.
     pub fn effective_resume_stage(&self) -> Option<crate::queue::RetryStage> {
-        // Знаходимо найбільш ранній етап що НЕ зберігається
+        let agent_file_exists = self.found.segments_json || self.found.timeline_json;
+
         if self.found.voice_file && !self.keep_voiceover {
             return Some(crate::queue::RetryStage::Voiceover);
         }
         if self.found.subtitle_srt && !self.keep_subtitles {
             return Some(crate::queue::RetryStage::Subtitles);
         }
-        // timeline.json знято → перезапустити агента (Video з агентом)
-        if self.found.timeline_json && !self.keep_timeline {
+        // Файл агента знято → перезапустити агента (Video з агентом)
+        if agent_file_exists && !self.keep_timeline {
             return Some(crate::queue::RetryStage::Video);
         }
         if (self.found.media_images > 0 || self.found.media_videos > 0) && !self.keep_video {
             return Some(crate::queue::RetryStage::Video);
         }
-        // Якщо медіа зберігаємо, але набір неповний — потрібно довантажити відсутні
-        // (аналог "Догенерувати відсутні", але автоматично при "Продовжити")
-        if self.keep_video && self.found.timeline_json {
+        // Якщо медіа зберігаємо але неповне — довантажити відсутні
+        if self.keep_video && agent_file_exists {
             if let Some(expected) = self.found.expected_media {
                 let present = self.found.media_images + self.found.media_videos;
                 if present < expected {
@@ -66,7 +69,6 @@ impl ResumePendingData {
                 }
             }
         }
-        // Всі знайдені файли зберігаємо → визначаємо по наявності відсутніх файлів
         self.found.resume_stage()
     }
 }
@@ -78,6 +80,7 @@ impl FoundFiles {
         let voice_file = task_dir.join("voice.mp3").exists()
             || task_dir.join("voice.wav").exists();
         let subtitle_srt = task_dir.join("subtitle.srt").exists();
+        let segments_json = task_dir.join("segments.json").exists();
         let timeline_json = task_dir.join("timeline.json").exists();
 
         let media_dir = task_dir.join("media");
@@ -109,19 +112,22 @@ impl FoundFiles {
             .join(format!("{}.mp4", safe_name.trim()))
             .exists();
 
-        // Рахуємо очікувану кількість медіа з timeline.json (кількість сегментів)
+        // Рахуємо очікувану кількість медіа: спочатку з timeline.json, потім з segments.json
         let expected_media = if timeline_json {
-            let timeline_path = task_dir.join("timeline.json");
-            std::fs::read_to_string(&timeline_path).ok()
+            std::fs::read_to_string(task_dir.join("timeline.json")).ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
                 .and_then(|v| v["segments"].as_array().map(|a| {
                     a.iter().filter(|seg| !seg["media"].is_null()).count()
                 }))
+        } else if segments_json {
+            std::fs::read_to_string(task_dir.join("segments.json")).ok()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .and_then(|v| v["segments"].as_array().map(|a| a.len()))
         } else {
             None
         };
 
-        Self { text_txt, voice_file, subtitle_srt, timeline_json, media_images, media_videos, output_video, expected_media }
+        Self { text_txt, voice_file, subtitle_srt, segments_json, timeline_json, media_images, media_videos, output_video, expected_media }
     }
 
     pub fn has_any(&self) -> bool {
@@ -129,6 +135,7 @@ impl FoundFiles {
         self.text_txt
             || self.voice_file
             || self.subtitle_srt
+            || self.segments_json
             || self.timeline_json
             || self.media_images > 0
             || self.media_videos > 0
@@ -137,10 +144,10 @@ impl FoundFiles {
     /// Визначає з якого етапу продовжити виходячи лише з наявних файлів
     /// (без урахування чекбоксів — для початкового стану).
     pub fn resume_stage(&self) -> Option<crate::queue::RetryStage> {
-        // output_video не враховується — навіть якщо є готове відео, визначаємо етап по проміжних файлах
+        // output_video не враховується — визначаємо по проміжних файлах
         if self.media_images > 0 || self.media_videos > 0 {
             Some(crate::queue::RetryStage::Montage)
-        } else if self.timeline_json {
+        } else if self.segments_json || self.timeline_json {
             // Агент вже відпрацював — продовжуємо з пошуку медіа (без агента)
             Some(crate::queue::RetryStage::Video)
         } else if self.subtitle_srt {
@@ -185,11 +192,13 @@ pub fn draw_resume_dialog(
         let text_txt      = data.found.text_txt;
         let voice_file    = data.found.voice_file;
         let subtitle_srt  = data.found.subtitle_srt;
+        let segments_json = data.found.segments_json;
         let timeline_json = data.found.timeline_json;
         let media_images  = data.found.media_images;
         let media_videos  = data.found.media_videos;
         let output_video  = data.found.output_video;
         let expected_media = data.found.expected_media;
+        let agent_file_exists = segments_json || timeline_json;
 
         let mut keep_vo = data.keep_voiceover;
         let mut keep_su = data.keep_subtitles;
@@ -201,7 +210,7 @@ pub fn draw_resume_dialog(
             let temp = ResumePendingData {
                 task_name: String::new(),
                 found: FoundFiles {
-                    text_txt, voice_file, subtitle_srt, timeline_json,
+                    text_txt, voice_file, subtitle_srt, segments_json, timeline_json,
                     media_images, media_videos, output_video, expected_media,
                 },
                 settings: data.settings.clone(),
@@ -284,12 +293,17 @@ pub fn draw_resume_dialog(
                     });
                 }
 
-                // Таймлайн агента — з чекбоксом
-                if timeline_json {
+                // Файл агента (segments.json або timeline.json) — з чекбоксом
+                if agent_file_exists {
+                    let file_hint = match (segments_json, timeline_json) {
+                        (true, true)  => "segments.json + timeline.json",
+                        (true, false) => "segments.json",
+                        _             => "timeline.json",
+                    };
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut keep_tl, "");
                         ui.label(translate(language, "resume_timeline"));
-                        ui.label(egui::RichText::new("timeline.json").color(weak).size(11.0));
+                        ui.label(egui::RichText::new(file_hint).color(weak).size(11.0));
                     });
                 }
 
@@ -361,10 +375,10 @@ pub fn draw_resume_dialog(
 
                 ui.add_space(10.0);
 
-                // Кнопка "Догенерувати відсутні" — тільки якщо є timeline.json і медіа неповні
+                // Кнопка "Догенерувати відсутні" — якщо є файл агента і медіа неповні
                 let missing_count = expected_media.and_then(|exp| {
                     let present = media_images + media_videos;
-                    if timeline_json && present < exp { Some(exp - present) } else { None }
+                    if agent_file_exists && present < exp { Some(exp - present) } else { None }
                 });
 
                 if let Some(missing) = missing_count {
