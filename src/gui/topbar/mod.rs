@@ -122,6 +122,7 @@ pub fn draw_status_bar(
     gemini_max_threads: usize,
     codex_max_threads: usize,
     agy_max_threads: usize,
+    pi_max_threads: usize,
     edge_tts_max_threads: usize,
     ffmpeg_max_threads: usize,
     googler_image_max_threads: usize,
@@ -159,6 +160,7 @@ pub fn draw_status_bar(
                 if thread_chip(ui, "Claude", crate::api::claude::ClaudeLimiter::get().active_count(), claude_max_threads) { open_threads = true; }
                 if thread_chip(ui, "Codex", crate::api::codex::CodexLimiter::get().active_count(), codex_max_threads) { open_threads = true; }
                 if thread_chip(ui, "AGY", crate::api::agy::AgyLimiter::get().active_count(), agy_max_threads) { open_threads = true; }
+                if thread_chip(ui, "Pi", crate::api::pi::PiLimiter::get().active_count(), pi_max_threads) { open_threads = true; }
                 if thread_chip(ui, "OR", crate::api::openrouter::OpenRouterLimiter::get().active_count(), openrouter_max_threads) { open_threads = true; }
             });
             if open_threads { *threads_window_open = true; }

@@ -177,6 +177,7 @@ pub fn draw_threads_window(
     gemini_max_threads: &mut usize,
     codex_max_threads: &mut usize,
     agy_max_threads: &mut usize,
+    pi_max_threads: &mut usize,
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     edge_tts_max_threads: &mut usize,
     googler_image_max_threads: &mut usize,
@@ -304,6 +305,29 @@ pub fn draw_threads_window(
                     if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
                         *agy_max_threads = val;
                         crate::api::agy::AgyLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- Pi CLI ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Pi CLI").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::pi::PiLimiter::get().active_count(), *pi_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_pi_threads"));
+                    let mut val = *pi_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
+                        *pi_max_threads = val;
+                        crate::api::pi::PiLimiter::get().set_max_threads(val);
                     }
                 });
             });

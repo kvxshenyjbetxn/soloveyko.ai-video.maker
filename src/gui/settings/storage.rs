@@ -31,6 +31,8 @@ fn default_video_llm_model_codex() -> String { "gpt-5.4-mini".to_string() }
 fn default_codex_max_threads() -> usize { 5 }
 fn default_model_agy() -> String { "gemini-3.5-flash".to_string() }
 fn default_agy_max_threads() -> usize { 5 }
+fn default_model_pi() -> String { "gemini-2.5-flash".to_string() }
+fn default_pi_max_threads() -> usize { 5 }
 fn default_edge_tts_voice() -> String { "uk-UA-PolinaNeural".to_string() }
 fn default_edge_tts_rate() -> String { "0".to_string() }
 fn default_edge_tts_pitch() -> String { "0".to_string() }
@@ -163,6 +165,9 @@ pub struct AppSettings {
     /// Обрана модель AGY
     #[serde(default = "default_model_agy")]
     pub translation_model_agy: String,
+    /// Обрана модель Pi
+    #[serde(default = "default_model_pi")]
+    pub translation_model_pi: String,
     /// Обраний сервіс для генерації відеоряду ("Googler")
     #[serde(default = "default_video_service")]
     pub video_service: String,
@@ -205,6 +210,9 @@ pub struct AppSettings {
     /// Максимальна кількість потоків для AGY CLI
     #[serde(default = "default_agy_max_threads")]
     pub agy_max_threads: usize,
+    /// Максимальна кількість потоків для Pi CLI
+    #[serde(default = "default_pi_max_threads")]
+    pub pi_max_threads: usize,
     /// Чи показувати вікно привітання при наступному запуску
     #[serde(default = "default_show_welcome")]
     pub show_welcome: bool,
@@ -364,6 +372,9 @@ pub struct AppSettings {
     /// Модель AGY для відео-промтів
     #[serde(default = "default_model_agy")]
     pub video_llm_model_agy: String,
+    /// Модель Pi для відео-промтів
+    #[serde(default = "default_model_pi")]
+    pub video_llm_model_pi: String,
     /// Температура ЛЛМ для відео-промтів (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub video_llm_temperature: f32,
@@ -423,6 +434,7 @@ impl Default for AppSettings {
             translation_model_gemini: "gemini-2.5-flash".to_string(),
             translation_model_codex: "gpt-5.4-mini".to_string(),
             translation_model_agy: "default".to_string(),
+            translation_model_pi: "gemini-2.5-flash".to_string(),
             video_service: "Googler".to_string(),
             text_split_mode: "paragraphs".to_string(),
             text_split_mode_openrouter: "paragraphs".to_string(),
@@ -437,6 +449,7 @@ impl Default for AppSettings {
             gemini_max_threads: 5,
             codex_max_threads: 5,
             agy_max_threads: 5,
+            pi_max_threads: 5,
             show_welcome: true,
             edge_tts_voice: "uk-UA-PolinaNeural".to_string(),
             edge_tts_rate: "0".to_string(),
@@ -490,6 +503,7 @@ impl Default for AppSettings {
             video_llm_model_gemini: "gemini-2.5-flash".to_string(),
             video_llm_model_codex: "gpt-5.4-mini".to_string(),
             video_llm_model_agy: "default".to_string(),
+            video_llm_model_pi: "gemini-2.5-flash".to_string(),
             video_llm_temperature: 0.7,
             overlay_triggers_enabled: false,
             overlay_triggers: vec![],
@@ -653,6 +667,9 @@ pub struct PipelineTemplate {
     /// Обрана модель AGY
     #[serde(default = "default_model_agy")]
     pub translation_model_agy: String,
+    /// Обрана модель Pi
+    #[serde(default = "default_model_pi")]
+    pub translation_model_pi: String,
     /// Обраний сервіс для генерації відеоряду
     #[serde(default = "default_video_service")]
     pub video_service: String,
@@ -827,6 +844,9 @@ pub struct PipelineTemplate {
     /// Модель AGY для відео-промтів
     #[serde(default = "default_model_agy")]
     pub video_llm_model_agy: String,
+    /// Модель Pi для відео-промтів
+    #[serde(default = "default_model_pi")]
+    pub video_llm_model_pi: String,
     /// Температура ЛЛМ для відео-промтів
     #[serde(default = "default_temperature")]
     pub video_llm_temperature: f32,
@@ -876,6 +896,7 @@ pub fn save_template(
     translation_model_gemini: &str,
     translation_model_codex: &str,
     translation_model_agy: &str,
+    translation_model_pi: &str,
     video_service: &str,
     text_split_mode: &str,
     text_split_mode_openrouter: &str,
@@ -932,6 +953,7 @@ pub fn save_template(
     video_llm_model_gemini: &str,
     video_llm_model_codex: &str,
     video_llm_model_agy: &str,
+    video_llm_model_pi: &str,
     video_llm_temperature: f32,
     overlay_triggers_enabled: bool,
     overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
@@ -969,6 +991,7 @@ pub fn save_template(
             translation_model_gemini: translation_model_gemini.to_string(),
             translation_model_codex: translation_model_codex.to_string(),
             translation_model_agy: translation_model_agy.to_string(),
+            translation_model_pi: translation_model_pi.to_string(),
             video_service: video_service.to_string(),
             text_split_mode: text_split_mode.to_string(),
             text_split_mode_openrouter: text_split_mode_openrouter.to_string(),
@@ -1025,6 +1048,7 @@ pub fn save_template(
             video_llm_model_gemini: video_llm_model_gemini.to_string(),
             video_llm_model_codex: video_llm_model_codex.to_string(),
             video_llm_model_agy: video_llm_model_agy.to_string(),
+            video_llm_model_pi: video_llm_model_pi.to_string(),
             video_llm_temperature,
             overlay_triggers_enabled,
             overlay_triggers,

@@ -444,6 +444,59 @@ pub fn set_no_window(cmd: &mut std::process::Command) {
     let _ = cmd;
 }
 
+/// На Windows шукає npm .cmd файл у типових директоріях (APPDATA\npm\).
+/// Повертає повний шлях до .cmd файлу, якщо знайдено.
+#[cfg(target_os = "windows")]
+pub fn find_npm_cmd_windows(name: &str) -> Option<String> {
+    let cmd_name = format!("{}.cmd", name);
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let p = format!("{}\\npm\\{}", appdata, cmd_name);
+        if std::path::Path::new(&p).exists() { return Some(p); }
+    }
+    if let Ok(localdata) = std::env::var("LOCALAPPDATA") {
+        let p = format!("{}\\npm\\{}", localdata, cmd_name);
+        if std::path::Path::new(&p).exists() { return Some(p); }
+    }
+    None
+}
+
+/// На Windows шукає node.js скрипт npm-пакету та повертає (node_exe, script_path).
+/// Читає pi.cmd щоб знайти реальний JS файл — надійніше ніж запуск через cmd /C.
+#[cfg(target_os = "windows")]
+pub fn find_npm_node_script_windows(cmd_name: &str) -> Option<(String, String)> {
+    let cmd_path = find_npm_cmd_windows(cmd_name)?;
+
+    // Читаємо .cmd файл і витягуємо шлях до JS скрипту зі рядка виду:
+    // "%_prog%"  "%dp0%\node_modules\pkg\dist\cli.js" %*
+    let content = std::fs::read_to_string(&cmd_path).ok()?;
+    let script_path = content.lines()
+        .find(|l| l.contains("node_modules") && l.contains(".js"))?
+        // витягуємо шлях між другою парою лапок
+        .split('"')
+        .find(|s| s.contains("node_modules") && s.ends_with(".js"))?
+        // %dp0% розгортаємо у реальну директорію npm
+        .replace("%dp0%", &std::path::Path::new(&cmd_path).parent()?.to_string_lossy());
+
+    if !std::path::Path::new(&script_path).exists() {
+        return None;
+    }
+
+    // Шукаємо node.exe — спочатку поряд з npm, потім Program Files
+    let npm_dir = std::path::Path::new(&cmd_path).parent()?;
+    let node_candidates = [
+        npm_dir.join("node.exe").to_string_lossy().into_owned(),
+        "C:\\Program Files\\nodejs\\node.exe".to_string(),
+        "C:\\Program Files (x86)\\nodejs\\node.exe".to_string(),
+    ];
+    let node_exe = node_candidates
+        .iter()
+        .find(|p| std::path::Path::new(p.as_str()).exists())
+        .cloned()
+        .unwrap_or_else(|| "node".to_string()); // fallback: шукає у PATH
+
+    Some((node_exe, script_path))
+}
+
 /// Шукає бінарник у типових місцях macOS (PATH з терміналу недоступний у .app).
 #[cfg(target_os = "macos")]
 pub fn find_binary_macos(name: &str) -> String {

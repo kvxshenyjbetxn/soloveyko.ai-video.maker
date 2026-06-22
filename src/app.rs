@@ -158,6 +158,8 @@ pub struct VideoMakerApp {
     pub translation_model_codex: String,
     /// ID обраної моделі AGY.
     pub translation_model_agy: String,
+    /// ID обраної моделі Pi.
+    pub translation_model_pi: String,
     /// Рядок пошуку у дропдауні вибору моделі (ephemeral UI state).
     pub translation_model_search: String,
     /// Список моделей OpenRouter, завантажених у фоні.
@@ -211,6 +213,8 @@ pub struct VideoMakerApp {
     pub video_llm_model_codex: String,
     /// Модель AGY для відео-промтів.
     pub video_llm_model_agy: String,
+    /// Модель Pi для відео-промтів.
+    pub video_llm_model_pi: String,
     /// Температура ЛЛМ для відео-промтів.
     pub video_llm_temperature: f32,
     /// Рядок пошуку у дропдауні вибору моделі ЛЛМ відеоряду.
@@ -267,6 +271,8 @@ pub struct VideoMakerApp {
     pub codex_max_threads: usize,
     /// Максимальна кількість потоків для AGY CLI.
     pub agy_max_threads: usize,
+    /// Максимальна кількість потоків для Pi CLI.
+    pub pi_max_threads: usize,
     /// Чи відкрите вікно привітання.
     pub welcome_open: bool,
     /// Галочка "не показувати при наступному запуску" у вікні привітання.
@@ -476,6 +482,7 @@ impl Default for VideoMakerApp {
             translation_model_gemini: "gemini-2.5-flash".to_string(),
             translation_model_codex: "gpt-5.4-mini".to_string(),
             translation_model_agy: "gemini-3.5-flash".to_string(),
+            translation_model_pi: "gemini-2.5-flash".to_string(),
             translation_model_search: String::new(),
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
@@ -502,6 +509,7 @@ impl Default for VideoMakerApp {
             video_llm_model_gemini: "gemini-2.5-flash".to_string(),
             video_llm_model_codex: "gpt-5.4-mini".to_string(),
             video_llm_model_agy: "gemini-3.5-flash".to_string(),
+            video_llm_model_pi: "gemini-2.5-flash".to_string(),
             video_llm_temperature: 0.7,
             video_llm_model_search: String::new(),
             googler_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
@@ -530,6 +538,7 @@ impl Default for VideoMakerApp {
             gemini_max_threads: 5,
             codex_max_threads: 5,
             agy_max_threads: 5,
+            pi_max_threads: 5,
             welcome_open: false,
             welcome_dont_show: false,
             tool_checks: crate::gui::welcome::ToolChecks::new(),
@@ -663,6 +672,7 @@ impl VideoMakerApp {
         let mut translation_model_gemini = saved.translation_model_gemini.clone();
         let mut translation_model_codex = saved.translation_model_codex.clone();
         let mut translation_model_agy = saved.translation_model_agy.clone();
+        let mut translation_model_pi = saved.translation_model_pi.clone();
 
         // Зворотна сумісність: якщо завантажені окремі слоти порожні, але є загальне поле translation_model
         if translation_model_openrouter.is_empty() && translation_service == "OpenRouter" {
@@ -696,6 +706,13 @@ impl VideoMakerApp {
                 "default".to_string()
             };
         }
+        if translation_model_pi.is_empty() {
+            translation_model_pi = if translation_service == "Pi CLI" {
+                translation_model.clone()
+            } else {
+                "gemini-2.5-flash".to_string()
+            };
+        }
 
         let video_service = saved.video_service.clone();
         let video_media_type = saved.video_media_type.clone();
@@ -712,6 +729,7 @@ impl VideoMakerApp {
         let video_llm_model_gemini = saved.video_llm_model_gemini.clone();
         let video_llm_model_codex = saved.video_llm_model_codex.clone();
         let video_llm_model_agy = saved.video_llm_model_agy.clone();
+        let video_llm_model_pi = saved.video_llm_model_pi.clone();
         let video_llm_temperature = saved.video_llm_temperature;
         // Відновлюємо активну модель залежно від збереженого сервісу
         let video_llm_model = match video_llm_service.as_str() {
@@ -725,6 +743,7 @@ impl VideoMakerApp {
             "Gemini CLI"  => video_llm_model_gemini.clone(),
             "Codex CLI"   => video_llm_model_codex.clone(),
             "AGY CLI"     => video_llm_model_agy.clone(),
+            "Pi CLI"      => video_llm_model_pi.clone(),
             _             => saved.video_llm_model.clone(),
         };
         let googler_image_priority = saved.googler_image_priority.clone();
@@ -748,6 +767,7 @@ impl VideoMakerApp {
         let gemini_max_threads = saved.gemini_max_threads;
         let codex_max_threads = saved.codex_max_threads;
         let agy_max_threads = saved.agy_max_threads;
+        let pi_max_threads = saved.pi_max_threads;
         let show_welcome = saved.show_welcome;
 
         // Налаштовуємо глобальний лімітер одночасних запитів OpenRouter
@@ -760,6 +780,8 @@ impl VideoMakerApp {
         crate::api::codex::CodexLimiter::get().set_max_threads(codex_max_threads);
         // Налаштовуємо глобальний лімітер одночасних запитів AGY CLI
         crate::api::agy::AgyLimiter::get().set_max_threads(agy_max_threads);
+        // Налаштовуємо глобальний лімітер одночасних запитів Pi CLI
+        crate::api::pi::PiLimiter::get().set_max_threads(pi_max_threads);
         // Налаштовуємо глобальний лімітер одночасних запитів Edge TTS
         crate::api::edgetts::EdgeTTSLimiter::get().set_max_threads(saved.edge_tts_max_threads);
         // Налаштовуємо глобальний лімітер одночасних процесів FFmpeg
@@ -869,6 +891,7 @@ impl VideoMakerApp {
             translation_model_gemini,
             translation_model_codex,
             translation_model_agy,
+            translation_model_pi,
             translation_model_search: String::new(),
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
@@ -896,6 +919,7 @@ impl VideoMakerApp {
             video_llm_model_gemini,
             video_llm_model_codex,
             video_llm_model_agy,
+            video_llm_model_pi,
             video_llm_temperature,
             video_llm_model_search: String::new(),
             googler_image_priority,
@@ -924,6 +948,7 @@ impl VideoMakerApp {
             gemini_max_threads,
             codex_max_threads,
             agy_max_threads,
+            pi_max_threads,
             welcome_open: show_welcome,
             welcome_dont_show: false,
             tool_checks,
@@ -1035,6 +1060,7 @@ impl VideoMakerApp {
             translation_model_gemini: self.translation_model_gemini.clone(),
             translation_model_codex: self.translation_model_codex.clone(),
             translation_model_agy: self.translation_model_agy.clone(),
+            translation_model_pi: self.translation_model_pi.clone(),
             video_service: self.video_service.clone(),
             text_split_mode: self.text_split_mode.clone(),
             text_split_mode_openrouter: self.text_split_mode_openrouter.clone(),
@@ -1094,6 +1120,7 @@ impl VideoMakerApp {
             video_llm_model_gemini: self.video_llm_model_gemini.clone(),
             video_llm_model_codex: self.video_llm_model_codex.clone(),
             video_llm_model_agy: self.video_llm_model_agy.clone(),
+            video_llm_model_pi: self.video_llm_model_pi.clone(),
             video_llm_temperature: self.video_llm_temperature,
             overlay_triggers_enabled: self.overlay_triggers_enabled,
             overlay_triggers: self.overlay_triggers.clone(),
@@ -1362,6 +1389,7 @@ impl eframe::App for VideoMakerApp {
             &mut self.gemini_max_threads,
             &mut self.codex_max_threads,
             &mut self.agy_max_threads,
+            &mut self.pi_max_threads,
             &self.voicebot_balance,
             &mut self.edge_tts_max_threads,
             &mut self.googler_image_max_threads,
@@ -1377,6 +1405,7 @@ impl eframe::App for VideoMakerApp {
             self.gemini_max_threads,
             self.codex_max_threads,
             self.agy_max_threads,
+            self.pi_max_threads,
             self.edge_tts_max_threads,
             self.ffmpeg_max_threads,
             self.googler_image_max_threads,
@@ -1478,6 +1507,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.translation_model_gemini,
                         &mut self.translation_model_codex,
                         &mut self.translation_model_agy,
+                        &mut self.translation_model_pi,
                         &mut self.translation_model_search,
                         &self.openrouter_models,
                         &self.openrouter_models_loading,
@@ -1497,6 +1527,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.video_llm_model_gemini,
                         &mut self.video_llm_model_codex,
                         &mut self.video_llm_model_agy,
+                        &mut self.video_llm_model_pi,
                         &mut self.video_llm_temperature,
                         &mut self.video_llm_model_search,
                         &mut self.translation_temperature,
@@ -2324,6 +2355,7 @@ impl eframe::App for VideoMakerApp {
                 || self.translation_model_gemini != self.last_saved_settings.translation_model_gemini
                 || self.translation_model_codex != self.last_saved_settings.translation_model_codex
                 || self.translation_model_agy != self.last_saved_settings.translation_model_agy
+                || self.translation_model_pi != self.last_saved_settings.translation_model_pi
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.assemblyai_key != self.last_saved_settings.assemblyai_key
                 || self.pexels_key != self.last_saved_settings.pexels_key
@@ -2341,6 +2373,7 @@ impl eframe::App for VideoMakerApp {
                 || self.video_llm_model_gemini != self.last_saved_settings.video_llm_model_gemini
                 || self.video_llm_model_codex != self.last_saved_settings.video_llm_model_codex
                 || self.video_llm_model_agy != self.last_saved_settings.video_llm_model_agy
+                || self.video_llm_model_pi != self.last_saved_settings.video_llm_model_pi
                 || self.video_llm_temperature != self.last_saved_settings.video_llm_temperature
                 || self.text_split_mode != self.last_saved_settings.text_split_mode
                 || self.text_split_char_limit != self.last_saved_settings.text_split_char_limit
@@ -2352,6 +2385,7 @@ impl eframe::App for VideoMakerApp {
                 || self.gemini_max_threads != self.last_saved_settings.gemini_max_threads
                 || self.codex_max_threads != self.last_saved_settings.codex_max_threads
                 || self.agy_max_threads != self.last_saved_settings.agy_max_threads
+                || self.pi_max_threads != self.last_saved_settings.pi_max_threads
                 || self.edge_tts_voice != self.last_saved_settings.edge_tts_voice
                 || self.edge_tts_rate != self.last_saved_settings.edge_tts_rate
                 || self.edge_tts_pitch != self.last_saved_settings.edge_tts_pitch
@@ -2432,6 +2466,7 @@ impl eframe::App for VideoMakerApp {
                     translation_model_gemini: self.translation_model_gemini.clone(),
                     translation_model_codex: self.translation_model_codex.clone(),
                     translation_model_agy: self.translation_model_agy.clone(),
+                    translation_model_pi: self.translation_model_pi.clone(),
                     video_service: self.video_service.clone(),
                     video_media_type: self.video_media_type.clone(),
                     text_split_mode: self.text_split_mode.clone(),
@@ -2448,6 +2483,7 @@ impl eframe::App for VideoMakerApp {
                     video_llm_model_gemini: self.video_llm_model_gemini.clone(),
                     video_llm_model_codex: self.video_llm_model_codex.clone(),
                     video_llm_model_agy: self.video_llm_model_agy.clone(),
+                    video_llm_model_pi: self.video_llm_model_pi.clone(),
                     video_llm_temperature: self.video_llm_temperature,
                     translation_temperature: self.translation_temperature,
                     translation_service: self.translation_service.clone(),
@@ -2459,6 +2495,7 @@ impl eframe::App for VideoMakerApp {
                     gemini_max_threads: self.gemini_max_threads,
                     codex_max_threads: self.codex_max_threads,
                     agy_max_threads: self.agy_max_threads,
+                    pi_max_threads: self.pi_max_threads,
                     edge_tts_voice: self.edge_tts_voice.clone(),
                     edge_tts_rate: self.edge_tts_rate.clone(),
                     edge_tts_pitch: self.edge_tts_pitch.clone(),

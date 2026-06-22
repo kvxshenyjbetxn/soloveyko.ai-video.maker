@@ -155,7 +155,8 @@ pub fn draw_queue_jobs_list(
                                     && (job.settings.video_llm_service == "Claude Code"
                                         || job.settings.video_llm_service == "Gemini CLI"
                                         || job.settings.video_llm_service == "Codex CLI"
-                                        || job.settings.video_llm_service == "AGY CLI");
+                                        || job.settings.video_llm_service == "AGY CLI"
+                                        || job.settings.video_llm_service == "Pi CLI");
                                 if is_agent_mode {
                                     let chat_btn = ui.button(
                                         egui::RichText::new("💬").size(11.0),

@@ -153,6 +153,8 @@ pub fn call_llm(
         crate::api::codex::call_codex(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
     } else if service == "AGY CLI" {
         crate::api::agy::call_agy_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+    } else if service == "Pi CLI" {
+        crate::api::pi::call_pi_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
     } else {
         call_openrouter(key, model, user_content, temperature, job_info)
     }

@@ -1041,7 +1041,8 @@ fn run_video_branch(
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
         || settings.video_llm_service == "Codex CLI"
-        || settings.video_llm_service == "AGY CLI";
+        || settings.video_llm_service == "AGY CLI"
+        || settings.video_llm_service == "Pi CLI";
 
     // Визначаємо текст: перекладений якщо є, інакше оригінал
     let source_text = if settings.translation_enabled {
@@ -1517,6 +1518,8 @@ fn run_agent_timeline(
     job_id: u64,
     job_name: &str,
     settings: &crate::queue::JobSettings,
+    status: Arc<Mutex<crate::queue::JobStatus>>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: &egui::Context,
@@ -1619,13 +1622,45 @@ fn run_agent_timeline(
         save_agent_session_to_file(save_dir, sess);
     }
 
-    if !segments_path.exists() {
-        return Err("Agent did not create segments.json".to_string());
+    // Якщо segments.json відсутній або невалідний — ставимо на паузу замість провалу.
+    // Користувач може продовжити розмову в чаті та натиснути «Продовжити пайплайн».
+    loop {
+        let validation_err = if !segments_path.exists() {
+            Some("segments.json не створено агентом".to_string())
+        } else {
+            match std::fs::read_to_string(&segments_path) {
+                Err(e) => Some(format!("Не вдалося прочитати segments.json: {}", e)),
+                Ok(content) => {
+                    match serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content) {
+                        Err(e) => Some(format!("segments.json невалідний: {}", e)),
+                        Ok(_) => None,
+                    }
+                }
+            }
+        };
+
+        if let Some(err_msg) = validation_err {
+            crate::logger::log_job(job_id, job_name,
+                &format!("Agent: {} — очікуємо підтвердження від користувача...", err_msg));
+            *status.lock().unwrap() = crate::queue::JobStatus::AwaitingAgentControl;
+            ctx.request_repaint();
+
+            // Чекаємо поки користувач натисне «Продовжити пайплайн» у вікні чату
+            let (lock, cvar) = &*agent_control_resume;
+            let mut resumed = lock.lock().unwrap();
+            while !*resumed {
+                resumed = cvar.wait(resumed).unwrap();
+            }
+            *resumed = false;
+
+            crate::logger::log_job(job_id, job_name, "Продовжуємо перевірку segments.json...");
+            *status.lock().unwrap() = crate::queue::JobStatus::Running;
+            ctx.request_repaint();
+            // Повторюємо перевірку
+        } else {
+            break;
+        }
     }
-    let content = std::fs::read_to_string(&segments_path)
-        .map_err(|e| format!("Cannot read agent segments.json: {}", e))?;
-    serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
-        .map_err(|e| format!("Agent segments.json is invalid: {}", e))?;
 
     crate::logger::log_job(job_id, job_name, "Agent segments.json created and validated.");
     ctx.request_repaint();
@@ -1667,6 +1702,8 @@ pub fn call_agent_new_session_streaming(
         crate::api::codex::call_codex_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else if service == "AGY CLI" {
         crate::api::agy::call_agy_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
+    } else if service == "Pi CLI" {
+        crate::api::pi::call_pi_new_session_streaming(model, prompt, session_id, job_info, working_dir, on_chunk)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
@@ -1689,6 +1726,8 @@ pub fn call_agent_resume(
         crate::api::codex::call_codex_resume(model, message, session_id, job_info, working_dir)
     } else if service == "AGY CLI" {
         crate::api::agy::call_agy_resume(model, message, session_id, job_info, working_dir)
+    } else if service == "Pi CLI" {
+        crate::api::pi::call_pi_resume(model, message, session_id, job_info, working_dir)
     } else {
         Err(format!("Agent sessions not supported for service: {}", service))
     }
@@ -1783,7 +1822,7 @@ pub fn run_pipeline(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
-    _agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     capcut_mode_override: Arc<Mutex<Option<bool>>>,
@@ -1874,7 +1913,8 @@ pub fn run_pipeline(
             (settings.video_llm_service == "Claude Code"
                 || settings.video_llm_service == "Gemini CLI"
                 || settings.video_llm_service == "Codex CLI"
-                || settings.video_llm_service == "AGY CLI");
+                || settings.video_llm_service == "AGY CLI"
+                || settings.video_llm_service == "Pi CLI");
 
         if is_agent_mode {
             // === Агентний режим: послідовно ===
@@ -1898,6 +1938,8 @@ pub fn run_pipeline(
 
             if let Err(e) = run_agent_timeline(
                 job_id, &job_name, &settings,
+                Arc::clone(&status),
+                Arc::clone(&agent_control_resume),
                 Arc::clone(&agent_chat),
                 Arc::clone(&agent_session),
                 &ctx,
@@ -2202,7 +2244,8 @@ fn run_final_stages(
     let is_agent_mode = settings.video_llm_service == "Claude Code"
         || settings.video_llm_service == "Gemini CLI"
         || settings.video_llm_service == "Codex CLI"
-        || settings.video_llm_service == "AGY CLI";
+        || settings.video_llm_service == "AGY CLI"
+        || settings.video_llm_service == "Pi CLI";
     if settings.video_enabled && !is_agent_mode && !settings.skip_agent_on_resume {
         let source_text = if settings.translation_enabled {
             translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
@@ -2409,7 +2452,8 @@ pub fn retry_from_stage(
                     (settings.video_llm_service == "Claude Code"
                         || settings.video_llm_service == "Gemini CLI"
                         || settings.video_llm_service == "Codex CLI"
-                        || settings.video_llm_service == "AGY CLI");
+                        || settings.video_llm_service == "AGY CLI"
+                        || settings.video_llm_service == "Pi CLI");
                 let video_already_done = *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
 
                 if is_agent_mode && !video_already_done {
@@ -2419,6 +2463,8 @@ pub fn retry_from_stage(
 
                     if let Err(e) = run_agent_timeline(
                         job_id, &job_name, &settings,
+                        Arc::clone(&status),
+                        Arc::clone(&agent_control_resume),
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
                         &ctx,
@@ -2486,7 +2532,8 @@ pub fn retry_from_stage(
                     && (settings.video_llm_service == "Claude Code"
                         || settings.video_llm_service == "Gemini CLI"
                         || settings.video_llm_service == "Codex CLI"
-                        || settings.video_llm_service == "AGY CLI");
+                        || settings.video_llm_service == "AGY CLI"
+                        || settings.video_llm_service == "Pi CLI");
 
                 // В агентному режимі спочатку запускаємо агента для створення segments.json
                 if is_agent_mode {
@@ -2495,6 +2542,8 @@ pub fn retry_from_stage(
                     ctx.request_repaint();
                     if let Err(e) = run_agent_timeline(
                         job_id, &job_name, &settings,
+                        Arc::clone(&status),
+                        Arc::clone(&agent_control_resume),
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
                         &ctx,
@@ -2587,7 +2636,8 @@ pub fn retry_from_stage(
                     (settings.video_llm_service == "Claude Code"
                         || settings.video_llm_service == "Gemini CLI"
                         || settings.video_llm_service == "Codex CLI"
-                        || settings.video_llm_service == "AGY CLI");
+                        || settings.video_llm_service == "AGY CLI"
+                        || settings.video_llm_service == "Pi CLI");
                 let video_already_done = *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
 
                 if is_agent_mode && !video_already_done {
@@ -2597,6 +2647,8 @@ pub fn retry_from_stage(
 
                     if let Err(e) = run_agent_timeline(
                         job_id, &job_name, &settings,
+                        Arc::clone(&status),
+                        Arc::clone(&agent_control_resume),
                         Arc::clone(&agent_chat),
                         Arc::clone(&agent_session),
                         &ctx,

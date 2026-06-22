@@ -27,6 +27,7 @@ pub fn draw_agent_chat_windows(
     jobs: &[crate::queue::PipelineJob],
     open_agent_chats: &mut std::collections::HashMap<u64, AgentChatWindowState>,
 ) {
+    use crate::queue::JobStatus;
     let job_ids: Vec<u64> = open_agent_chats.keys().cloned().collect();
     let mut to_remove = Vec::new();
 
@@ -42,6 +43,8 @@ pub fn draw_agent_chat_windows(
         let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
         let timeline_rebuild_arc = std::sync::Arc::clone(&jobs[job_idx].timeline_rebuild_requested);
         let job_settings = jobs[job_idx].settings.clone();
+
+        let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
 
         let state = open_agent_chats.get_mut(&job_id).unwrap();
 
@@ -69,6 +72,8 @@ pub fn draw_agent_chat_windows(
         let mut is_open = true;
         let mut trigger_send = false;
         let mut trigger_rebuild = false;
+        let mut trigger_resume_pipeline = false;
+        let is_awaiting_agent = job_status == JobStatus::AwaitingAgentControl;
 
         let title = format!(
             "{} — #{} {}",
@@ -154,6 +159,41 @@ pub fn draw_agent_chat_windows(
                                 .color(egui::Color32::from_rgb(231, 76, 60))
                                 .size(11.0),
                         ).wrap());
+                        ui.add_space(4.0);
+                    }
+
+                    // Кнопка «Продовжити пайплайн» — з'являється коли агент не створив segments.json
+                    // і пайплайн чекає підтвердження від користувача
+                    if is_awaiting_agent {
+                        ui.add_space(4.0);
+                        egui::Frame::none()
+                            .fill(egui::Color32::from_rgb(39, 174, 96).linear_multiply(0.15))
+                            .inner_margin(egui::Margin::same(8.0))
+                            .rounding(egui::Rounding::same(6.0))
+                            .show(ui, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("⏸ ")
+                                            .color(egui::Color32::from_rgb(39, 174, 96))
+                                            .size(13.0)
+                                            .strong(),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(translate(language, "agent_awaiting_hint"))
+                                            .size(12.0)
+                                            .color(egui::Color32::from_rgb(39, 174, 96)),
+                                    );
+                                });
+                                ui.add_space(4.0);
+                                if ui.add(egui::Button::new(
+                                    egui::RichText::new(translate(language, "agent_resume_pipeline_btn"))
+                                        .strong()
+                                        .size(13.0)
+                                ).min_size(egui::vec2(ui.available_width(), 28.0))).clicked() {
+                                    trigger_resume_pipeline = true;
+                                }
+                            });
                         ui.add_space(4.0);
                     }
 
@@ -243,6 +283,12 @@ pub fn draw_agent_chat_windows(
 
         if trigger_rebuild {
             *timeline_rebuild_arc.lock().unwrap() = true;
+        }
+
+        if trigger_resume_pipeline {
+            let (lock, cvar) = &*agent_control_resume_arc;
+            *lock.lock().unwrap() = true;
+            cvar.notify_one();
         }
 
         if !is_open {

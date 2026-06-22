@@ -10,3 +10,4 @@ pub mod ffmpeg;
 pub mod assemblyai;
 pub mod updater;
 pub mod stock;
+pub mod pi;

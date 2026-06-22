@@ -12,6 +12,7 @@ pub struct TranslationControlWindowState {
     pub regen_model_gemini: String,
     pub regen_model_codex: String,
     pub regen_model_agy: String,
+    pub regen_model_pi: String,
     pub regen_model_search: String,
     pub regen_prompt: String,
     pub regen_temperature: f32,
@@ -32,6 +33,7 @@ impl TranslationControlWindowState {
             regen_model_gemini: "gemini-2.5-flash".to_string(),
             regen_model_codex: "gpt-5.4-mini".to_string(),
             regen_model_agy: "gemini-3.5-flash".to_string(),
+            regen_model_pi: "gemini-2.5-flash".to_string(),
             regen_model_search: String::new(),
             regen_prompt: String::new(),
             regen_temperature: 0.7,
@@ -275,6 +277,11 @@ pub fn draw_translation_control_windows(
             } else {
                 state.regen_model_agy.clone()
             };
+            state.regen_model_pi = if job_settings.translation_service == "Pi CLI" {
+                if job_settings.translation_model.is_empty() { "gemini-2.5-flash".to_string() } else { job_settings.translation_model.clone() }
+            } else {
+                state.regen_model_pi.clone()
+            };
             state.regen_prompt = job_settings.translation_prompt.clone();
             state.regen_temperature = job_settings.translation_temperature;
             state.regen_model_search.clear();
@@ -321,6 +328,7 @@ pub fn draw_translation_control_windows(
                                 &mut state.regen_model_gemini,
                                 &mut state.regen_model_codex,
                                 &mut state.regen_model_agy,
+                                &mut state.regen_model_pi,
                             );
                         });
                     });
