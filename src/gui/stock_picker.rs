@@ -289,7 +289,8 @@ fn flush_segment_search(state: &mut StockPickerState) {
 pub enum StockPickerAction {
     None,
     Close,
-    Confirmed,
+    /// Несе MediaItem з trim-редактора (вже має запущену екстракцію кадрів)
+    Confirmed(Option<crate::gui::montage_editor::MediaItem>),
 }
 
 pub fn draw_stock_picker(
@@ -711,20 +712,29 @@ fn draw_trim_editor(
         });
 
     if confirmed {
-        let trim = state.trim_edit.take().unwrap();
-        let trim_end = trim.trim_start + trim.segment_duration;
-        if let Some(seg) = state.cache.get_mut(trim.segment_idx) {
+        let TrimEditState {
+            segment_idx,
+            video_id,
+            filename,
+            trim_start,
+            segment_duration,
+            media: trim_media,
+            ..
+        } = state.trim_edit.take().unwrap();
+        let trim_end = trim_start + segment_duration;
+        if let Some(seg) = state.cache.get_mut(segment_idx) {
             seg.selected = Some(SelectedMedia {
                 kind: "video".to_string(),
-                id: trim.video_id,
+                id: video_id,
                 url: String::new(), // вже завантажено
-                filename: trim.filename,
-                trim_start: trim.trim_start,
+                filename,
+                trim_start,
                 trim_end,
             });
             let _ = save_cache(Path::new(&state.save_path), &state.cache);
         }
-        *action = StockPickerAction::Confirmed;
+        // Передаємо MediaItem — вже має запущену екстракцію кадрів від trim-редактора
+        *action = StockPickerAction::Confirmed(Some(trim_media));
     } else if cancelled {
         state.trim_edit = None;
     }
@@ -1102,18 +1112,29 @@ fn start_video_download_if_needed(
         state.trim_edit = None;
     }
 
-    // Видаляємо старі файли та їх frame_cache для цього сегменту
+    // Видаляємо старі файли та їх frame_cache для цього сегменту у фоні,
+    // щоб не блокувати UI-трід видаленням великих директорій кешу кадрів.
     let media_dir = Path::new(&state.save_path).join("media");
     let seg_prefix = format!("{:04}_", seg_idx + 1);
-    if let Ok(entries) = std::fs::read_dir(&media_dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with(&seg_prefix) && name != filename {
-                let old_path = entry.path();
-                delete_frame_cache_for_file(Path::new(&state.save_path), &old_path);
+    let old_files: Vec<PathBuf> = if let Ok(entries) = std::fs::read_dir(&media_dir) {
+        entries.flatten()
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.starts_with(&seg_prefix) && name != filename
+            })
+            .map(|e| e.path())
+            .collect()
+    } else {
+        vec![]
+    };
+    if !old_files.is_empty() {
+        let save_path_s = state.save_path.clone();
+        std::thread::spawn(move || {
+            for old_path in old_files {
+                delete_frame_cache_for_file(Path::new(&save_path_s), &old_path);
                 let _ = std::fs::remove_file(old_path);
             }
-        }
+        });
     }
 
     // Якщо файл вже є (і належить потрібному відео) — одразу відкриваємо trim редактор
@@ -1214,7 +1235,7 @@ fn start_photo_download(
         ctx_c.request_repaint();
     });
 
-    *action = StockPickerAction::Confirmed;
+    *action = StockPickerAction::Confirmed(None);
 }
 
 // ─── Thumbnail ───────────────────────────────────────────────────────────────

@@ -2100,10 +2100,14 @@ impl eframe::App for VideoMakerApp {
                 crate::gui::stock_picker::StockPickerAction::Close => {
                     self.stock_picker_state = None;
                 }
-                crate::gui::stock_picker::StockPickerAction::Confirmed => {
+                crate::gui::stock_picker::StockPickerAction::Confirmed(maybe_media) => {
                     self.stock_picker_state = None;
-                    // Оновити плейсхолдери в редакторі монтажу якщо він відкритий
                     if let Some(ref mut editor) = self.montage_editor_state {
+                        // Переносимо MediaItem з trim-редактора в пул — вже містить витягнуті кадри
+                        if let Some(media) = maybe_media {
+                            editor.media_pool.retain(|m| m.path != media.path);
+                            editor.media_pool.push(media);
+                        }
                         editor.needs_stock_refresh = true;
                     }
                 }

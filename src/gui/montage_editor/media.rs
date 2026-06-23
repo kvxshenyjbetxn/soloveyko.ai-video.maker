@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use super::types::{ClipKind, PreviewRenderSettings};
 use super::utils::{frame_cache_dir, probe_duration, probe_has_audio, sharp_frame_cache_dir, uuid_str};
@@ -28,6 +28,8 @@ pub struct MediaItem {
     pub extraction_complete: Arc<AtomicBool>,
     /// true = відеофайл містить вбудовану аудіодоріжку
     pub has_audio: bool,
+    /// Результат фонового ffprobe (duration_secs, has_audio); None = ще виконується
+    probe_result: Arc<Mutex<Option<(f32, bool)>>>,
 }
 
 impl MediaItem {
@@ -55,15 +57,30 @@ impl MediaItem {
             ClipKind::Image
         };
 
-        let duration_secs = if is_image {
-            5.0
+        // Тривалість та наявність аудіо зондуємо у фоновому потоці,
+        // щоб не блокувати UI-трід ffprobe-викликами.
+        let probe_result: Arc<Mutex<Option<(f32, bool)>>> = Arc::new(Mutex::new(None));
+        let (duration_secs, has_audio) = if is_image {
+            // Для зображень — відразу встановлюємо значення без зонду
+            *probe_result.lock().unwrap() = Some((5.0, false));
+            (5.0, false)
         } else if is_video || is_audio {
-            probe_duration(&path).unwrap_or(10.0)
+            let probe_arc_c = Arc::clone(&probe_result);
+            let path_c = path.clone();
+            let is_vid = is_video;
+            std::thread::spawn(move || {
+                let dur = probe_duration(&path_c).unwrap_or(10.0);
+                let audio = is_vid && probe_has_audio(&path_c);
+                if let Ok(mut g) = probe_arc_c.lock() {
+                    *g = Some((dur, audio));
+                }
+            });
+            // Тимчасові значення до завершення зонду
+            (10.0, false)
         } else {
-            5.0
+            *probe_result.lock().unwrap() = Some((5.0, false));
+            (5.0, false)
         };
-        // Перевіряємо аудіодоріжку тільки для відеофайлів
-        let has_audio = is_video && probe_has_audio(&path);
 
         // Стабільні папки кешу на основі хешу шляху + версії якості превʼю.
         let cache_dir = frame_cache_dir(cache_base, &path, preview);
@@ -106,38 +123,49 @@ impl MediaItem {
             let path_str = path.to_string_lossy().to_string();
             let dir = cache_dir.clone();
             let flag = extraction_complete.clone();
+            let scrub_w = preview.quality.scrub_width();
+            let qscale = preview.quality.ffmpeg_qscale();
+            let fps_val = preview.fps;
             std::thread::spawn(move || {
                 std::fs::create_dir_all(&dir).ok();
+
+                // Крок 1: Швидко витягуємо перший кадр щоб UI одразу мав що показати.
+                let first_frame = dir.join("000001.jpg");
+                if !first_frame.exists() {
+                    let mut quick = std::process::Command::new(crate::bundle::ffmpeg_path());
+                    quick.args([
+                        "-y", "-v", "error", "-threads", "1",
+                        "-i", &path_str,
+                        "-vframes", "1",
+                        "-vf", &format!("scale={}:-2", scrub_w),
+                        "-q:v", qscale,
+                        first_frame.to_str().unwrap_or(""),
+                    ]);
+                    crate::bundle::set_no_window(&mut quick);
+                    let _ = crate::api::ffmpeg::run_tracked(&mut quick);
+                }
+
+                // Крок 2: Повна екстракція всіх кадрів для скрабінгу.
                 let out_pattern = dir.join("%06d.jpg");
-                let Some(out_str) = out_pattern.to_str() else { return };
+                let Some(out_str) = out_pattern.to_str() else {
+                    flag.store(true, Ordering::Relaxed);
+                    return;
+                };
                 let mut ffmpeg_preview = std::process::Command::new(crate::bundle::ffmpeg_path());
                 ffmpeg_preview.args([
                     "-y", "-v", "error", "-threads", "1",
                     "-i", &path_str,
-                    "-vf", &format!("scale={}:-2,fps={}", preview.quality.scrub_width(), preview.fps),
-                    "-q:v", preview.quality.ffmpeg_qscale(),
+                    "-vf", &format!("scale={}:-2,fps={}", scrub_w, fps_val),
+                    "-q:v", qscale,
                     out_str,
                 ]);
                 crate::bundle::set_no_window(&mut ffmpeg_preview);
                 let status = crate::api::ffmpeg::run_tracked(&mut ffmpeg_preview);
                 if matches!(status, Ok(s) if s.success()) {
                     std::fs::write(dir.join(".complete"), b"1").ok();
-                    flag.store(true, Ordering::Relaxed);
-                } else {
-                    // Fallback: витягуємо тільки перший кадр без фільтрів
-                    let first_frame = dir.join("000001.jpg");
-                    let mut ffmpeg_fallback = std::process::Command::new(crate::bundle::ffmpeg_path());
-                    ffmpeg_fallback.args([
-                        "-y", "-v", "error", "-threads", "1",
-                        "-i", &path_str,
-                        "-vframes", "1",
-                        "-q:v", preview.quality.ffmpeg_qscale(),
-                        first_frame.to_str().unwrap_or(""),
-                    ]);
-                    crate::bundle::set_no_window(&mut ffmpeg_fallback);
-                    let _ = crate::api::ffmpeg::run_tracked(&mut ffmpeg_fallback);
-                    flag.store(true, Ordering::Relaxed);
                 }
+                // Незалежно від результату — перший кадр вже є з кроку 1
+                flag.store(true, Ordering::Relaxed);
             });
         } else {
             // Аудіо: вилучення не потрібне
@@ -154,7 +182,21 @@ impl MediaItem {
             sharp_cache_dir,
             extraction_complete,
             has_audio,
+            probe_result,
         }
+    }
+
+    /// Оновлює duration_secs та has_audio якщо фоновий ffprobe-зонд завершився.
+    /// Повертає true якщо дані змінились — сигнал що UI треба перемалювати.
+    pub fn refresh_probe(&mut self) -> bool {
+        if let Ok(mut guard) = self.probe_result.try_lock() {
+            if let Some((dur, audio)) = guard.take() {
+                self.duration_secs = dur;
+                self.has_audio = audio;
+                return true;
+            }
+        }
+        false
     }
 
     pub fn is_extraction_complete(&self) -> bool {

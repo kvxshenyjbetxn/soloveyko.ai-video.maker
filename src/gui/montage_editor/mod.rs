@@ -81,11 +81,30 @@ pub fn draw_montage_editor_window(
     editor.pending_animate_paths.clear();
     editor.pending_regen = None;
 
+    // Оновлюємо duration_secs/has_audio для медіа, у яких фоновий ffprobe щойно завершився
+    {
+        let mut probe_updated = false;
+        for media in editor.media_pool.iter_mut() {
+            if media.refresh_probe() {
+                probe_updated = true;
+            }
+        }
+        if probe_updated {
+            ctx.request_repaint();
+        }
+    }
+
     // Оновлюємо плейсхолдери якщо підтверджено вибір стоку.
     // needs_stock_refresh залишається true поки є незавантажені файли.
     if editor.needs_stock_refresh {
         let still_pending = state::refresh_placeholder_clips(editor);
         editor.needs_stock_refresh = still_pending;
+    }
+
+    // Поки є медіа з незавершеною екстракцією кадрів — продовжуємо опитування,
+    // щоб UI автоматично підхопив новий кадр як тільки ffmpeg його запише.
+    if editor.media_pool.iter().any(|m| !m.is_extraction_complete()) {
+        ctx.request_repaint_after(std::time::Duration::from_millis(300));
     }
 
     // Після завершення оживлення (.jpg → .mp4): оновлюємо пул та кліпи

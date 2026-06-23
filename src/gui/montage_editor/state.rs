@@ -8,7 +8,7 @@ use super::types::{
 use super::media::MediaItem;
 use super::frame_cache::FrameCache;
 use super::audio::PlayingAudio;
-use super::utils::{frame_cache_dir, probe_duration, sharp_frame_cache_dir, uuid_str};
+use super::utils::{probe_duration, uuid_str};
 
 // ─── Стан редактора ───────────────────────────────────────────────────────────
 
@@ -821,6 +821,10 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
             if let Some(sel) = &entry.selected {
                 let file_path = editor.save_path.join("media").join(&sel.filename);
                 if file_path.exists() {
+                    // Пропускаємо кліп якщо він вже вказує на цей файл — уникаємо повторної обробки кожен кадр
+                    if clip.path.as_deref() == Some(file_path.as_path()) && !clip.is_placeholder {
+                        continue;
+                    }
                     let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
                     let kind = if matches!(ext.as_str(), "mp4"|"mov"|"webm") { ClipKind::Video } else { ClipKind::Image };
                     replacements.push((clip.id.clone(), file_path, kind, sel.trim_start, seg_idx));
@@ -834,13 +838,11 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
 
     let made_replacements = !replacements.is_empty();
     for (clip_id, file_path, kind, trim_start, seg_idx) in replacements {
-        // Видаляємо старий запис і кеш кадрів щоб thumbnail перегенерувався з нового відео
-        editor.media_pool.retain(|m| m.path != file_path);
-        let old_cache = frame_cache_dir(&editor.save_path, &file_path, editor.preview_render);
-        let old_sharp_cache = sharp_frame_cache_dir(&editor.save_path, &file_path, editor.preview_render);
-        let _ = std::fs::remove_dir_all(&old_cache);
-        let _ = std::fs::remove_dir_all(&old_sharp_cache);
-        editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path, editor.preview_render));
+        // Якщо MediaItem для цього файлу вже є в пулі — зберігаємо його (з вже витягнутими кадрами).
+        // Не видаляємо кеш кадрів — trim-редактор міг вже витягнути їх, і вони готові до програвання.
+        if !editor.media_pool.iter().any(|m| m.path == file_path) {
+            editor.media_pool.push(MediaItem::new(file_path.clone(), &editor.save_path, editor.preview_render));
+        }
         let media_id = editor.media_pool.iter()
             .find(|m| m.path == file_path)
             .map(|m| m.id.clone())
