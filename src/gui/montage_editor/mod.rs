@@ -16,7 +16,9 @@ pub use types::{
 };
 pub use media::MediaItem;
 pub use frame_cache::FrameCache;
-pub use audio::{AudioPlayer, PlayingAudio, embedded_audio_cache_path};
+pub use audio::{
+    AudioPlayer, PlayingAudio, embedded_audio_cache_path, extract_embedded_audio_async,
+};
 pub use state::MontageEditorState;
 
 use std::collections::HashSet;

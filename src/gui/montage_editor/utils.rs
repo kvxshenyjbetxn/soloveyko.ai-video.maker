@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use super::types::PreviewRenderSettings;
 
-/// Стабільний хеш шляху → ім'я базової папки кешу (не змінюється між запусками)
+/// Стабільний хеш шляху → частина імені папки кешу.
 pub fn path_hash(path: &Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -11,14 +11,30 @@ pub fn path_hash(path: &Path) -> String {
     format!("{:x}", h.finish())
 }
 
+/// Версія файлу для кешу кадрів.
+/// Коли медіа перегенеровано в той самий шлях, mtime/розмір змінюються,
+/// тому редактор не читає старі кадри з попереднього кешу.
+fn file_cache_version(path: &Path) -> String {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return "missing".to_string();
+    };
+    let modified_ms = meta.modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("{}_{}", meta.len(), modified_ms)
+}
+
 /// Папка легкого кешу кадрів превʼю з версією якості/роздільності.
 /// Версіонування не дає редактору випадково читати старі кадри після апдейту.
 pub fn frame_cache_dir(cache_base: &Path, media_path: &Path, settings: PreviewRenderSettings) -> PathBuf {
     cache_base
         .join(".frame_cache")
         .join(format!(
-            "{}_{}_{}",
+            "{}_{}_{}_{}",
             path_hash(media_path),
+            file_cache_version(media_path),
             settings.quality.cache_tag(),
             settings.fps_tag(),
         ))
@@ -30,8 +46,9 @@ pub fn sharp_frame_cache_dir(cache_base: &Path, media_path: &Path, settings: Pre
     cache_base
         .join(".frame_cache")
         .join(format!(
-            "{}_{}_{}",
+            "{}_{}_{}_{}",
             path_hash(media_path),
+            file_cache_version(media_path),
             settings.quality.sharp_cache_tag(),
             settings.fps_tag(),
         ))

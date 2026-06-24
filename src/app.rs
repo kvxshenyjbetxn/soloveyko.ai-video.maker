@@ -1956,19 +1956,74 @@ impl eframe::App for VideoMakerApp {
                         self.gallery_image_loading.lock().unwrap().remove(&path);
 
                         if let Some(ref mut editor) = self.montage_editor_state {
-                            if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == path) {
-                                let _ = std::fs::remove_dir_all(&m.cache_dir);
-                                let _ = std::fs::remove_dir_all(&m.sharp_cache_dir);
-                                editor.frame_cache.clear_for_media_id(&m.id);
-                                let old_id = m.id.clone();
-                                *m = crate::gui::montage_editor::MediaItem::new(path.clone(), &editor.save_path, editor.preview_render);
-                                m.id = old_id;
+                            if let Some(idx) = editor.media_pool.iter().position(|m| m.path == path) {
+                                let old_media = editor.media_pool[idx].clone();
+                                let old_id = old_media.id.clone();
+                                let was_selected = editor.selected_media_ids.remove(&old_id);
+                                let was_dragged = editor.dragged_media_id.as_deref() == Some(old_id.as_str());
+
+                                // Повністю прибираємо старі preview-кеші, бо файл перезаписано тим самим шляхом.
+                                let _ = std::fs::remove_dir_all(&old_media.cache_dir);
+                                let _ = std::fs::remove_dir_all(&old_media.sharp_cache_dir);
+                                let _ = std::fs::remove_file(
+                                    crate::gui::montage_editor::embedded_audio_cache_path(&path, &editor.save_path),
+                                );
+                                editor.frame_cache.clear_for_media_id(&old_id);
+                                editor.pool_thumbnails.remove(&old_id);
+
+                                let new_media = crate::gui::montage_editor::MediaItem::new(
+                                    path.clone(),
+                                    &editor.save_path,
+                                    editor.preview_render,
+                                );
+                                let new_id = new_media.id.clone();
+                                let new_name = new_media.name.clone();
+                                let new_kind = new_media.kind.clone();
+                                editor.media_pool[idx] = new_media;
+
+                                // Кліпи мають перейти на новий media_id. Це також відсікає
+                                // запізнілі async-текстури старого media_id після перегенерації.
+                                let mut extract_embedded_audio = false;
+                                for clip in &mut editor.clips {
+                                    let same_media = clip.media_id == old_id
+                                        || clip.path.as_deref() == Some(path.as_path());
+                                    if same_media {
+                                        clip.media_id = new_id.clone();
+                                        clip.path = Some(path.clone());
+                                        if clip.is_embedded_audio {
+                                            clip.name = format!("A: {}", new_name);
+                                            clip.kind = crate::gui::montage_editor::ClipKind::Audio;
+                                            extract_embedded_audio = true;
+                                        } else {
+                                            clip.name = new_name.clone();
+                                            clip.kind = new_kind.clone();
+                                        }
+                                    }
+                                }
+                                if extract_embedded_audio {
+                                    crate::gui::montage_editor::extract_embedded_audio_async(
+                                        path.clone(),
+                                        editor.save_path.clone(),
+                                    );
+                                }
+
+                                if was_selected {
+                                    editor.selected_media_ids.insert(new_id.clone());
+                                }
+                                if was_dragged {
+                                    editor.dragged_media_id = Some(new_id.clone());
+                                }
+                                editor.pool_thumbnails.remove(&new_id);
+                                editor.active_audios.clear();
+                                let _ = editor.save_to_timeline();
                             }
                             if editor.pool_preview.as_deref() == Some(path.as_path()) {
                                 // Виставляємо stale замість негайного None — дає GPU-бекенду
                                 // кадр на звільнення старої текстури перед завантаженням нової
+                                editor.pool_preview_texture = None;
                                 editor.preview_stale_path = Some(path.clone());
                             }
+                            ctx.request_repaint_after(std::time::Duration::from_millis(250));
                         }
                     }
                     Err(e) => {
