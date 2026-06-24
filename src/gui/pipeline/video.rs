@@ -173,6 +173,7 @@ pub fn draw_video_section(
 
         // Перемикач режиму роботи: API / Agent
         let previous_llm_service = video_llm_service.clone();
+        let mut switched_llm_mode = false;
 
         let mut api_mode = *video_llm_service == "OpenRouter" || *video_llm_service == "None";
         let mut agent_mode = !api_mode && !video_llm_service.is_empty();
@@ -197,6 +198,7 @@ pub fn draw_video_section(
                 }
                 *video_llm_service = "OpenRouter".to_string();
                 *video_llm_model = video_llm_model_openrouter.clone();
+                switched_llm_mode = true;
                 agent_mode = false;
                 // Відновлюємо режим нарізки
                 *text_split_mode = text_split_mode_openrouter.clone();
@@ -208,6 +210,7 @@ pub fn draw_video_section(
                 }
                 *video_llm_service = "Claude Code".to_string();
                 *video_llm_model = if video_llm_model_claude.is_empty() { "sonnet".to_string() } else { video_llm_model_claude.clone() };
+                switched_llm_mode = true;
                 api_mode = false;
                 // Зберігаємо режим нарізки та встановлюємо full для агента
                 *text_split_mode_openrouter = text_split_mode.clone();
@@ -261,7 +264,7 @@ pub fn draw_video_section(
         }
 
         // При зміні сервісу (всередині одного режиму) — відновлюємо відповідну збережену модель
-        if *video_llm_service != previous_llm_service {
+        if !switched_llm_mode && *video_llm_service != previous_llm_service {
             if previous_llm_service == "OpenRouter" {
                 *video_llm_model_openrouter = video_llm_model.clone();
             } else if previous_llm_service == "Claude Code" {
