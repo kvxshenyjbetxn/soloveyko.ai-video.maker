@@ -572,15 +572,34 @@ pub fn animate_image_with_priority(
     Err("Всі відео-провайдери вичерпані для анімації".to_string())
 }
 
+/// Повертає читабельну назву відеомоделі Googler для логів.
+pub fn video_provider_model_name(key: &str) -> &'static str {
+    match key {
+        "flow"            => "Flow (VEO)",
+        "flower"          => "Flower (Veo 3.1)",
+        "grok"            => "Grok",
+        "flow_omni_flash" => "Omni Flash (Flow)",
+        "flow_fast"       => "Veo 3.1 Fast (Flow)",
+        "flow_light"      => "Veo 3.1 Light (Flow)",
+        "flow_quality"    => "Veo 3.1 Quality (Flow)",
+        _                 => "Unknown",
+    }
+}
+
 /// Генерує відео з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
 /// Повертає `(provider_name, data_uri)` — щоб caller знав який провайдер переміг.
-pub fn generate_video_with_priority(
+/// Перед кожним новим провайдером викликає `on_provider` для job-логу моделі.
+pub fn generate_video_with_priority_logged<F>(
     key: &str,
     prompt: &str,
     aspect_ratio: &str,
     priority: &[String],
-) -> Result<(String, String), String> {
+    on_provider: F,
+) -> Result<(String, String), String>
+where
+    F: Fn(&str),
+{
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -590,6 +609,9 @@ pub fn generate_video_with_priority(
         .build();
 
     for provider in priority {
+        // Лог пишеться один раз на провайдера, щоб було видно активну модель.
+        on_provider(provider);
+
         let mut failures = 0u32;
         loop {
             match try_generate_video(key, prompt, aspect_ratio, provider, &agent) {

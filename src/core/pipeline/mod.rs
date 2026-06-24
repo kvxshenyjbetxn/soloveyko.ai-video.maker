@@ -1268,10 +1268,12 @@ fn run_video_branch(
                 return (i, Ok(()));
             }
 
-            crate::logger::log_job(
-                job_id_c, &job_name_c,
-                &format!("Generating {} {}/{} ...", if use_video { "video" } else { "image" }, i + 1, total),
-            );
+            if !use_video {
+                crate::logger::log_job(
+                    job_id_c, &job_name_c,
+                    &format!("Generating image {}/{} ...", i + 1, total),
+                );
+            }
 
             if prompt.trim().is_empty() {
                 crate::logger::log_job(
@@ -1282,8 +1284,25 @@ fn run_video_branch(
             }
 
             let result = if use_video {
-                crate::api::googler::generate_video_with_priority(&key, &prompt, "16:9", &priority)
-                    .map(|(p, d)| (p, d))
+                crate::api::googler::generate_video_with_priority_logged(
+                    &key,
+                    &prompt,
+                    "16:9",
+                    &priority,
+                    |provider| {
+                        crate::logger::log_job(
+                            job_id_c,
+                            &job_name_c,
+                            &format!(
+                                "Generating video {}/{} ... (модель: {})",
+                                i + 1,
+                                total,
+                                crate::api::googler::video_provider_model_name(provider)
+                            ),
+                        );
+                    },
+                )
+                .map(|(p, d)| (p, d))
             } else {
                 crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority)
                     .map(|(p, d)| (p, d))
@@ -2910,7 +2929,23 @@ pub fn regenerate_single_media(
         );
 
         let api_result = if media_type == "video" {
-            crate::api::googler::generate_video_with_priority(&googler_key, &prompt, "16:9", &priority)
+            crate::api::googler::generate_video_with_priority_logged(
+                &googler_key,
+                &prompt,
+                "16:9",
+                &priority,
+                |provider| {
+                    crate::logger::log_job(
+                        job_id,
+                        &job_name,
+                        &format!(
+                            "Regen {}: модель — {}",
+                            file_name,
+                            crate::api::googler::video_provider_model_name(provider)
+                        ),
+                    );
+                },
+            )
         } else {
             crate::api::googler::generate_image_with_priority(&googler_key, &prompt, "16:9", &priority)
         };
