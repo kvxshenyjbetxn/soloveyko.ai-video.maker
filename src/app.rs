@@ -190,6 +190,12 @@ pub struct VideoMakerApp {
     pub text_split_char_limit: usize,
     /// Промт для генерації зображень відеоряду.
     pub video_prompt: String,
+    /// Чи додавати контекст сценарію в API-промт відеоряду.
+    pub video_context_enabled: bool,
+    /// Режим контексту: "full" або "around".
+    pub video_context_mode: String,
+    /// Кількість символів контексту навколо сегмента для режиму "around".
+    pub video_context_chars: usize,
     /// Чи увімкнено автоматичний апскейл Googler відео
     pub googler_video_upscale_enabled: bool,
     /// Роздільна здатність апскейлу ("1080p", "2K", "4K")

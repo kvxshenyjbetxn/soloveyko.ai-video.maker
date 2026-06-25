@@ -43,6 +43,174 @@ fn media_file_exists_by_index(media_dir: &std::path::Path, index: usize) -> bool
     false
 }
 
+/// Безпечно повертає byte-індекс для позиції в символах.
+fn byte_index_at_char(text: &str, char_idx: usize) -> usize {
+    text.char_indices()
+        .map(|(idx, _)| idx)
+        .nth(char_idx)
+        .unwrap_or(text.len())
+}
+
+/// Рахує кількість Unicode-символів у byte-діапазоні.
+fn char_count_between(text: &str, start: usize, end: usize) -> usize {
+    text[start..end].chars().count()
+}
+
+/// Визначає кінець речення для розумних меж контексту.
+fn is_sentence_end(ch: char) -> bool {
+    matches!(ch, '.' | '!' | '?' | '…')
+}
+
+/// Зсуває початок контексту назад до попереднього кінця речення.
+fn snap_context_start_to_sentence(text: &str, rough_start: usize) -> usize {
+    if rough_start == 0 {
+        return 0;
+    }
+
+    text[..rough_start]
+        .char_indices()
+        .rev()
+        .find(|(_, ch)| is_sentence_end(*ch))
+        .map(|(idx, ch)| idx + ch.len_utf8())
+        .unwrap_or(0)
+}
+
+/// Зсуває кінець контексту вперед до наступного кінця речення.
+fn snap_context_end_to_sentence(text: &str, rough_end: usize) -> usize {
+    if rough_end >= text.len() {
+        return text.len();
+    }
+
+    text[rough_end..]
+        .char_indices()
+        .find(|(_, ch)| is_sentence_end(*ch))
+        .map(|(offset, ch)| rough_end + offset + ch.len_utf8())
+        .unwrap_or(text.len())
+}
+
+/// Шукає сегмент у повному тексті, рухаючись уперед, щоб однакові фрази не плутали порядок.
+fn find_segment_range(source_text: &str, segment: &str, cursor: &mut usize) -> Option<(usize, usize)> {
+    if segment.is_empty() {
+        return None;
+    }
+
+    let range = source_text[*cursor..]
+        .find(segment)
+        .map(|offset| *cursor + offset)
+        .or_else(|| source_text.find(segment));
+
+    range.map(|start| {
+        let end = start + segment.len();
+        *cursor = end;
+        (start, end)
+    })
+}
+
+/// Форматує контекст пояснювальними блоками, щоб модель чітко розуміла роль кожної частини.
+fn format_around_context(before: &str, segment: &str, after: &str) -> String {
+    format!(
+        "Context before the segment you need to visualize:\n{}\n\nCurrent segment you need to visualize:\n{}\n\nContext after the segment you need to visualize:\n{}",
+        before.trim(),
+        segment.trim(),
+        after.trim()
+    )
+}
+
+/// Будує текст контексту для кожного сегмента відеоряду.
+fn build_video_contexts(
+    source_text: &str,
+    segments: &[String],
+    mode: &str,
+    around_chars: usize,
+) -> Vec<String> {
+    if mode == "full" {
+        return vec![source_text.to_string(); segments.len()];
+    }
+
+    let before_chars = around_chars / 2;
+    let after_chars = around_chars - before_chars;
+    let mut cursor = 0usize;
+
+    segments
+        .iter()
+        .map(|segment| {
+            let Some((seg_start, seg_end)) = find_segment_range(source_text, segment, &mut cursor) else {
+                return format_around_context("", segment, "");
+            };
+
+            let chars_before_segment = char_count_between(source_text, 0, seg_start);
+            let chars_until_segment_end = char_count_between(source_text, 0, seg_end);
+            let total_chars = source_text.chars().count();
+
+            let start_char = chars_before_segment.saturating_sub(before_chars);
+            let end_char = (chars_until_segment_end + after_chars).min(total_chars);
+            let rough_start_byte = byte_index_at_char(source_text, start_char);
+            let rough_end_byte = byte_index_at_char(source_text, end_char);
+
+            // Значення в UI — орієнтир. Реальні межі розширюємо до речень,
+            // щоб контекст не починався і не закінчувався посеред фрази.
+            let start_byte = snap_context_start_to_sentence(source_text, rough_start_byte);
+            let end_byte = snap_context_end_to_sentence(source_text, rough_end_byte);
+
+            let before = &source_text[start_byte..seg_start];
+            let current = &source_text[seg_start..seg_end];
+            let after = &source_text[seg_end..end_byte];
+            format_around_context(before, current, after)
+        })
+        .collect()
+}
+
+/// Записує тимчасовий debug-файл із промтами після підстановки плейсхолдерів.
+fn write_prompt_substitution_debug(
+    save_dir: &std::path::Path,
+    file_name: &str,
+    title: &str,
+    prompt_template: &str,
+    segments: &[String],
+    prompts: &[String],
+) {
+    use std::fmt::Write;
+
+    let mut content = String::new();
+    let _ = writeln!(content, "=== {} ===", title);
+    let _ = writeln!(content, "Total: {}", prompts.len());
+    let _ = writeln!(content, "\n--- ORIGINAL PROMPT TEMPLATE ---\n{}\n", prompt_template);
+
+    for (i, prompt) in prompts.iter().enumerate() {
+        let segment = segments.get(i).map(String::as_str).unwrap_or("");
+
+        let _ = writeln!(content, "\n==================== [{} / {}] ====================", i + 1, prompts.len());
+        let _ = writeln!(content, "\n{{{{text}}}}:\n{}", segment);
+        let _ = writeln!(content, "\nFINAL REQUEST:\n{}", prompt);
+    }
+
+    let _ = std::fs::write(save_dir.join(file_name), content);
+}
+
+/// Підставляє текст сегмента і контекст у промт відеоряду.
+fn fill_video_prompt(prompt: &str, segment: &str, context: Option<&str>) -> String {
+    let mut filled = if prompt.contains("{{text}}") {
+        prompt.replace("{{text}}", segment)
+    } else if prompt.is_empty() {
+        segment.to_string()
+    } else {
+        format!("{}\n\n{}", prompt, segment)
+    };
+
+    if let Some(context) = context.filter(|c| !c.trim().is_empty()) {
+        if filled.contains("{{context}}") {
+            filled = filled.replace("{{context}}", context);
+        } else {
+            filled.push_str("\n\nContext:\n");
+            filled.push_str(context);
+        }
+    } else {
+        filled = filled.replace("{{context}}", "");
+    }
+
+    filled
+}
+
 /// Валідує завантажені або декодовані медіа-байти на порожнечу та текстові помилки.
 fn validate_media_bytes(bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() {
@@ -239,6 +407,17 @@ pub(super) fn run_video_branch(
         ),
     );
 
+    let contexts = if settings.video_context_enabled && !is_agent_mode {
+        build_video_contexts(
+            &source_text,
+            &segments,
+            &settings.video_context_mode,
+            settings.video_context_chars,
+        )
+    } else {
+        vec![String::new(); total]
+    };
+
     // Зберігаємо debug-файл сегментів
     let segments_path = save_dir.join("segments.txt");
     {
@@ -274,6 +453,42 @@ pub(super) fn run_video_branch(
     *prompts_progress.lock().unwrap() = Some((0, total));
     ctx.request_repaint();
 
+    let substituted_video_prompts: Vec<String> = if !is_agent_mode {
+        segments
+            .iter()
+            .enumerate()
+            .map(|(i, segment)| {
+                fill_video_prompt(
+                    &settings.video_prompt,
+                    segment,
+                    contexts.get(i).map(String::as_str),
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    if !is_agent_mode {
+        write_prompt_substitution_debug(
+            save_dir,
+            "video_prompt_substitution_debug.txt",
+            if use_llm {
+                "Video LLM requests after placeholder substitution"
+            } else {
+                "Direct media prompts after placeholder substitution"
+            },
+            &settings.video_prompt,
+            &segments,
+            &substituted_video_prompts,
+        );
+        crate::logger::log_job(
+            job_id,
+            &job_name,
+            "Debug prompts saved: video_prompt_substitution_debug.txt",
+        );
+    }
+
     // Резервуємо масив промтів з правильним порядком за індексом
     let mut prompts: Vec<String> = vec![String::new(); total];
 
@@ -288,7 +503,10 @@ pub(super) fn run_video_branch(
             let llm_service = settings.video_llm_service.clone();
             let openrouter_key = settings.openrouter_key.clone();
             let llm_model = settings.video_llm_model.clone();
-            let video_prompt = settings.video_prompt.clone();
+            let user_prompt = substituted_video_prompts
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| fill_video_prompt(&settings.video_prompt, &segment, None));
             let llm_temperature = settings.video_llm_temperature;
             let save_path = settings.save_path.clone();
             let prompts_progress_c = Arc::clone(&prompts_progress);
@@ -301,8 +519,8 @@ pub(super) fn run_video_branch(
                     &llm_service,
                     &openrouter_key,
                     &llm_model,
-                    &video_prompt,
-                    &segment,
+                    "",
+                    &user_prompt,
                     llm_temperature,
                     Some((job_id_c, job_name_c.clone())),
                     Some(save_path.as_str()),
@@ -321,14 +539,7 @@ pub(super) fn run_video_branch(
                             ),
                         );
                         // Fallback: проста підстановка
-                        let fallback = if video_prompt.contains("{{text}}") {
-                            video_prompt.replace("{{text}}", &segment)
-                        } else if video_prompt.is_empty() {
-                            segment.clone()
-                        } else {
-                            format!("{}\n\n{}", video_prompt, segment)
-                        };
-                        (fallback, None)
+                        (user_prompt, None)
                     }
                 };
 
@@ -365,12 +576,11 @@ pub(super) fn run_video_branch(
                 settings.video_style_prompt.replace("{{text}}", segment)
             } else if is_agent_mode {
                 segment.clone()
-            } else if settings.video_prompt.contains("{{text}}") {
-                settings.video_prompt.replace("{{text}}", segment)
-            } else if settings.video_prompt.is_empty() {
-                segment.clone()
             } else {
-                format!("{}\n\n{}", settings.video_prompt, segment)
+                substituted_video_prompts
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| fill_video_prompt(&settings.video_prompt, segment, None))
             };
             if let Ok(mut pp) = prompts_progress.lock() {
                 if let Some((ref mut done, _)) = *pp {
@@ -651,6 +861,22 @@ fn run_pexels_branch(
                     settings.text_split_char_limit,
                 );
 
+                let pexels_agent_mode = settings.video_llm_service == "Claude Code"
+                    || settings.video_llm_service == "Gemini CLI"
+                    || settings.video_llm_service == "Codex CLI"
+                    || settings.video_llm_service == "AGY CLI"
+                    || settings.video_llm_service == "Pi CLI";
+                let contexts = if settings.video_context_enabled && !pexels_agent_mode {
+                    build_video_contexts(
+                        &source_text,
+                        &segs,
+                        &settings.video_context_mode,
+                        settings.video_context_chars,
+                    )
+                } else {
+                    vec![String::new(); segs.len()]
+                };
+
                 let use_llm =
                     settings.video_llm_service != "None" && !settings.video_llm_service.is_empty();
                 let kws = if use_llm {
@@ -668,14 +894,42 @@ fn run_pexels_branch(
                         settings.video_prompt.clone()
                     };
                     let total_segs = segs.len();
+                    let substituted_keyword_prompts: Vec<String> = segs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, seg)| {
+                            fill_video_prompt(
+                                &kw_instruction,
+                                seg,
+                                contexts.get(i).map(String::as_str),
+                            )
+                        })
+                        .collect();
+                    write_prompt_substitution_debug(
+                        save_dir,
+                        "stock_keyword_prompt_substitution_debug.txt",
+                        "Stock keyword LLM requests after placeholder substitution",
+                        &kw_instruction,
+                        &segs,
+                        &substituted_keyword_prompts,
+                    );
+                    crate::logger::log_job(
+                        job_id,
+                        &job_name,
+                        "Debug prompts saved: stock_keyword_prompt_substitution_debug.txt",
+                    );
+
                     let mut handles = Vec::with_capacity(total_segs);
                     for (i, seg) in segs.iter().enumerate() {
                         let service = settings.video_llm_service.clone();
                         let model = settings.video_llm_model.clone();
                         let key = settings.openrouter_key.clone();
                         let temp = settings.video_llm_temperature;
-                        let instr = kw_instruction.clone();
                         let seg_clone = seg.clone();
+                        let user_prompt = substituted_keyword_prompts
+                            .get(i)
+                            .cloned()
+                            .unwrap_or_else(|| fill_video_prompt(&kw_instruction, &seg_clone, None));
                         let video_stage_c = Arc::clone(&video_stage);
                         let prompts_progress_c = Arc::clone(&prompts_progress);
                         let ctx_c = ctx.clone();
@@ -685,8 +939,8 @@ fn run_pexels_branch(
                                 &service,
                                 &key,
                                 &model,
-                                &instr,
-                                &seg_clone,
+                                "",
+                                &user_prompt,
                                 temp,
                                 Some((job_id, jn.clone())),
                                 None,

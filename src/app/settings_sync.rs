@@ -72,6 +72,9 @@ impl VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
+                || self.video_context_enabled != self.last_saved_settings.video_context_enabled
+                || self.video_context_mode != self.last_saved_settings.video_context_mode
+                || self.video_context_chars != self.last_saved_settings.video_context_chars
                 || self.video_agent_prompt != self.last_saved_settings.video_agent_prompt
                 || self.video_style_enabled != self.last_saved_settings.video_style_enabled
                 || self.video_style_prompt != self.last_saved_settings.video_style_prompt
@@ -203,6 +206,9 @@ impl VideoMakerApp {
                     text_split_mode_openrouter: self.text_split_mode_openrouter.clone(),
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
+                    video_context_enabled: self.video_context_enabled,
+                    video_context_mode: self.video_context_mode.clone(),
+                    video_context_chars: self.video_context_chars,
                     video_agent_prompt: self.video_agent_prompt.clone(),
                     video_style_enabled: self.video_style_enabled,
                     video_style_prompt: self.video_style_prompt.clone(),

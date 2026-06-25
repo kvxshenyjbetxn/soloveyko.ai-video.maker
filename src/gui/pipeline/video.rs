@@ -79,6 +79,35 @@ pub(crate) fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::
     response
 }
 
+/// Вставляє плейсхолдер у TextEdit за поточною позицією курсора.
+fn insert_at_cursor(
+    ui: &mut egui::Ui,
+    edit_id: egui::Id,
+    text: &mut String,
+    placeholder: &str,
+) {
+    if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), edit_id) {
+        if let Some(cursor_range) = state.cursor.char_range() {
+            let cursor_idx = cursor_range.primary.index;
+            let byte_idx = text
+                .char_indices()
+                .map(|(b_idx, _)| b_idx)
+                .nth(cursor_idx)
+                .unwrap_or(text.len());
+            text.insert_str(byte_idx, placeholder);
+
+            let new_char_idx = cursor_idx + placeholder.chars().count();
+            let new_cursor = egui::text::CCursor::new(new_char_idx);
+            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+            state.store(ui.ctx(), edit_id);
+        } else {
+            text.push_str(placeholder);
+        }
+    } else {
+        text.push_str(placeholder);
+    }
+}
+
 /// Повертає відображувану назву та вартість провайдера зображень.
 pub(crate) fn image_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
@@ -116,6 +145,9 @@ pub fn draw_video_section(
     text_split_mode_openrouter: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
+    video_context_enabled: &mut bool,
+    video_context_mode: &mut String,
+    video_context_chars: &mut usize,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
     googler_video_disabled: &mut Vec<String>,
@@ -330,38 +362,53 @@ pub fn draw_video_section(
 
         ui.add_space(4.0);
 
-        // Кнопка вставки плейсхолдера {{text}} за поточним положенням курсора
-        if ui.button(translate(language, "video_insert_placeholder")).clicked() {
-            let text_edit_id = te_resp.id;
-            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) {
-                let to_insert = "{{text}}";
-                if let Some(cursor_range) = state.cursor.char_range() {
-                    let cursor_idx = cursor_range.primary.index;
-                    let byte_idx = video_prompt
-                        .char_indices()
-                        .map(|(b_idx, _)| b_idx)
-                        .nth(cursor_idx)
-                        .unwrap_or(video_prompt.len());
-                    video_prompt.insert_str(byte_idx, to_insert);
-                    let new_char_idx = cursor_idx + to_insert.chars().count();
-                    let new_cursor = egui::text::CCursor::new(new_char_idx);
-                    state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
-                    state.store(ui.ctx(), text_edit_id);
-                } else {
-                    video_prompt.push_str(to_insert);
-                }
-            } else {
-                video_prompt.push_str("{{text}}");
+        // Кнопки швидкої вставки плейсхолдерів за поточним положенням курсора.
+        ui.horizontal(|ui| {
+            if ui.button(translate(language, "video_insert_placeholder")).clicked() {
+                insert_at_cursor(ui, te_resp.id, video_prompt, "{{text}}");
+                te_resp.request_focus();
             }
-            te_resp.request_focus();
-        }
+            if *video_context_enabled
+                && ui.button(translate(language, "video_insert_context_placeholder")).clicked()
+            {
+                insert_at_cursor(ui, te_resp.id, video_prompt, "{{context}}");
+                te_resp.request_focus();
+            }
+        });
 
         ui.add_space(2.0);
-        ui.label(
-            egui::RichText::new(translate(language, "video_placeholder_hint"))
-                .weak()
-                .size(11.0)
-        );
+        let placeholder_hint = if *video_context_enabled {
+            translate(language, "video_placeholder_hint")
+        } else {
+            translate(language, "video_placeholder_hint_basic")
+        };
+        ui.label(egui::RichText::new(placeholder_hint).weak().size(11.0));
+
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(translate(language, "video_context_label")).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::toggle_switch(ui, video_context_enabled);
+            });
+        });
+
+        if *video_context_enabled {
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.radio_value(video_context_mode, "around".to_string(), translate(language, "video_context_around"))
+                    .on_hover_text(translate(language, "video_context_around_hint"));
+                ui.radio_value(video_context_mode, "full".to_string(), translate(language, "video_context_full"))
+                    .on_hover_text(translate(language, "video_context_full_hint"));
+            });
+            if video_context_mode.as_str() == "around" {
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "video_context_chars_label"));
+                    ui.add(egui::DragValue::new(video_context_chars).range(10..=20000).suffix(" симв."));
+                });
+            }
+            ui.label(egui::RichText::new(translate(language, "video_context_hint")).weak().size(11.0));
+        }
 
         } // !is_agent_mode
 
@@ -576,29 +623,18 @@ pub fn draw_video_section(
                         .inner;
                     let win_te_id = win_te_resp.id;
                     ui.add_space(4.0);
-                    if ui.button(translate(language, "video_insert_placeholder")).clicked() {
-                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), win_te_id) {
-                            let to_insert = "{{text}}";
-                            if let Some(cursor_range) = state.cursor.char_range() {
-                                let cursor_idx = cursor_range.primary.index;
-                                let byte_idx = video_prompt
-                                    .char_indices()
-                                    .map(|(b_idx, _)| b_idx)
-                                    .nth(cursor_idx)
-                                    .unwrap_or(video_prompt.len());
-                                video_prompt.insert_str(byte_idx, to_insert);
-                                let new_char_idx = cursor_idx + to_insert.chars().count();
-                                let new_cursor = egui::text::CCursor::new(new_char_idx);
-                                state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
-                                state.store(ui.ctx(), win_te_id);
-                            } else {
-                                video_prompt.push_str(to_insert);
-                            }
-                        } else {
-                            video_prompt.push_str("{{text}}");
+                    ui.horizontal(|ui| {
+                        if ui.button(translate(language, "video_insert_placeholder")).clicked() {
+                            insert_at_cursor(ui, win_te_id, video_prompt, "{{text}}");
+                            ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
                         }
-                        ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
-                    }
+                        if *video_context_enabled
+                            && ui.button(translate(language, "video_insert_context_placeholder")).clicked()
+                        {
+                            insert_at_cursor(ui, win_te_id, video_prompt, "{{context}}");
+                            ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
+                        }
+                    });
                 });
             if !still_open {
                 ui.data_mut(|d| d.insert_persisted(expand_id, false));

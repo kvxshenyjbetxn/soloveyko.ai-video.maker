@@ -41,6 +41,8 @@ fn default_edge_tts_max_threads() -> usize { 5 }
 fn default_ffmpeg_max_threads() -> usize { 2 }
 fn default_googler_threads() -> usize { 5 }
 fn default_video_media_type() -> String { "image".to_string() }
+fn default_video_context_mode() -> String { "around".to_string() }
+fn default_video_context_chars() -> usize { 500 }
 fn default_subtitles_service() -> String { "Whisper".to_string() }
 fn default_assemblyai_key() -> String { String::new() }
 fn default_pexels_key() -> String { String::new() }
@@ -255,6 +257,15 @@ pub struct AppSettings {
     /// Промт стилю для генерації медіа (з плейсхолдером {{text}})
     #[serde(default)]
     pub video_style_prompt: String,
+    /// Чи додавати контекст сценарію в API-промт відеоряду.
+    #[serde(default)]
+    pub video_context_enabled: bool,
+    /// Режим контексту: "full" або "around".
+    #[serde(default = "default_video_context_mode")]
+    pub video_context_mode: String,
+    /// Кількість символів контексту навколо сегмента для режиму "around".
+    #[serde(default = "default_video_context_chars")]
+    pub video_context_chars: usize,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -464,6 +475,9 @@ impl Default for AppSettings {
             video_agent_prompt: String::new(),
             video_style_enabled: false,
             video_style_prompt: String::new(),
+            video_context_enabled: false,
+            video_context_mode: default_video_context_mode(),
+            video_context_chars: default_video_context_chars(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
             googler_video_disabled: vec![],
@@ -727,6 +741,15 @@ pub struct PipelineTemplate {
     /// Промт стилю для генерації медіа (з плейсхолдером {{text}})
     #[serde(default)]
     pub video_style_prompt: String,
+    /// Чи додавати контекст сценарію в API-промт відеоряду.
+    #[serde(default)]
+    pub video_context_enabled: bool,
+    /// Режим контексту: "full" або "around".
+    #[serde(default = "default_video_context_mode")]
+    pub video_context_mode: String,
+    /// Кількість символів контексту навколо сегмента для режиму "around".
+    #[serde(default = "default_video_context_chars")]
+    pub video_context_chars: usize,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -914,6 +937,9 @@ pub fn save_template(
     video_agent_prompt: &str,
     video_style_enabled: bool,
     video_style_prompt: &str,
+    video_context_enabled: bool,
+    video_context_mode: &str,
+    video_context_chars: usize,
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     googler_video_disabled: Vec<String>,
@@ -1009,6 +1035,9 @@ pub fn save_template(
             video_agent_prompt: video_agent_prompt.to_string(),
             video_style_enabled,
             video_style_prompt: video_style_prompt.to_string(),
+            video_context_enabled,
+            video_context_mode: video_context_mode.to_string(),
+            video_context_chars,
             googler_image_priority,
             googler_video_priority,
             googler_video_disabled,

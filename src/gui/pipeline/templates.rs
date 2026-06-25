@@ -38,6 +38,9 @@ pub fn draw_templates_section(
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
+    video_context_enabled: &mut bool,
+    video_context_mode: &mut String,
+    video_context_chars: &mut usize,
     video_agent_prompt: &mut String,
     video_style_enabled: &mut bool,
     video_style_prompt: &mut String,
@@ -172,6 +175,9 @@ pub fn draw_templates_section(
                             *text_split_mode = template.text_split_mode;
                             *text_split_char_limit = template.text_split_char_limit;
                             *video_prompt = template.video_prompt;
+                            *video_context_enabled = template.video_context_enabled;
+                            *video_context_mode = if template.video_context_mode.is_empty() { "around".to_string() } else { template.video_context_mode };
+                            *video_context_chars = template.video_context_chars.max(10);
                             *video_agent_prompt = template.video_agent_prompt;
                             *video_style_enabled = template.video_style_enabled;
                             *video_style_prompt = template.video_style_prompt;

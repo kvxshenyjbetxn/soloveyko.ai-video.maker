@@ -111,6 +111,9 @@ impl Default for VideoMakerApp {
             text_split_mode_openrouter: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
+            video_context_enabled: false,
+            video_context_mode: "around".to_string(),
+            video_context_chars: 500,
             googler_video_upscale_enabled: default_settings.googler_video_upscale_enabled,
             googler_video_upscale_resolution: default_settings
                 .googler_video_upscale_resolution
@@ -361,6 +364,9 @@ impl VideoMakerApp {
         let text_split_mode_openrouter = saved.text_split_mode_openrouter.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
+        let video_context_enabled = saved.video_context_enabled;
+        let video_context_mode = saved.video_context_mode.clone();
+        let video_context_chars = saved.video_context_chars;
         let video_agent_prompt = saved.video_agent_prompt.clone();
         let video_style_enabled = saved.video_style_enabled;
         let video_style_prompt = saved.video_style_prompt.clone();
@@ -565,6 +571,9 @@ impl VideoMakerApp {
             text_split_mode_openrouter,
             text_split_char_limit,
             video_prompt,
+            video_context_enabled,
+            video_context_mode,
+            video_context_chars,
             googler_video_upscale_enabled,
             googler_video_upscale_resolution,
             googler_video_upscale_quality,
