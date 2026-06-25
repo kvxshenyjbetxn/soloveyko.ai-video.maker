@@ -98,9 +98,9 @@ pub fn draw_image_preview(
 
             if close_resp.clicked() {
                 keep_open = false;
-            } else if same_resp.clicked() {
+            } else if !regen_loading && same_resp.clicked() {
                 regen_kind = Some(false);
-            } else if custom_resp.clicked() {
+            } else if !regen_loading && custom_resp.clicked() {
                 regen_kind = Some(true);
             } else if bg.clicked() {
                 if let Some(pos) = bg.interact_pointer_pos() {

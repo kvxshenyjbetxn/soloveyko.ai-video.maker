@@ -98,7 +98,10 @@ pub fn draw_media_regen_window(
 
             ui.add_space(8.0);
 
-            let is_loading = *media_regen_loading.lock().unwrap();
+            let is_loading = media_regen_target
+                .as_ref()
+                .map(|path| media_regen_paths.lock().unwrap().contains(path))
+                .unwrap_or(false);
             ui.add_enabled_ui(!is_loading, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button(translate(language, "gallery_regen_start_btn")).clicked() {

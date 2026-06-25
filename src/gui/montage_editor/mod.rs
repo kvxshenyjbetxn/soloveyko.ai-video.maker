@@ -517,9 +517,9 @@ fn draw_montage_media_preview(
 
             if close_r.clicked() {
                 keep_open = false;
-            } else if same_r.clicked() {
+            } else if !is_animating && same_r.clicked() {
                 regen_kind = Some(false);
-            } else if cust_r.clicked() {
+            } else if !is_animating && cust_r.clicked() {
                 regen_kind = Some(true);
             } else if bg.clicked() {
                 if let Some(pos) = bg.interact_pointer_pos() {

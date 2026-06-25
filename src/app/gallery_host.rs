@@ -49,8 +49,7 @@ impl VideoMakerApp {
                     .and_then(|t| t.as_ref())
                     .cloned();
                 if let Some(texture) = tex {
-                    let regen_loading_this = *self.media_regen_loading.lock().unwrap()
-                        && self.media_regen_target.as_deref() == Some(path.as_path());
+                    let regen_loading_this = self.media_regen_paths.lock().unwrap().contains(&path);
                     let (keep_open, regen_kind) =
                         crate::gui::gallery::draw_image_preview(ctx, &texture, regen_loading_this);
                     if !keep_open {
@@ -386,23 +385,6 @@ impl VideoMakerApp {
                     }
                     Err(e) => {
                         self.media_regen_error = Some(e);
-                    }
-                }
-            }
-        }
-
-        // Обробка стану custom regen window (тільки для відображення помилки та скидання target)
-        {
-            let result = self.media_regen_result.lock().unwrap().take();
-            if let Some(outcome) = result {
-                match outcome {
-                    Ok(()) => {
-                        self.media_regen_target = None;
-                        self.media_regen_error = None;
-                    }
-                    Err(e) => {
-                        self.media_regen_error = Some(e);
-                        self.media_regen_target = None;
                     }
                 }
             }

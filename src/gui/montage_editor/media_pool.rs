@@ -350,11 +350,11 @@ pub(super) fn draw_media_pool(
                         }
                         ui.separator();
                     }
-                    if ui.button(translate(language, "montage_editor_regen_same")).clicked() {
+                    if ui.add_enabled(!is_busy, egui::Button::new(translate(language, "montage_editor_regen_same"))).clicked() {
                         context_regen = Some((media_path.clone(), false));
                         ui.close_menu();
                     }
-                    if ui.button(translate(language, "montage_editor_regen_custom")).clicked() {
+                    if ui.add_enabled(!is_busy, egui::Button::new(translate(language, "montage_editor_regen_custom"))).clicked() {
                         context_regen = Some((media_path.clone(), true));
                         ui.close_menu();
                     }

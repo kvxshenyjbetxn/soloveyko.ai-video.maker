@@ -1010,11 +1010,11 @@ pub(super) fn draw_timeline(
                             }
                             ui.separator();
                         }
-                        if ui.button(translate(language, "montage_editor_regen_same")).clicked() {
+                        if ui.add_enabled(!is_animating, egui::Button::new(translate(language, "montage_editor_regen_same"))).clicked() {
                             editor.pending_regen = Some((clip_path.clone(), false));
                             ui.close_menu();
                         }
-                        if ui.button(translate(language, "montage_editor_regen_custom")).clicked() {
+                        if ui.add_enabled(!is_animating, egui::Button::new(translate(language, "montage_editor_regen_custom"))).clicked() {
                             editor.pending_regen = Some((clip_path.clone(), true));
                             ui.close_menu();
                         }
