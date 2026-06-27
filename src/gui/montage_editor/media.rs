@@ -1,10 +1,20 @@
 use super::types::{ClipKind, PreviewRenderSettings};
-use super::utils::{frame_cache_dir, probe_duration_and_audio, sharp_frame_cache_dir, uuid_str};
+use super::utils::{
+    acquire_preview_extraction, frame_cache_dir, probe_duration_and_audio, sharp_frame_cache_dir,
+    uuid_str,
+};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 // ─── Медіа-файл у пулі ───────────────────────────────────────────────────────
+
+fn save_preview_jpeg(img: &image::DynamicImage, out: &Path, quality: u8) -> image::ImageResult<()> {
+    let rgb = img.to_rgb8();
+    let file = std::fs::File::create(out)?;
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
+    encoder.encode_image(&rgb)
+}
 
 #[derive(Clone)]
 pub struct MediaItem {
@@ -91,13 +101,40 @@ impl MediaItem {
             // Вже є готовий прев'ю-кадр з попередньої сесії.
             extraction_complete.store(true, Ordering::Relaxed);
         } else if is_image {
-            // Зображення більше не декодуємо масово під час відкриття редактора.
-            // Кадр буде створено ліниво у FrameCache, коли він реально знадобиться.
+            let path_clone = path.clone();
+            let dir = cache_dir.clone();
+            let flag = extraction_complete.clone();
+            let width = preview.quality.scrub_width();
+            let quality = preview.quality.jpeg_quality();
+            std::thread::spawn(move || {
+                let _permit = acquire_preview_extraction();
+                std::fs::create_dir_all(&dir).ok();
+                let out = dir.join("000001.jpg");
+
+                for delay_ms in [0u64, 250, 800, 2000] {
+                    if delay_ms > 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                    }
+                    if out.exists() {
+                        flag.store(true, Ordering::Relaxed);
+                        return;
+                    }
+                    if let Ok(bytes) = std::fs::read(&path_clone) {
+                        if let Ok(img) = image::load_from_memory(&bytes) {
+                            let thumb = img.thumbnail(width, width * 2);
+                            if save_preview_jpeg(&thumb, &out, quality).is_ok() {
+                                let _ = std::fs::write(dir.join(".complete"), b"1");
+                                flag.store(true, Ordering::Relaxed);
+                                return;
+                            }
+                        }
+                    }
+                }
+            });
         } else if is_video {
-            // Відео не обробляємо наперед: кадри витягуються тільки коли їх реально
-            // просить preview/thumbnail. Це прибирає масовий старт ffmpeg при
-            // відкритті редактора з великим пулом відео.
-            extraction_complete.store(true, Ordering::Relaxed);
+            // Відео не проганяємо всі разом при відкритті проекту.
+            // Активний кліп сам запускає пріоритетний chunk-preload біля playhead у FrameCache.
+            extraction_complete.store(false, Ordering::Relaxed);
         } else {
             // Аудіо: вилучення не потрібне
             extraction_complete.store(true, Ordering::Relaxed);

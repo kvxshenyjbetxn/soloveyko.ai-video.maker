@@ -378,7 +378,7 @@ fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
                 ctx.clone(),
             );
             let media = MediaItem::new(dl.dest_path.clone(), Path::new(&state.save_path), render);
-            let frame_cache = FrameCache::new(60);
+            let frame_cache = FrameCache::new(render.texture_cache_size() / 2);
             state.trim_edit = Some(TrimEditState {
                 segment_idx: dl.segment_idx,
                 video_id: dl.video_id,
@@ -528,7 +528,7 @@ fn draw_trim_editor(
             trim.playhead = (trim.playhead + elapsed) % trim.segment_duration.max(0.001);
         }
         trim.last_tick = Some(Instant::now());
-        let fps = trim.render.fps.min(30.0);
+        let fps = trim.render.playback_fps();
         ctx.request_repaint_after(Duration::from_secs_f32(1.0 / fps));
     } else {
         trim.last_tick = None;
@@ -541,7 +541,14 @@ fn draw_trim_editor(
     // sharp_when_idle = true щоб показувати чіткий кадр коли плеєр на паузі
     let preview_tex = trim
         .frame_cache
-        .get_frame(ctx, &trim.media, show_time, !trim.is_playing, trim.render)
+        .get_frame(
+            ctx,
+            &trim.media,
+            show_time,
+            trim.is_playing,
+            !trim.is_playing,
+            trim.render,
+        )
         .or_else(|| {
             // Fallback: найближчий кадр стрічки поки екстракція ще йде
             trim.preview_frames
@@ -1421,7 +1428,7 @@ fn start_video_download_if_needed(
             ctx.clone(),
         );
         let media = MediaItem::new(dest.clone(), Path::new(&state.save_path), render);
-        let frame_cache = FrameCache::new(60);
+        let frame_cache = FrameCache::new(render.texture_cache_size() / 2);
         state.trim_edit = Some(TrimEditState {
             segment_idx: seg_idx,
             video_id: vid.id.clone(),

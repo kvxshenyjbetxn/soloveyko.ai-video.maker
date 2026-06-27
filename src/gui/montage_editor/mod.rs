@@ -303,7 +303,8 @@ pub fn draw_montage_editor_window(
                 }
             }
         }
-        ctx.request_repaint();
+        let playback_fps = editor.preview_render.playback_fps().max(1.0);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / playback_fps));
     }
 
     let title = format!(
@@ -558,7 +559,7 @@ fn load_preview_texture(
         let media = editor.media_pool.iter().find(|m| m.path == path).cloned()?;
         editor
             .frame_cache
-            .get_frame(ctx, &media, 0.0, false, editor.preview_render)
+            .get_frame(ctx, &media, 0.0, false, false, editor.preview_render)
     } else {
         None
     }

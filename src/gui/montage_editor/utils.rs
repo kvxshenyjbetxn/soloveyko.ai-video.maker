@@ -115,6 +115,55 @@ impl Drop for ProbePermit<'_> {
     }
 }
 
+/// Лімітер важких ffmpeg-екстракцій превʼю.
+/// Дозволяє повернути плавний playback, але без масового старту десятків ffmpeg,
+/// який раніше морозив увесь ПК на великих проектах.
+struct PreviewExtractionLimiter {
+    active: Mutex<usize>,
+    condvar: Condvar,
+}
+
+impl PreviewExtractionLimiter {
+    fn get() -> &'static Self {
+        static LIMITER: OnceLock<PreviewExtractionLimiter> = OnceLock::new();
+        LIMITER.get_or_init(|| PreviewExtractionLimiter {
+            active: Mutex::new(0),
+            condvar: Condvar::new(),
+        })
+    }
+
+    fn acquire(&self) -> PreviewExtractionPermit<'_> {
+        let mut active = self.active.lock().unwrap();
+        while *active >= 2 {
+            active = self.condvar.wait(active).unwrap();
+        }
+        *active += 1;
+        PreviewExtractionPermit { limiter: self }
+    }
+
+    fn release(&self) {
+        let mut active = self.active.lock().unwrap();
+        if *active > 0 {
+            *active -= 1;
+        }
+        self.condvar.notify_one();
+    }
+}
+
+pub struct PreviewExtractionPermit<'a> {
+    limiter: &'a PreviewExtractionLimiter,
+}
+
+impl Drop for PreviewExtractionPermit<'_> {
+    fn drop(&mut self) {
+        self.limiter.release();
+    }
+}
+
+pub fn acquire_preview_extraction() -> PreviewExtractionPermit<'static> {
+    PreviewExtractionLimiter::get().acquire()
+}
+
 fn probe_media_info(path: &Path) -> (Option<f32>, bool) {
     let _permit = ProbeLimiter::get().acquire();
     let clean_path = clean_windows_path(path);

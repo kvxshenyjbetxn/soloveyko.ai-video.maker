@@ -348,6 +348,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             ui.ctx(),
             m,
             source_offset,
+            editor.is_playing,
             use_sharp_frame,
             editor.preview_render,
         )
@@ -360,18 +361,28 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                     let out_t = (ph - out.start_secs + out.trim_start)
                         .max(0.0)
                         .min(m.duration_secs - 0.001);
-                    editor
-                        .frame_cache
-                        .get_frame(ui.ctx(), m, out_t, false, editor.preview_render)
+                    editor.frame_cache.get_frame(
+                        ui.ctx(),
+                        m,
+                        out_t,
+                        editor.is_playing,
+                        false,
+                        editor.preview_render,
+                    )
                 } else {
                     None
                 }
             } else {
                 // Settings-перехід: останній кадр попереднього кліпу
                 let last_t = (m.duration_secs - 0.001).max(0.0);
-                editor
-                    .frame_cache
-                    .get_frame(ui.ctx(), m, last_t, false, editor.preview_render)
+                editor.frame_cache.get_frame(
+                    ui.ctx(),
+                    m,
+                    last_t,
+                    editor.is_playing,
+                    false,
+                    editor.preview_render,
+                )
             }
         })
     } else {
@@ -823,6 +834,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                     ui.ctx(),
                     &media,
                     source_t,
+                    editor.is_playing,
                     use_sharp_frame,
                     editor.preview_render,
                 ) {

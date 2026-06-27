@@ -2,9 +2,9 @@ use super::audio::PlayingAudio;
 use super::frame_cache::FrameCache;
 use super::media::MediaItem;
 use super::types::{
-    ClipDragState, ClipKind, EditorClip, FRAME_CACHE_SIZE, MontagePreviewSettings,
-    OpacityDragState, PreviewDragState, PreviewQuality, PreviewRenderSettings, TimelineSnapshot,
-    TrackDragState, TrackKind,
+    ClipDragState, ClipKind, EditorClip, MontagePreviewSettings, OpacityDragState,
+    PreviewDragState, PreviewQuality, PreviewRenderSettings, TimelineSnapshot, TrackDragState,
+    TrackKind,
 };
 use super::utils::{probe_duration, uuid_str};
 use std::collections::{HashMap, HashSet};
@@ -245,7 +245,7 @@ impl MontageEditorState {
             dragged_media_id: None,
             drop_target_track: None,
             clip_drag_state: None,
-            frame_cache: FrameCache::new(FRAME_CACHE_SIZE),
+            frame_cache: FrameCache::new(preview_render.texture_cache_size()),
             preview_settings: MontagePreviewSettings::default(),
             preview_render,
             timeline_height: 220.0,
@@ -342,7 +342,9 @@ impl MontageEditorState {
 
         self.preview_render = next;
         self.pending_preview_render = Some(next);
-        self.frame_cache = FrameCache::new(FRAME_CACHE_SIZE);
+        self.frame_cache = FrameCache::new(next.texture_cache_size());
+        self.pool_thumbnails.clear();
+        self.pool_preview_texture = None;
         for media in &mut self.media_pool {
             let old_id = media.id.clone();
             let path = media.path.clone();

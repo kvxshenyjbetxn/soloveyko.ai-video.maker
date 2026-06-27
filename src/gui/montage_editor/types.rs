@@ -2,8 +2,8 @@ use eframe::egui::{Pos2, Rect};
 use std::path::PathBuf;
 
 pub const PREVIEW_FPS: f32 = 30.0;
-/// Кількість GPU-текстур у RAM/GPU LRU.
-pub const FRAME_CACHE_SIZE: usize = 80;
+/// Базовий розмір LRU для текстур превʼю.
+pub const FRAME_CACHE_SIZE: usize = 96;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PreviewQuality {
@@ -132,6 +132,95 @@ impl Default for PreviewRenderSettings {
 impl PreviewRenderSettings {
     pub fn fps_tag(self) -> String {
         format!("f{}", self.fps.round() as u32)
+    }
+
+    /// Для scrub треба стабільна відповідність часу → кадру,
+    /// інакше превʼю пропадає або перескакує під час перемотування.
+    pub fn scrub_frame_step(self) -> u32 {
+        1
+    }
+
+    /// Скільки кадрів наперед підвантажувати у фоні під час ручного скрабінгу.
+    pub fn prefetch_frames(self) -> u32 {
+        match self.quality {
+            PreviewQuality::Performance => 0,
+            PreviewQuality::Balanced => 1,
+            PreviewQuality::High => 2,
+            PreviewQuality::Ultra => 3,
+        }
+    }
+
+    /// Реальна частота оновлення під час playback.
+    /// Це верхня межа для smooth preview: нижчі quality-профілі свідомо
+    /// зменшують cadence, щоб ffmpeg встигав готувати кадри без ривків.
+    pub fn playback_fps(self) -> f32 {
+        let cap = match self.quality {
+            PreviewQuality::Performance => 12.0,
+            PreviewQuality::Balanced => 18.0,
+            PreviewQuality::High => 24.0,
+            PreviewQuality::Ultra => 30.0,
+        };
+        self.fps.min(cap).max(8.0)
+    }
+
+    /// Playback cadence обмежується repaint-таймером, а не пропуском індексів кадрів.
+    pub fn playback_frame_step(self) -> u32 {
+        1
+    }
+
+    /// Під час playback підвантажуємо трохи агресивніше, щоб наступний кадр
+    /// був готовий до моменту показу.
+    pub fn playback_prefetch_frames(self) -> u32 {
+        match self.quality {
+            PreviewQuality::Performance => 1,
+            PreviewQuality::Balanced => 2,
+            PreviewQuality::High => 3,
+            PreviewQuality::Ultra => 4,
+        }
+    }
+
+    /// Ліміт паралельних фонових завантажень кадрів.
+    /// Низька якість = менше фонових ffmpeg-процесів = менше лагів UI.
+    pub fn max_parallel_frame_loads(self) -> usize {
+        match self.quality {
+            PreviewQuality::Performance => 1,
+            PreviewQuality::Balanced => 2,
+            PreviewQuality::High => 3,
+            PreviewQuality::Ultra => 4,
+        }
+    }
+
+    /// Скільки текстур тримати в RAM/GPU, щоб повторне програвання ділянки
+    /// не перечитувало її з диска заново.
+    pub fn texture_cache_size(self) -> usize {
+        let seconds_to_keep = match self.quality {
+            PreviewQuality::Performance => 8,
+            PreviewQuality::Balanced => 10,
+            PreviewQuality::High => 12,
+            PreviewQuality::Ultra => 14,
+        };
+        (self.playback_fps().ceil() as usize * seconds_to_keep).max(FRAME_CACHE_SIZE)
+    }
+
+    /// Скільки вже готових proxy-кадрів варто підігрівати навколо playhead.
+    pub fn cached_frame_warmup(self) -> u32 {
+        match self.quality {
+            PreviewQuality::Performance => 10,
+            PreviewQuality::Balanced => 16,
+            PreviewQuality::High => 24,
+            PreviewQuality::Ultra => 32,
+        }
+    }
+
+    /// Чіткий high-res still має сенс тільки на вищих quality-профілях.
+    pub fn allows_sharp_frame(self) -> bool {
+        matches!(self.quality, PreviewQuality::High | PreviewQuality::Ultra)
+    }
+
+    /// Наскільки далеко можна шукати сусідній уже готовий кадр як fallback.
+    pub fn fallback_frame_distance(self) -> u32 {
+        let base = (self.fps / 3.0).ceil().max(3.0) as u32;
+        base.max(self.scrub_frame_step() * 3)
     }
 }
 
