@@ -56,6 +56,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_regen_same" => "Regenerate",
         "montage_editor_regen_custom" => "Regenerate (custom)",
         "montage_editor_replace_stock" => "🔄 Replace stock media",
+        "montage_editor_placeholder_title" => "Segment Placeholder",
+        "montage_editor_placeholder_hint" => {
+            "This segment does not have ready media yet. You can pick stock media or generate a file from the saved prompt."
+        }
         "montage_editor_inspector" => "Inspector",
         "montage_editor_no_selection" => "Select a clip on the timeline",
         "montage_editor_clip_start" => "Start (s):",
@@ -466,6 +470,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_regen_custom_tooltip" => "Regenerate with custom settings",
         "gallery_regen_window_title" => "Regenerate",
         "gallery_regen_media_type_label" => "Media type",
+        "gallery_regen_media_type_locked" => {
+            "For a new file, the media type is locked to the segment's current settings."
+        }
         "gallery_regen_priority_image_label" => "Provider priority (image)",
         "gallery_regen_priority_video_label" => "Provider priority (video)",
         "gallery_regen_prompt_label" => "Prompt (empty = use saved prompt)",

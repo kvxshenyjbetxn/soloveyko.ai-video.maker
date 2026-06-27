@@ -173,33 +173,38 @@ fn sync_segment_durations_from_timeline(save_dir: &Path, cache: &mut Vec<Segment
 }
 
 fn build_skeleton_cache_from_timeline(save_dir: &Path) -> Option<Vec<SegmentCache>> {
-    let content = std::fs::read_to_string(save_dir.join("timeline.json")).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let segs = v["segments"].as_array()?;
-    let result: Vec<SegmentCache> = segs
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| {
-            let text = s["text"].as_str()?.to_string();
-            let start = s["start_secs"].as_f64().unwrap_or(0.0);
-            let end = s["end_secs"].as_f64().unwrap_or(0.0);
-            let duration = (end - start).max(0.0) as f32;
-            Some(SegmentCache {
-                index: i,
-                keyword: text.clone(),
-                segment_text: text,
-                segment_duration: duration,
-                photos: vec![],
-                videos: vec![],
-                selected: None,
+    fn read_skeleton(path: &Path) -> Option<Vec<SegmentCache>> {
+        let content = std::fs::read_to_string(path).ok()?;
+        let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+        let segs = v["segments"].as_array()?;
+        let result: Vec<SegmentCache> = segs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                let text = s["text"].as_str()?.to_string();
+                let start = s["start_secs"].as_f64().unwrap_or(0.0);
+                let end = s["end_secs"].as_f64().unwrap_or(0.0);
+                let duration = (end - start).max(0.0) as f32;
+                Some(SegmentCache {
+                    index: i,
+                    keyword: text.clone(),
+                    segment_text: text,
+                    segment_duration: duration,
+                    photos: vec![],
+                    videos: vec![],
+                    selected: None,
+                })
             })
-        })
-        .collect();
-    if result.is_empty() {
-        None
-    } else {
-        Some(result)
+            .collect();
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
     }
+
+    read_skeleton(&save_dir.join("timeline.json"))
+        .or_else(|| read_skeleton(&save_dir.join("segments.json")))
 }
 
 // ─── Lazy search ──────────────────────────────────────────────────────────────

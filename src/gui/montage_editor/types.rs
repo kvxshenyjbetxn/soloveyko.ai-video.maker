@@ -246,11 +246,11 @@ pub struct EditorClip {
     pub zoom_enabled: bool,
     /// Чи застосовувати ефект покачування до цього кліпу у превью.
     pub shake_enabled: bool,
-    /// Чи є кліп плейсхолдером (медіа ще не обрано — чекає вибору стоку).
+    /// Чи є кліп плейсхолдером (медіа ще не готове або ще не обрано).
     pub is_placeholder: bool,
     /// Початок обрізки у вихідному файлі (секунди). 0.0 = з початку.
     pub trim_start: f32,
-    /// Індекс сегменту в stock_cache.json (для кліпів обраних зі стоків; None = не стокове медіа).
+    /// Індекс сегменту пайплайну; використовується для стокових кліпів і плейсхолдерів.
     pub stock_seg_idx: Option<usize>,
     /// Тип xfade-переходу для overlap-зон ("fade", "wipeleft", "dissolve", …).
     pub overlap_transition: String,

@@ -373,6 +373,10 @@ impl VideoMakerApp {
                                 editor.pool_thumbnails.remove(&new_id);
                                 editor.active_audios.clear();
                                 let _ = editor.save_to_timeline();
+                            } else {
+                                // Це новий файл для плейсхолдера — дамо редактору підхопити його
+                                // через refresh_placeholder_clips на наступному кадрі.
+                                editor.needs_stock_refresh = true;
                             }
                             if editor.pool_preview.as_deref() == Some(path.as_path()) {
                                 // Виставляємо stale замість негайного None — дає GPU-бекенду

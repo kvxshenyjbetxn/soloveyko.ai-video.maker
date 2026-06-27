@@ -56,6 +56,10 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_regen_same" => "Перегенерувати",
         "montage_editor_regen_custom" => "Перегенерувати (налаштування)",
         "montage_editor_replace_stock" => "🔄 Замінити стокове медіа",
+        "montage_editor_placeholder_title" => "Плейсхолдер сегмента",
+        "montage_editor_placeholder_hint" => {
+            "Для цього сегмента ще немає готового медіа. Можна вибрати сток або згенерувати файл за збереженим промтом."
+        }
         "montage_editor_inspector" => "Інспектор",
         "montage_editor_no_selection" => "Виберіть кліп на таймлінії",
         "montage_editor_clip_start" => "Старт (с):",
@@ -466,6 +470,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "gallery_regen_custom_tooltip" => "Перегенерувати з іншими налаштуваннями",
         "gallery_regen_window_title" => "Перегенерація",
         "gallery_regen_media_type_label" => "Тип медіа",
+        "gallery_regen_media_type_locked" => {
+            "Для нового файла тип медіа зафіксовано поточними налаштуваннями сегмента."
+        }
         "gallery_regen_priority_image_label" => "Пріоритет провайдерів (зображення)",
         "gallery_regen_priority_video_label" => "Пріоритет провайдерів (відео)",
         "gallery_regen_prompt_label" => "Промт (порожнє = зі збереженого файлу)",

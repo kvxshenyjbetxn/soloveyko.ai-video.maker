@@ -47,8 +47,10 @@ pub struct MontageEditorState {
     pub selected_media_ids: HashSet<String>,
     /// Тимчасові шляхи для оживлення (заповнюються draw_*, обробляються в draw_montage_editor_window)
     pub pending_animate_paths: Vec<PathBuf>,
-    /// Тимчасова дія перегенерації (заповнюється draw_*, обробляється в draw_montage_editor_window)
+    /// Тимчасова дія перегенерації для вже існуючого медіафайлу.
     pub pending_regen: Option<(PathBuf, bool)>,
+    /// Тимчасова дія генерації для плейсхолдера сегмента (segment_idx, is_custom).
+    pub pending_placeholder_regen: Option<(usize, bool)>,
     /// Шлях медіа що зараз відкрите у fullscreen preview
     pub pool_preview: Option<PathBuf>,
     /// Кешована текстура для fullscreen preview (шлях, текстура)
@@ -62,7 +64,7 @@ pub struct MontageEditorState {
     pub maximized: bool,
     /// Запит на відкриття Stock Picker для сегмента з вказаним індексом
     pub pending_open_stock_picker: Option<usize>,
-    /// Прапорець: оновити плейсхолдери з stock_cache.json (встановлюється після підтвердження вибору стоку)
+    /// Прапорець: примусово оновити плейсхолдери після вибору стоку або допису нового медіа.
     pub needs_stock_refresh: bool,
     /// Блокує drag на превью (коли поверх відкрито stock picker або інше вікно)
     pub input_blocked: bool,
@@ -252,6 +254,7 @@ impl MontageEditorState {
             selected_media_ids: HashSet::new(),
             pending_animate_paths: vec![],
             pending_regen: None,
+            pending_placeholder_regen: None,
             pool_preview: None,
             pool_preview_texture: None,
             preview_stale_path: None,
@@ -637,6 +640,113 @@ fn clip_from_json_seg(
     }
 }
 
+fn segment_media_stem(seg_idx: usize) -> String {
+    format!("{:04}", seg_idx + 1)
+}
+
+fn placeholder_segment_index(clip: &EditorClip) -> Option<usize> {
+    if let Some(idx) = clip.stock_seg_idx {
+        return Some(idx);
+    }
+    clip.media_id
+        .strip_prefix("placeholder_")
+        .and_then(|s| s.parse::<usize>().ok())
+}
+
+fn existing_segment_media_rel_path(save_path: &Path, seg_idx: usize) -> Option<String> {
+    let media_dir = save_path.join("media");
+    let stem = segment_media_stem(seg_idx);
+    for ext in ["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm"] {
+        let file_name = format!("{}.{}", stem, ext);
+        if media_dir.join(&file_name).exists() {
+            return Some(format!("media/{}", file_name));
+        }
+    }
+    None
+}
+
+pub(super) fn placeholder_output_path(
+    save_path: &Path,
+    seg_idx: usize,
+    media_type: &str,
+) -> PathBuf {
+    let ext = if media_type == "video" { "mp4" } else { "jpg" };
+    save_path
+        .join("media")
+        .join(format!("{}.{}", segment_media_stem(seg_idx), ext))
+}
+
+fn resolve_placeholder_media(
+    save_path: &Path,
+    seg_idx: usize,
+    stock_cache: Option<&[crate::api::stock::SegmentCache]>,
+) -> Option<(PathBuf, ClipKind, f32)> {
+    if let Some(entry) = stock_cache.and_then(|cache| cache.get(seg_idx)) {
+        if let Some(sel) = &entry.selected {
+            let file_path = save_path.join("media").join(&sel.filename);
+            if file_path.exists() {
+                let ext = file_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
+                    ClipKind::Video
+                } else {
+                    ClipKind::Image
+                };
+                return Some((file_path, kind, sel.trim_start));
+            }
+        }
+    }
+
+    let rel_path = existing_segment_media_rel_path(save_path, seg_idx)?;
+    let file_path: PathBuf = save_path.join(&rel_path).components().collect();
+    let ext = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
+        ClipKind::Video
+    } else {
+        ClipKind::Image
+    };
+    Some((file_path, kind, 0.0))
+}
+
+fn build_placeholder_clip(
+    seg_idx: usize,
+    text: &str,
+    start: f32,
+    end: f32,
+    track_idx: usize,
+) -> EditorClip {
+    EditorClip {
+        id: uuid_str(),
+        media_id: format!("placeholder_{}", seg_idx),
+        path: None,
+        name: text.chars().take(24).collect::<String>(),
+        start_secs: start,
+        duration: (end - start).max(0.5),
+        track_idx,
+        kind: ClipKind::Image,
+        scale: 1.0,
+        pos_x: 0.0,
+        pos_y: 0.0,
+        zoom_enabled: false,
+        shake_enabled: false,
+        is_placeholder: true,
+        trim_start: 0.0,
+        stock_seg_idx: Some(seg_idx),
+        overlap_transition: "fade".to_string(),
+        opacity: 1.0,
+        pair_id: None,
+        audio_linked: false,
+        is_embedded_audio: false,
+    }
+}
+
 fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
     let path = save_path.join("timeline.json");
     if !path.exists() {
@@ -680,102 +790,67 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
         // stock_cache.json для відновлення медіа в режимі стоків (пріоритет над індексним маппінгом)
         let stock_cache = crate::api::stock::load_cache(save_path);
 
-        // Збираємо медіафайли для fallback-відновлення null-media сегментів
-        // (використовується тільки коли немає stock_cache і немає медіа в сегменті)
-        let media_dir = save_path.join("media");
-        let recovery_files: Vec<String> = if media_dir.exists() {
-            let mut files: Vec<String> = std::fs::read_dir(&media_dir)
-                .ok()
-                .into_iter()
-                .flatten()
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    let name = e.file_name();
-                    let s = name.to_string_lossy();
-                    let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
-                    matches!(
-                        ext.as_str(),
-                        "jpg" | "jpeg" | "png" | "webp" | "gif" | "mp4" | "mov" | "webm"
-                    )
-                })
-                .map(|e| e.file_name().to_string_lossy().to_string())
-                .collect();
-            files.sort();
-            files
-        } else {
-            Vec::new()
-        };
-        let n_segs = segs.len();
-        let n_files = recovery_files.len();
-
         for (i, seg) in segs.iter().enumerate() {
+            let text = seg["text"].as_str();
             let media_str = seg["media"].as_str().map(|s| s.to_string()).or_else(|| {
-                // Відновлення лише для pipeline-формату (є поле "text"), не для редакторських gap-сегментів
-                if seg["text"].as_str().is_none() {
-                    return None;
-                }
+                // Відновлення лише для pipeline-формату (є поле "text"),
+                // не для редакторських gap-сегментів.
+                text?;
 
-                // Режим стоків: якщо stock_cache.json існує — він є єдиним джерелом медіа.
-                // Сегменти без вибраного стоку залишаються плейсхолдерами (не беремо перший з пулу).
-                if let Some(ref cache) = stock_cache {
-                    if let Some(entry) = cache.get(i) {
-                        if let Some(sel) = &entry.selected {
-                            let fp = format!("media/{}", sel.filename);
-                            if save_path.join(&fp).exists() {
-                                return Some(fp);
-                            }
+                if let Some(entry) = stock_cache.as_ref().and_then(|cache| cache.get(i)) {
+                    if let Some(sel) = &entry.selected {
+                        let fp = format!("media/{}", sel.filename);
+                        if save_path.join(&fp).exists() {
+                            return Some(fp);
                         }
                     }
-                    return None; // stocks-режим, але медіа ще не вибрано — плейсхолдер
                 }
 
-                // Fallback (не stocks-режим): пропорційний індексний маппінг (для 0001.jpg…)
-                if n_files == 0 {
-                    return None;
-                }
-                let file_idx = if n_files <= n_segs {
-                    (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
-                } else {
-                    i.min(n_files - 1)
-                };
-                recovery_files.get(file_idx).map(|f| format!("media/{}", f))
+                existing_segment_media_rel_path(save_path, i)
             });
 
             if let Some(media) = media_str {
+                let media_path = save_path.join(&media);
+                let is_missing_pipeline_media = text.is_some() && !media_path.exists();
+                if is_missing_pipeline_media {
+                    if let Some((resolved_path, _, _)) =
+                        resolve_placeholder_media(save_path, i, stock_cache.as_deref())
+                    {
+                        let rel = resolved_path
+                            .strip_prefix(save_path)
+                            .ok()
+                            .map(|p| p.to_string_lossy().replace('\\', "/"))
+                            .unwrap_or(media.clone());
+                        let mut clip = clip_from_json_seg(seg, &rel, save_path, bg_track_idx);
+                        if clip.stock_seg_idx.is_none() {
+                            clip.stock_seg_idx = Some(i);
+                        }
+                        clips.push(clip);
+                    } else {
+                        let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
+                        let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+                        clips.push(build_placeholder_clip(
+                            i,
+                            text.unwrap_or(""),
+                            start,
+                            end,
+                            bg_track_idx,
+                        ));
+                    }
+                    continue;
+                }
+
                 let mut clip = clip_from_json_seg(seg, &media, save_path, bg_track_idx);
                 // Pipeline-формат (є "text") не містить stock_seg_idx у JSON — відновлюємо з індексу сегменту
-                if clip.stock_seg_idx.is_none() && seg["text"].as_str().is_some() {
+                if clip.stock_seg_idx.is_none() && text.is_some() {
                     clip.stock_seg_idx = Some(i);
                 }
                 clips.push(clip);
-            } else if seg["text"].as_str().is_some() {
+            } else if let Some(text) = text {
                 // Сегмент без медіа (media: null) — плейсхолдер для Stock Picker
-                let text = seg["text"].as_str().unwrap_or("").to_string();
                 let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
                 let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
-                clips.push(EditorClip {
-                    id: uuid_str(),
-                    media_id: format!("placeholder_{}", i),
-                    path: None,
-                    name: text.chars().take(24).collect::<String>(),
-                    start_secs: start,
-                    duration: (end - start).max(0.5),
-                    track_idx: bg_track_idx,
-                    kind: ClipKind::Image,
-                    scale: 1.0,
-                    pos_x: 0.0,
-                    pos_y: 0.0,
-                    zoom_enabled: false,
-                    shake_enabled: false,
-                    is_placeholder: true,
-                    trim_start: 0.0,
-                    stock_seg_idx: Some(i),
-                    overlap_transition: "fade".to_string(),
-                    opacity: 1.0,
-                    pair_id: None,
-                    audio_linked: false,
-                    is_embedded_audio: false,
-                });
+                clips.push(build_placeholder_clip(i, text, start, end, bg_track_idx));
             }
         }
     }
@@ -820,35 +895,13 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                             if seg["media"].as_str().is_some() {
                                 continue;
                             } // вже є медіа
-                            let text = seg["text"].as_str().unwrap_or("").to_string();
+                            let text = seg["text"].as_str().unwrap_or("");
                             if text.is_empty() {
                                 continue;
                             }
                             let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
                             let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
-                            clips.push(EditorClip {
-                                id: uuid_str(),
-                                media_id: format!("placeholder_{}", i),
-                                path: None,
-                                name: text.chars().take(24).collect::<String>(),
-                                start_secs: start,
-                                duration: (end - start).max(0.5),
-                                track_idx: stock_track,
-                                kind: ClipKind::Image,
-                                scale: 1.0,
-                                pos_x: 0.0,
-                                pos_y: 0.0,
-                                zoom_enabled: false,
-                                shake_enabled: false,
-                                is_placeholder: true,
-                                trim_start: 0.0,
-                                stock_seg_idx: Some(i),
-                                overlap_transition: "fade".to_string(),
-                                opacity: 1.0,
-                                pair_id: None,
-                                audio_linked: false,
-                                is_embedded_audio: false,
-                            });
+                            clips.push(build_placeholder_clip(i, text, start, end, stock_track));
                         }
                     }
                 }
@@ -899,57 +952,33 @@ fn find_audio_file(save_path: &Path) -> Option<PathBuf> {
 /// Після підтвердження вибору стоку — замінює плейсхолдери реальними кліпами.
 /// Повертає true якщо є ще незавантажені файли (треба повторити наступного кадру).
 pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
-    let cache_path = editor.save_path.join("stock_cache.json");
-    let content = match std::fs::read_to_string(&cache_path) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-    let cache: Vec<crate::api::stock::SegmentCache> = match serde_json::from_str(&content) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
+    let stock_cache = crate::api::stock::load_cache(&editor.save_path);
     let mut replacements: Vec<(String, PathBuf, ClipKind, f32, usize)> = Vec::new();
-    let mut still_pending = false;
+    let mut still_pending_stock = false;
 
     for clip in &editor.clips {
-        // Обробляємо і плейсхолдери (перший вибір), і вже-призначені стокові кліпи (заміна через контекстне меню)
-        let seg_idx = if clip.is_placeholder {
-            match clip
-                .media_id
-                .strip_prefix("placeholder_")
-                .and_then(|s| s.parse::<usize>().ok())
-            {
-                Some(i) => i,
-                None => continue,
-            }
-        } else if let Some(idx) = clip.stock_seg_idx {
-            idx
-        } else {
+        // Обробляємо і плейсхолдери (перший вибір), і вже призначені сегментні кліпи.
+        let Some(seg_idx) = placeholder_segment_index(clip) else {
             continue;
         };
-        if let Some(entry) = cache.get(seg_idx) {
+
+        if let Some((file_path, kind, trim_start)) =
+            resolve_placeholder_media(&editor.save_path, seg_idx, stock_cache.as_deref())
+        {
+            // Пропускаємо кліп якщо він уже вказує на цей файл — уникаємо зайвої обробки.
+            if clip.path.as_deref() == Some(file_path.as_path()) && !clip.is_placeholder {
+                continue;
+            }
+            replacements.push((clip.id.clone(), file_path, kind, trim_start, seg_idx));
+            continue;
+        }
+
+        if let Some(entry) = stock_cache.as_ref().and_then(|cache| cache.get(seg_idx)) {
             if let Some(sel) = &entry.selected {
                 let file_path = editor.save_path.join("media").join(&sel.filename);
-                if file_path.exists() {
-                    // Пропускаємо кліп якщо він вже вказує на цей файл — уникаємо повторної обробки кожен кадр
-                    if clip.path.as_deref() == Some(file_path.as_path()) && !clip.is_placeholder {
-                        continue;
-                    }
-                    let ext = file_path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .unwrap_or("")
-                        .to_lowercase();
-                    let kind = if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
-                        ClipKind::Video
-                    } else {
-                        ClipKind::Image
-                    };
-                    replacements.push((clip.id.clone(), file_path, kind, sel.trim_start, seg_idx));
-                } else {
-                    // Файл ще не завантажений — повторимо після наступного repaint
-                    still_pending = true;
+                if !file_path.exists() {
+                    // Файл уже вибрано, але ще не встигли завантажити.
+                    still_pending_stock = true;
                 }
             }
         }
@@ -988,14 +1017,14 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
         }
     }
 
-    // Зберігаємо timeline.json щоб stock_seg_idx пережив перезапуск
+    // Зберігаємо timeline.json щоб stock_seg_idx пережив перезапуск.
     if made_replacements {
         editor.save_to_timeline().ok();
-        // Оновлюємо segments.json: прописуємо шляхи до обраного медіа
+        // Оновлюємо segments.json: прописуємо шляхи до обраного медіа.
         update_segments_json_media(&editor.save_path, &editor.clips);
     }
 
-    still_pending
+    still_pending_stock
 }
 
 /// Оновлює поле `media` у segments.json для сегментів що вже мають призначене медіа.

@@ -423,46 +423,61 @@ fn save_agent_chat_to_file(save_dir: &std::path::Path, chat: &[crate::queue::Age
 
 /// Після генерації медіафайлів заповнює поле `media` в segments.json фактичними шляхами.
 pub(super) fn assign_media_to_timeline(save_dir: &std::path::Path) -> Result<(), String> {
+    fn existing_segment_media_rel_path(
+        save_dir: &std::path::Path,
+        seg_idx: usize,
+    ) -> Option<String> {
+        let media_dir = save_dir.join("media");
+        let stem = format!("{:04}", seg_idx + 1);
+        for ext in [
+            "jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "avi", "mkv", "webm",
+        ] {
+            let file_name = format!("{}.{}", stem, ext);
+            if media_dir.join(&file_name).exists() {
+                return Some(format!("media/{}", file_name));
+            }
+        }
+        None
+    }
+
     let timeline_path = save_dir.join("segments.json");
     let content = std::fs::read_to_string(&timeline_path)
         .map_err(|e| format!("Cannot read segments.json: {}", e))?;
     let mut timeline =
         serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
             .map_err(|e| format!("Invalid segments.json: {}", e))?;
-
-    let media_dir = save_dir.join("media");
-    let mut files: Vec<String> = std::fs::read_dir(&media_dir)
-        .ok()
-        .into_iter()
-        .flatten()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            let name = e.file_name();
-            let s = name.to_string_lossy();
-            let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
-            matches!(
-                ext.as_str(),
-                "jpg" | "jpeg" | "png" | "gif" | "webp" | "mp4" | "mov" | "avi" | "mkv" | "webm"
-            )
-        })
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
-    files.sort();
-
-    if files.is_empty() {
-        return Ok(());
-    }
-
-    let n_segs = timeline.segments.len();
-    let n_files = files.len();
+    let stock_cache = crate::api::stock::load_cache(save_dir);
 
     for (i, seg) in timeline.segments.iter_mut().enumerate() {
-        let file_idx = if n_files <= n_segs {
-            (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
+        let explicit_media = seg.media.as_ref().and_then(|media| {
+            let media_path = save_dir.join(media);
+            if media_path.exists() {
+                Some(media.clone())
+            } else {
+                None
+            }
+        });
+        let stock_media = stock_cache
+            .as_ref()
+            .and_then(|cache| cache.get(i))
+            .and_then(|entry| entry.selected.as_ref())
+            .and_then(|sel| {
+                let rel = format!("media/{}", sel.filename);
+                if save_dir.join(&rel).exists() {
+                    Some((rel, sel.trim_start as f64))
+                } else {
+                    None
+                }
+            });
+
+        if let Some(media) = explicit_media {
+            seg.media = Some(media);
+        } else if let Some((media, trim_start)) = stock_media {
+            seg.media = Some(media);
+            seg.trim_start = trim_start;
         } else {
-            i.min(n_files - 1)
-        };
-        seg.media = files.get(file_idx).map(|f| format!("media/{}", f));
+            seg.media = existing_segment_media_rel_path(save_dir, i);
+        }
     }
 
     let json = serde_json::to_string_pretty(&timeline).map_err(|e| format!("JSON error: {}", e))?;

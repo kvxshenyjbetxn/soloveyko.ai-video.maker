@@ -45,6 +45,10 @@ pub fn draw_media_regen_window(
     );
     let mut is_open = true;
     let mut should_close = false;
+    let target_exists = media_regen_target
+        .as_ref()
+        .map(|p| p.exists())
+        .unwrap_or(false);
 
     egui::Window::new(title)
         .open(&mut is_open)
@@ -61,18 +65,24 @@ pub fn draw_media_regen_window(
                 egui::RichText::new(translate(language, "gallery_regen_media_type_label")).strong(),
             );
             ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.radio_value(
-                    media_regen_media_type,
-                    "image".to_string(),
-                    translate(language, "video_media_type_image"),
-                );
-                ui.radio_value(
-                    media_regen_media_type,
-                    "video".to_string(),
-                    translate(language, "video_media_type_video"),
-                );
+            ui.add_enabled_ui(target_exists, |ui| {
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        media_regen_media_type,
+                        "image".to_string(),
+                        translate(language, "video_media_type_image"),
+                    );
+                    ui.radio_value(
+                        media_regen_media_type,
+                        "video".to_string(),
+                        translate(language, "video_media_type_video"),
+                    );
+                });
             });
+            if !target_exists {
+                ui.add_space(4.0);
+                ui.weak(translate(language, "gallery_regen_media_type_locked"));
+            }
 
             ui.add_space(8.0);
 

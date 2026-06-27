@@ -81,6 +81,7 @@ pub fn draw_montage_editor_window(
     // Очищаємо накопичені дії попереднього кадру
     editor.pending_animate_paths.clear();
     editor.pending_regen = None;
+    editor.pending_placeholder_regen = None;
 
     // Оновлюємо duration_secs/has_audio для медіа, у яких фоновий ffprobe щойно завершився
     {
@@ -95,11 +96,26 @@ pub fn draw_montage_editor_window(
         }
     }
 
-    // Оновлюємо плейсхолдери якщо підтверджено вибір стоку.
-    // needs_stock_refresh залишається true поки є незавантажені файли.
-    if editor.needs_stock_refresh {
-        let still_pending = state::refresh_placeholder_clips(editor);
-        editor.needs_stock_refresh = still_pending;
+    // Оновлюємо плейсхолдери:
+    // - під час активного пайплайну підтягуємо нові згенеровані файли автоматично;
+    // - після вибору стоку/перегенерації тримаємо коротке опитування, поки файл не з'явиться.
+    let job_active = jobs
+        .iter()
+        .find(|j| j.id == job_id)
+        .map(|job| {
+            !matches!(
+                &*job.status.lock().unwrap(),
+                crate::queue::JobStatus::Done | crate::queue::JobStatus::Failed(_)
+            )
+        })
+        .unwrap_or(false);
+    let has_placeholders = editor.clips.iter().any(|c| c.is_placeholder);
+    if editor.needs_stock_refresh || (job_active && has_placeholders) {
+        let still_pending_stock = state::refresh_placeholder_clips(editor);
+        editor.needs_stock_refresh = still_pending_stock;
+        if still_pending_stock || (job_active && editor.clips.iter().any(|c| c.is_placeholder)) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+        }
     }
 
     // Поки є медіа з незавершеною екстракцією кадрів — продовжуємо опитування,
@@ -407,10 +423,26 @@ pub fn draw_montage_editor_window(
     // Збираємо дії з pending полів editor
     let animate_paths = std::mem::take(&mut editor.pending_animate_paths);
     let regen_opt = editor.pending_regen.take();
+    let placeholder_regen_opt = editor.pending_placeholder_regen.take();
     let open_stock_picker = editor.pending_open_stock_picker.take();
     let preview_render_changed = editor.pending_preview_render.take();
-    let regen_action = regen_opt.and_then(|(path, is_custom)| {
-        jobs.iter().find(|j| j.id == job_id).map(|job| {
+    let regen_action = jobs.iter().find(|j| j.id == job_id).and_then(|job| {
+        if let Some((path, is_custom)) = regen_opt {
+            return Some((
+                path,
+                job.settings.clone(),
+                is_custom,
+                job_id,
+                job.name.clone(),
+            ));
+        }
+
+        placeholder_regen_opt.map(|(seg_idx, is_custom)| {
+            let path = state::placeholder_output_path(
+                &editor.save_path,
+                seg_idx,
+                &job.settings.video_media_type,
+            );
             (
                 path,
                 job.settings.clone(),

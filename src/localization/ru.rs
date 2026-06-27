@@ -56,6 +56,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_regen_same" => "Перегенерировать",
         "montage_editor_regen_custom" => "Перегенерировать (настройки)",
         "montage_editor_replace_stock" => "🔄 Заменить стоковое медиа",
+        "montage_editor_placeholder_title" => "Плейсхолдер сегмента",
+        "montage_editor_placeholder_hint" => {
+            "Для этого сегмента ещё нет готового медиа. Можно выбрать сток или сгенерировать файл по сохранённому промту."
+        }
         "montage_editor_inspector" => "Инспектор",
         "montage_editor_no_selection" => "Выберите клип на таймлайне",
         "montage_editor_clip_start" => "Старт (с):",
@@ -464,6 +468,9 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_regen_custom_tooltip" => "Перегенерировать с другими настройками",
         "gallery_regen_window_title" => "Перегенерация",
         "gallery_regen_media_type_label" => "Тип медиа",
+        "gallery_regen_media_type_locked" => {
+            "Для нового файла тип медиа фиксируется текущими настройками сегмента."
+        }
         "gallery_regen_priority_image_label" => "Приоритет провайдеров (изображения)",
         "gallery_regen_priority_video_label" => "Приоритет провайдеров (видео)",
         "gallery_regen_prompt_label" => "Промт (пустое = из сохранённого файла)",

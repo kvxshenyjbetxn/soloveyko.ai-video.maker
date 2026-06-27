@@ -25,6 +25,61 @@ pub(super) fn draw_inspector(
             let num_tracks = editor.num_tracks;
             let clip = &mut editor.clips[idx];
 
+            if clip.is_placeholder {
+                let seg_idx = clip.stock_seg_idx.or_else(|| {
+                    clip.media_id
+                        .strip_prefix("placeholder_")
+                        .and_then(|s| s.parse::<usize>().ok())
+                });
+                let title = if let Some(seg_idx) = seg_idx {
+                    format!(
+                        "{} #{}",
+                        translate(language, "montage_editor_placeholder_title"),
+                        seg_idx + 1
+                    )
+                } else {
+                    translate(language, "montage_editor_placeholder_title").to_string()
+                };
+                ui.label(egui::RichText::new(title).size(12.0).strong());
+                ui.add_space(6.0);
+                ui.label(clip.name.as_str());
+                ui.add_space(6.0);
+                ui.weak(translate(language, "montage_editor_placeholder_hint"));
+                ui.add_space(8.0);
+                ui.label(format!(
+                    "{} {:.2}",
+                    translate(language, "montage_editor_clip_start"),
+                    clip.start_secs
+                ));
+                ui.label(format!(
+                    "{} {:.2}",
+                    translate(language, "montage_editor_clip_dur"),
+                    clip.duration
+                ));
+                if let Some(seg_idx) = seg_idx {
+                    ui.add_space(8.0);
+                    if ui
+                        .button(translate(language, "montage_editor_replace_stock"))
+                        .clicked()
+                    {
+                        editor.pending_open_stock_picker = Some(seg_idx);
+                    }
+                    if ui
+                        .button(translate(language, "montage_editor_regen_same"))
+                        .clicked()
+                    {
+                        editor.pending_placeholder_regen = Some((seg_idx, false));
+                    }
+                    if ui
+                        .button(translate(language, "montage_editor_regen_custom"))
+                        .clicked()
+                    {
+                        editor.pending_placeholder_regen = Some((seg_idx, true));
+                    }
+                }
+                return;
+            }
+
             ui.label(egui::RichText::new(&clip.name).size(12.0).strong());
             ui.add_space(6.0);
 
