@@ -96,15 +96,19 @@ fn split_by_char_limit(text: &str, limit: usize) -> Vec<String> {
             .unwrap_or(remaining.len());
 
         let slice = &remaining[..limit_byte];
+        let slice_chars: Vec<(usize, char)> = slice.char_indices().collect();
 
         // Шукаємо останній знак пунктуації перед лімітом (включаємо його у чанк)
         let split_byte =
-            slice
-                .char_indices()
+            slice_chars
+                .iter()
+                .enumerate()
                 .rev()
-                .find_map(|(byte_idx, ch)| {
-                    if matches!(ch, '.' | '!' | '?' | ',' | ';' | ':') {
-                        Some(byte_idx + ch.len_utf8())
+                .find_map(|(char_idx, (byte_idx, ch))| {
+                    if matches!(ch, '.' | '!' | '?' | ',' | ';' | ':')
+                        && !is_numeric_separator(&slice_chars, char_idx)
+                    {
+                        Some(*byte_idx + ch.len_utf8())
                     } else {
                         None
                     }
@@ -125,4 +129,27 @@ fn split_by_char_limit(text: &str, limit: usize) -> Vec<String> {
     }
 
     chunks
+}
+
+fn is_numeric_separator(chars: &[(usize, char)], idx: usize) -> bool {
+    idx > 0
+        && idx + 1 < chars.len()
+        && chars[idx - 1].1.is_ascii_digit()
+        && chars[idx + 1].1.is_ascii_digit()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_text;
+
+    #[test]
+    fn char_limit_does_not_split_inside_numbers() {
+        let text = "Это Андромеда. И примерно через 4,5 миллиарда лет она врежется в Млечный Путь.";
+
+        let chunks = split_text(text, "char_limit", 40);
+
+        assert!(chunks.iter().all(|chunk| !chunk.ends_with("4,")));
+        assert!(chunks.iter().all(|chunk| !chunk.starts_with("5 миллиарда")));
+        assert!(chunks.iter().any(|chunk| chunk.contains("4,5 миллиарда")));
+    }
 }

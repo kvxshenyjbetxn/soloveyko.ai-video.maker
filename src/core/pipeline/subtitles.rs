@@ -400,10 +400,6 @@ fn run_whisper_amd(
         args.push("-l".to_string());
         args.push(settings.whisper_language.clone());
     }
-    if settings.whisper_max_line_width > 0 {
-        args.push("-ml".to_string());
-        args.push(settings.whisper_max_line_width.to_string());
-    }
     crate::logger::log_job(
         job_id,
         job_name,

@@ -317,6 +317,15 @@ fn find_segment_in_stream(
         return (None, None, 0.0);
     }
 
+    // Для Prompt Only сегменти зазвичай походять з того ж тексту, що і SRT,
+    // тому точний збіг у нормалізованому потоці є найнадійнішим варіантом.
+    let stream_slice: String = stream_chars[start_from..].iter().collect();
+    if let Some(idx) = stream_slice.find(segment) {
+        let start = start_from + stream_slice[..idx].chars().count();
+        let end = start + segment.chars().count();
+        return (Some(start), Some(end), 1.0);
+    }
+
     // Будуємо список слів зі стріму (починаючи з start_from, з абсолютними індексами)
     let mut stream_words: Vec<WordPos> = Vec::new();
     let mut current_word = Vec::<char>::new();
@@ -349,12 +358,6 @@ fn find_segment_in_stream(
 
     // Fallback: якщо слів у стрімі менше ніж у сегменті — пряме порівняння
     if stream_words.len() < target_words.len() {
-        let stream_slice: String = stream_chars[start_from..].iter().collect();
-        if let Some(idx) = stream_slice.find(segment) {
-            let start = start_from + stream_slice[..idx].chars().count();
-            let end = start + segment.chars().count();
-            return (Some(start), Some(end), 1.0);
-        }
         return (None, None, 0.0);
     }
 
@@ -390,13 +393,17 @@ fn find_segment_in_stream(
             }
         }
 
-        let confidence = match_count as f64 / target_words.len() as f64;
+        let span_end = last_word_idx
+            .map(|li| stream_words[li].end)
+            .unwrap_or(stream_words[i].end);
+        let span_len = span_end.saturating_sub(stream_words[i].start).max(1);
+        let density = (segment.chars().count() as f64 / span_len as f64).min(1.0);
+        let confidence = match_count as f64 / target_words.len() as f64 * density;
+
         if confidence >= threshold && confidence > max_confidence {
             max_confidence = confidence;
             best_start = Some(stream_words[i].start);
-            best_end = last_word_idx
-                .map(|li| stream_words[li].end)
-                .or_else(|| Some(stream_words[i].end));
+            best_end = Some(span_end);
 
             if confidence >= 0.9 {
                 break 'outer;
@@ -852,4 +859,24 @@ fn write_sync_debug(
     }
 
     std::fs::write(save_dir.join("sync_debug.txt"), report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find_segment_in_stream;
+
+    #[test]
+    fn exact_match_is_preferred_for_normalized_segment() {
+        let stream = "не в сутки а каждую секунду это андромеда и примерно через 4 5 миллиарда лет она врежется в млечный путь не пролетит мимо";
+        let segment = "5 миллиарда лет она врежется в млечный путь не пролетит мимо";
+
+        let start_byte = stream.find(segment).unwrap();
+        let start_char = stream[..start_byte].chars().count();
+        let end_char = start_char + segment.chars().count();
+
+        assert_eq!(
+            find_segment_in_stream(segment, stream, start_char),
+            (Some(start_char), Some(end_char), 1.0)
+        );
+    }
 }
