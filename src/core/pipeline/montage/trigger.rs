@@ -47,11 +47,19 @@ fn normalize(s: &str) -> String {
 fn levenshtein(a: &[char], b: &[char]) -> usize {
     let n = a.len();
     let m = b.len();
-    if n == 0 { return m; }
-    if m == 0 { return n; }
+    if n == 0 {
+        return m;
+    }
+    if m == 0 {
+        return n;
+    }
     let mut dp = vec![vec![0usize; m + 1]; n + 1];
-    for i in 0..=n { dp[i][0] = i; }
-    for j in 0..=m { dp[0][j] = j; }
+    for i in 0..=n {
+        dp[i][0] = i;
+    }
+    for j in 0..=m {
+        dp[0][j] = j;
+    }
     for i in 1..=n {
         for j in 1..=m {
             let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
@@ -66,20 +74,25 @@ fn levenshtein(a: &[char], b: &[char]) -> usize {
 /// Перевіряє схожість двох слів: dist/maxLen ≤ threshold.
 /// Аналог Go IsWordSimilar(s1, s2, 0.4) → вимагає similarity ≥ 60%.
 fn is_word_similar(s1: &str, s2: &str, threshold: f64) -> bool {
-    if s1 == s2 { return true; }
+    if s1 == s2 {
+        return true;
+    }
     let a: Vec<char> = s1.chars().collect();
     let b: Vec<char> = s2.chars().collect();
     let max_len = a.len().max(b.len());
-    if max_len == 0 { return true; }
+    if max_len == 0 {
+        return true;
+    }
     let dist = levenshtein(&a, &b);
     dist as f64 / max_len as f64 <= threshold
 }
 
-
 /// Конвертує рядок часу формату ASS (H:MM:SS.cc) у секунди.
 fn ass_time_to_secs(t: &str) -> f64 {
     let parts: Vec<&str> = t.splitn(3, ':').collect();
-    if parts.len() != 3 { return 0.0; }
+    if parts.len() != 3 {
+        return 0.0;
+    }
     let h: f64 = parts[0].parse().unwrap_or(0.0);
     let m: f64 = parts[1].parse().unwrap_or(0.0);
     let s: f64 = parts[2].parse().unwrap_or(0.0);
@@ -90,7 +103,9 @@ fn ass_time_to_secs(t: &str) -> f64 {
 fn srt_time_to_secs(t: &str) -> f64 {
     let t = t.replace(',', ".");
     let parts: Vec<&str> = t.splitn(3, ':').collect();
-    if parts.len() != 3 { return 0.0; }
+    if parts.len() != 3 {
+        return 0.0;
+    }
     let h: f64 = parts[0].parse().unwrap_or(0.0);
     let m: f64 = parts[1].parse().unwrap_or(0.0);
     let s: f64 = parts[2].parse().unwrap_or(0.0);
@@ -106,7 +121,8 @@ fn srt_time_to_secs(t: &str) -> f64 {
 /// 4. Повертає час початку першого збіжного слова, або None якщо не знайдено
 pub fn find_text_timing(sub_path: &std::path::Path, phrase: &str) -> Option<f64> {
     let data = std::fs::read_to_string(sub_path).ok()?;
-    let is_ass = sub_path.extension()
+    let is_ass = sub_path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.eq_ignore_ascii_case("ass"))
         .unwrap_or(false);
@@ -123,18 +139,27 @@ pub fn find_text_timing(sub_path: &std::path::Path, phrase: &str) -> Option<f64>
         // Парсинг ASS: рядки Dialogue: 0,H:MM:SS.cc,H:MM:SS.cc,Style,,0,0,0,,text
         for line in data.lines() {
             let line = line.trim();
-            if !line.starts_with("Dialogue:") { continue; }
+            if !line.starts_with("Dialogue:") {
+                continue;
+            }
             let parts: Vec<&str> = line.splitn(10, ',').collect();
-            if parts.len() < 10 { continue; }
+            if parts.len() < 10 {
+                continue;
+            }
             let start = ass_time_to_secs(parts[1].trim());
             let end = ass_time_to_secs(parts[2].trim());
             // Видаляємо ASS-теги з тексту
             let raw_text = parts[9];
             let text = remove_ass_tags(raw_text);
-            let text = text.replace("\\N", " ").replace("\\n", " ").replace("\\h", " ");
+            let text = text
+                .replace("\\N", " ")
+                .replace("\\n", " ")
+                .replace("\\h", " ");
             let clean = normalize(&text);
             let words: Vec<&str> = clean.split_whitespace().collect();
-            if words.is_empty() { continue; }
+            if words.is_empty() {
+                continue;
+            }
             let word_dur = (end - start) / words.len() as f64;
             for (i, w) in words.iter().enumerate() {
                 sub_words.push(SubWord {
@@ -149,14 +174,18 @@ pub fn find_text_timing(sub_path: &std::path::Path, phrase: &str) -> Option<f64>
         let mut current_end = 0.0f64;
         for line in data.lines() {
             let line = line.trim();
-            if line.is_empty() { continue; }
+            if line.is_empty() {
+                continue;
+            }
             if let Some(arrow_pos) = line.find(" --> ") {
                 current_start = srt_time_to_secs(&line[..arrow_pos]);
                 current_end = srt_time_to_secs(&line[arrow_pos + 5..]);
             } else if !line.chars().all(|c| c.is_ascii_digit()) && current_end > current_start {
                 let clean = normalize(line);
                 let words: Vec<&str> = clean.split_whitespace().collect();
-                if words.is_empty() { continue; }
+                if words.is_empty() {
+                    continue;
+                }
                 let word_dur = (current_end - current_start) / words.len() as f64;
                 for (i, w) in words.iter().enumerate() {
                     sub_words.push(SubWord {
@@ -216,4 +245,3 @@ fn remove_ass_tags(s: &str) -> String {
     }
     result
 }
-

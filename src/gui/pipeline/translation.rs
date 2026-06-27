@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 use std::sync::{Arc, Mutex};
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -43,38 +43,78 @@ pub fn draw_translation_section(
 
         let mut service_changed = false;
         egui::ComboBox::from_id_salt("translation_service_combo")
-            .selected_text(
-                if translation_service == "Claude Code" {
-                    translate(language, "translation_service_claude_code")
-                } else if translation_service == "Gemini CLI" {
-                    translate(language, "translation_service_gemini_cli")
-                } else if translation_service == "Codex CLI" {
-                    translate(language, "translation_service_codex_cli")
-                } else if translation_service == "AGY CLI" {
-                    translate(language, "translation_service_agy_cli")
-                } else if translation_service == "Pi CLI" {
-                    translate(language, "translation_service_pi_cli")
-                } else {
-                    translate(language, "translation_service_openrouter")
-                }
-            )
+            .selected_text(if translation_service == "Claude Code" {
+                translate(language, "translation_service_claude_code")
+            } else if translation_service == "Gemini CLI" {
+                translate(language, "translation_service_gemini_cli")
+            } else if translation_service == "Codex CLI" {
+                translate(language, "translation_service_codex_cli")
+            } else if translation_service == "AGY CLI" {
+                translate(language, "translation_service_agy_cli")
+            } else if translation_service == "Pi CLI" {
+                translate(language, "translation_service_pi_cli")
+            } else {
+                translate(language, "translation_service_openrouter")
+            })
             .show_ui(ui, |ui| {
-                if ui.selectable_value(translation_service, "OpenRouter".to_string(), translate(language, "translation_service_openrouter")).clicked() {
+                if ui
+                    .selectable_value(
+                        translation_service,
+                        "OpenRouter".to_string(),
+                        translate(language, "translation_service_openrouter"),
+                    )
+                    .clicked()
+                {
                     service_changed = true;
                 }
-                if ui.selectable_value(translation_service, "Claude Code".to_string(), translate(language, "translation_service_claude_code")).clicked() {
+                if ui
+                    .selectable_value(
+                        translation_service,
+                        "Claude Code".to_string(),
+                        translate(language, "translation_service_claude_code"),
+                    )
+                    .clicked()
+                {
                     service_changed = true;
                 }
-                if ui.selectable_value(translation_service, "Gemini CLI".to_string(), translate(language, "translation_service_gemini_cli")).clicked() {
+                if ui
+                    .selectable_value(
+                        translation_service,
+                        "Gemini CLI".to_string(),
+                        translate(language, "translation_service_gemini_cli"),
+                    )
+                    .clicked()
+                {
                     service_changed = true;
                 }
-                if ui.selectable_value(translation_service, "Codex CLI".to_string(), translate(language, "translation_service_codex_cli")).clicked() {
+                if ui
+                    .selectable_value(
+                        translation_service,
+                        "Codex CLI".to_string(),
+                        translate(language, "translation_service_codex_cli"),
+                    )
+                    .clicked()
+                {
                     service_changed = true;
                 }
-                if ui.selectable_value(translation_service, "AGY CLI".to_string(), translate(language, "translation_service_agy_cli")).clicked() {
+                if ui
+                    .selectable_value(
+                        translation_service,
+                        "AGY CLI".to_string(),
+                        translate(language, "translation_service_agy_cli"),
+                    )
+                    .clicked()
+                {
                     service_changed = true;
                 }
-                if ui.selectable_value(translation_service, "Pi CLI".to_string(), translate(language, "translation_service_pi_cli")).clicked() {
+                if ui
+                    .selectable_value(
+                        translation_service,
+                        "Pi CLI".to_string(),
+                        translate(language, "translation_service_pi_cli"),
+                    )
+                    .clicked()
+                {
                     service_changed = true;
                 }
             });
@@ -134,7 +174,10 @@ pub fn draw_translation_section(
 
         if service_changed && translation_service == "Claude Code" {
             // Перевіряємо, чи модель валідна для Claude Code
-            if translation_model != "sonnet" && translation_model != "opus" && translation_model != "haiku" {
+            if translation_model != "sonnet"
+                && translation_model != "opus"
+                && translation_model != "haiku"
+            {
                 *translation_model = "sonnet".to_string();
             }
         }
@@ -151,9 +194,7 @@ pub fn draw_translation_section(
         }
         if service_changed && translation_service == "Codex CLI" {
             // Перевіряємо, чи модель валідна для Codex CLI
-            if translation_model != "gpt-5.5"
-                && translation_model != "gpt-5.4-mini"
-            {
+            if translation_model != "gpt-5.5" && translation_model != "gpt-5.4-mini" {
                 *translation_model = "gpt-5.4-mini".to_string();
             }
         }
@@ -176,7 +217,8 @@ pub fn draw_translation_section(
 
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(translate(language, "translation_prompt_label")).strong());
-            if ui.small_button("⛶")
+            if ui
+                .small_button("⛶")
                 .on_hover_text(translate(language, "prompt_expand_hint"))
                 .clicked()
             {
@@ -202,7 +244,10 @@ pub fn draw_translation_section(
         ui.add_space(4.0);
 
         // Кнопка швидкої вставки плейсхолдера {{text}} за поточним положенням курсора
-        if ui.button(translate(language, "translation_insert_placeholder")).clicked() {
+        if ui
+            .button(translate(language, "translation_insert_placeholder"))
+            .clicked()
+        {
             let text_edit_id = te_resp.id;
             if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) {
                 let to_insert = "{{text}}";
@@ -216,7 +261,9 @@ pub fn draw_translation_section(
                     translation_prompt.insert_str(byte_idx, to_insert);
                     let new_char_idx = cursor_idx + to_insert.chars().count();
                     let new_cursor = egui::text::CCursor::new(new_char_idx);
-                    state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                    state
+                        .cursor
+                        .set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
                     state.store(ui.ctx(), text_edit_id);
                 } else {
                     translation_prompt.push_str(to_insert);
@@ -231,7 +278,7 @@ pub fn draw_translation_section(
         ui.label(
             egui::RichText::new(translate(language, "translation_placeholder_hint"))
                 .weak()
-                .size(11.0)
+                .size(11.0),
         );
 
         // Розгорнуте вікно редагування промту
@@ -257,7 +304,10 @@ pub fn draw_translation_section(
                         .inner;
                     let win_te_id = win_te_resp.id;
                     ui.add_space(4.0);
-                    if ui.button(translate(language, "translation_insert_placeholder")).clicked() {
+                    if ui
+                        .button(translate(language, "translation_insert_placeholder"))
+                        .clicked()
+                    {
                         if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), win_te_id) {
                             let to_insert = "{{text}}";
                             if let Some(cursor_range) = state.cursor.char_range() {
@@ -270,7 +320,11 @@ pub fn draw_translation_section(
                                 translation_prompt.insert_str(byte_idx, to_insert);
                                 let new_char_idx = cursor_idx + to_insert.chars().count();
                                 let new_cursor = egui::text::CCursor::new(new_char_idx);
-                                state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                                state
+                                    .cursor
+                                    .set_char_range(Some(egui::text::CCursorRange::one(
+                                        new_cursor,
+                                    )));
                                 state.store(ui.ctx(), win_te_id);
                             } else {
                                 translation_prompt.push_str(to_insert);
@@ -294,7 +348,11 @@ pub fn draw_translation_section(
             ui.add_space(4.0);
 
             egui::ComboBox::from_id_salt("claude_code_model")
-                .selected_text(if translation_model.is_empty() { "sonnet" } else { translation_model.as_str() })
+                .selected_text(if translation_model.is_empty() {
+                    "sonnet"
+                } else {
+                    translation_model.as_str()
+                })
                 .show_ui(ui, |ui| {
                     ui.selectable_value(translation_model, "sonnet".to_string(), "sonnet");
                     ui.selectable_value(translation_model, "opus".to_string(), "opus");
@@ -306,13 +364,37 @@ pub fn draw_translation_section(
             ui.add_space(4.0);
 
             egui::ComboBox::from_id_salt("gemini_cli_model")
-                .selected_text(if translation_model.is_empty() { "gemini-2.5-flash" } else { translation_model.as_str() })
+                .selected_text(if translation_model.is_empty() {
+                    "gemini-2.5-flash"
+                } else {
+                    translation_model.as_str()
+                })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(translation_model, "gemini-2.5-flash".to_string(), "gemini-2.5-flash");
-                    ui.selectable_value(translation_model, "gemini-2.5-pro".to_string(), "gemini-2.5-pro");
-                    ui.selectable_value(translation_model, "gemini-3-flash-preview".to_string(), "gemini-3-flash-preview");
-                    ui.selectable_value(translation_model, "gemini-3.1-pro-preview".to_string(), "gemini-3.1-pro-preview");
-                    ui.selectable_value(translation_model, "gemini-2.5-flash-lite".to_string(), "gemini-2.5-flash-lite");
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-2.5-flash".to_string(),
+                        "gemini-2.5-flash",
+                    );
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-2.5-pro".to_string(),
+                        "gemini-2.5-pro",
+                    );
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-3-flash-preview".to_string(),
+                        "gemini-3-flash-preview",
+                    );
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-3.1-pro-preview".to_string(),
+                        "gemini-3.1-pro-preview",
+                    );
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-2.5-flash-lite".to_string(),
+                        "gemini-2.5-flash-lite",
+                    );
                 });
         } else if translation_service == "Codex CLI" {
             // Вибір моделі для Codex CLI
@@ -320,19 +402,39 @@ pub fn draw_translation_section(
             ui.add_space(4.0);
 
             egui::ComboBox::from_id_salt("codex_cli_model")
-                .selected_text(if translation_model.is_empty() { "gpt-5.4-mini" } else { translation_model.as_str() })
+                .selected_text(if translation_model.is_empty() {
+                    "gpt-5.4-mini"
+                } else {
+                    translation_model.as_str()
+                })
                 .show_ui(ui, |ui| {
                     ui.selectable_value(translation_model, "gpt-5.5".to_string(), "gpt-5.5");
-                    ui.selectable_value(translation_model, "gpt-5.4-mini".to_string(), "gpt-5.4-mini");
+                    ui.selectable_value(
+                        translation_model,
+                        "gpt-5.4-mini".to_string(),
+                        "gpt-5.4-mini",
+                    );
                 });
         } else if translation_service == "AGY CLI" {
             ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
             ui.add_space(4.0);
             egui::ComboBox::from_id_salt("translation_agy_model")
-                .selected_text(if translation_model.is_empty() { "gemini-3.5-flash" } else { translation_model.as_str() })
+                .selected_text(if translation_model.is_empty() {
+                    "gemini-3.5-flash"
+                } else {
+                    translation_model.as_str()
+                })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(translation_model, "gemini-3.5-flash".to_string(), "gemini-3.5-flash");
-                    ui.selectable_value(translation_model, "gemini-3.1-pro-preview".to_string(), "gemini-3.1-pro-preview");
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-3.5-flash".to_string(),
+                        "gemini-3.5-flash",
+                    );
+                    ui.selectable_value(
+                        translation_model,
+                        "gemini-3.1-pro-preview".to_string(),
+                        "gemini-3.1-pro-preview",
+                    );
                 });
         } else if translation_service == "Pi CLI" {
             ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
@@ -368,7 +470,8 @@ pub fn draw_translation_section(
                         let ctx = ui.ctx().clone();
 
                         std::thread::spawn(move || {
-                            let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
+                            let _permit =
+                                crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
                             let agent = ureq::AgentBuilder::new()
                                 .timeout_connect(std::time::Duration::from_secs(10))
@@ -432,13 +535,23 @@ pub fn draw_translation_section(
             }
         }
 
-        if translation_service != "Claude Code" && translation_service != "Gemini CLI" && translation_service != "Codex CLI" && translation_service != "AGY CLI" && translation_service != "Pi CLI" {
+        if translation_service != "Claude Code"
+            && translation_service != "Gemini CLI"
+            && translation_service != "Codex CLI"
+            && translation_service != "AGY CLI"
+            && translation_service != "Pi CLI"
+        {
             ui.add_space(8.0);
 
             // Повзунок температури моделі
-            ui.label(egui::RichText::new(
-                format!("{}: {:.2}", translate(language, "translation_temperature_label"), *translation_temperature)
-            ).strong());
+            ui.label(
+                egui::RichText::new(format!(
+                    "{}: {:.2}",
+                    translate(language, "translation_temperature_label"),
+                    *translation_temperature
+                ))
+                .strong(),
+            );
             ui.add_space(4.0);
             let slider_width = ui.available_width();
             ui.scope(|ui| {

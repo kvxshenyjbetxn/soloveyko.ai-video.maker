@@ -1,7 +1,7 @@
+use crate::gui::welcome::BinaryDownload;
+use crate::localization::{translate, Language};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
-use crate::localization::{Language, translate};
-use crate::gui::welcome::BinaryDownload;
 
 /// Доступні мови для Whisper (код → відображувана назва).
 const WHISPER_LANGUAGES: &[(&str, &str)] = &[
@@ -24,15 +24,28 @@ const WHISPER_LANGUAGES: &[(&str, &str)] = &[
 
 /// Моделі для whisper.cpp (ggml-формат).
 const WHISPER_MODELS: &[&str] = &[
-    "tiny", "base", "small", "medium", "large-v3", "large-v3-turbo",
+    "tiny",
+    "base",
+    "small",
+    "medium",
+    "large-v3",
+    "large-v3-turbo",
 ];
 
 /// Моделі для WhisperX (faster-whisper / HuggingFace).
 const WHISPERX_MODELS: &[&str] = &[
-    "tiny", "base", "small", "medium",
-    "large-v1", "large-v2", "large-v3", "large",
-    "distil-large-v2", "distil-large-v3",
-    "distil-medium.en", "distil-small.en",
+    "tiny",
+    "base",
+    "small",
+    "medium",
+    "large-v1",
+    "large-v2",
+    "large-v3",
+    "large",
+    "distil-large-v2",
+    "distil-large-v3",
+    "distil-medium.en",
+    "distil-small.en",
 ];
 
 /// Малює секцію "Субтитри" на панелі пайплайну.
@@ -120,12 +133,7 @@ pub fn draw_subtitles_section(
 
         // Налаштування AssemblyAI
         if subtitles_service == "AssemblyAI" {
-            draw_assemblyai_settings(
-                ui,
-                language,
-                whisper_language,
-                whisper_max_line_width,
-            );
+            draw_assemblyai_settings(ui, language, whisper_language, whisper_max_line_width);
         }
 
         // Стиль субтитрів (загальний для всіх сервісів)
@@ -162,7 +170,8 @@ fn draw_lang_and_model(
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_lang_label")).strong());
     ui.add_space(4.0);
 
-    let lang_display = WHISPER_LANGUAGES.iter()
+    let lang_display = WHISPER_LANGUAGES
+        .iter()
         .find(|(code, _)| *code == whisper_language.as_str())
         .map(|(code, name)| {
             if *code == "auto" {
@@ -217,19 +226,29 @@ fn draw_whisper_settings(
     ui.add_space(8.0);
 
     draw_lang_and_model(
-        ui, language,
-        "whisper_lang_combo", "whisper_model_combo",
+        ui,
+        language,
+        "whisper_lang_combo",
+        "whisper_model_combo",
         WHISPER_MODELS,
-        whisper_language, whisper_model,
+        whisper_language,
+        whisper_model,
     );
 
     // Максимальна кількість символів на сегмент (--max-len)
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
     ui.add_space(4.0);
     let mut max_len = *whisper_max_line_width;
-    let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+    let label_text = if max_len == 0 {
+        "∞".to_string()
+    } else {
+        max_len.to_string()
+    };
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut max_len, 0..=200).show_value(false))
+            .changed()
+        {
             *whisper_max_line_width = max_len;
         }
         ui.label(egui::RichText::new(label_text).monospace());
@@ -255,14 +274,21 @@ fn draw_whisper_settings(
         BinaryDownload::Failed(ref err) => {
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(format!("{} {}", translate(language, "subtitles_model_failed"), err))
-                        .color(egui::Color32::from_rgb(231, 76, 60))
-                        .size(11.0),
+                    egui::RichText::new(format!(
+                        "{} {}",
+                        translate(language, "subtitles_model_failed"),
+                        err
+                    ))
+                    .color(egui::Color32::from_rgb(231, 76, 60))
+                    .size(11.0),
                 )
                 .wrap(),
             );
             ui.add_space(4.0);
-            if ui.small_button(translate(language, "subtitles_model_retry")).clicked() {
+            if ui
+                .small_button(translate(language, "subtitles_model_retry"))
+                .clicked()
+            {
                 start_model_download(whisper_model, whisper_model_download, ctx);
             }
         }
@@ -276,15 +302,22 @@ fn draw_whisper_settings(
             } else {
                 let size_mb = crate::bundle::whisper_model_size_mb(whisper_model);
                 let btn_text = if size_mb > 0.0 {
-                    format!("{} (~{:.0} MB)", translate(language, "subtitles_model_download_btn"), size_mb)
+                    format!(
+                        "{} (~{:.0} MB)",
+                        translate(language, "subtitles_model_download_btn"),
+                        size_mb
+                    )
                 } else {
                     translate(language, "subtitles_model_download_btn").to_string()
                 };
 
-                if ui.add_sized(
-                    [ui.available_width(), 22.0],
-                    egui::Button::new(egui::RichText::new(btn_text).size(12.0)),
-                ).clicked() {
+                if ui
+                    .add_sized(
+                        [ui.available_width(), 22.0],
+                        egui::Button::new(egui::RichText::new(btn_text).size(12.0)),
+                    )
+                    .clicked()
+                {
                     start_model_download(whisper_model, whisper_model_download, ctx);
                 }
             }
@@ -318,19 +351,29 @@ fn draw_whisper_amd_settings(
     }
 
     draw_lang_and_model(
-        ui, language,
-        "whisper_amd_lang_combo", "whisper_amd_model_combo",
+        ui,
+        language,
+        "whisper_amd_lang_combo",
+        "whisper_amd_model_combo",
         WHISPER_MODELS,
-        whisper_language, whisper_model,
+        whisper_language,
+        whisper_model,
     );
 
     // Максимальна кількість символів на сегмент (--max-len)
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
     ui.add_space(4.0);
     let mut max_len = *whisper_max_line_width;
-    let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+    let label_text = if max_len == 0 {
+        "∞".to_string()
+    } else {
+        max_len.to_string()
+    };
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut max_len, 0..=200).show_value(false))
+            .changed()
+        {
             *whisper_max_line_width = max_len;
         }
         ui.label(egui::RichText::new(label_text).monospace());
@@ -356,14 +399,21 @@ fn draw_whisper_amd_settings(
         BinaryDownload::Failed(ref err) => {
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(format!("{} {}", translate(language, "subtitles_model_failed"), err))
-                        .color(egui::Color32::from_rgb(231, 76, 60))
-                        .size(11.0),
+                    egui::RichText::new(format!(
+                        "{} {}",
+                        translate(language, "subtitles_model_failed"),
+                        err
+                    ))
+                    .color(egui::Color32::from_rgb(231, 76, 60))
+                    .size(11.0),
                 )
                 .wrap(),
             );
             ui.add_space(4.0);
-            if ui.small_button(translate(language, "subtitles_model_retry")).clicked() {
+            if ui
+                .small_button(translate(language, "subtitles_model_retry"))
+                .clicked()
+            {
                 start_model_download(whisper_model, whisper_model_download, ctx);
             }
         }
@@ -377,15 +427,22 @@ fn draw_whisper_amd_settings(
             } else {
                 let size_mb = crate::bundle::whisper_model_size_mb(whisper_model);
                 let btn_text = if size_mb > 0.0 {
-                    format!("{} (~{:.0} MB)", translate(language, "subtitles_model_download_btn"), size_mb)
+                    format!(
+                        "{} (~{:.0} MB)",
+                        translate(language, "subtitles_model_download_btn"),
+                        size_mb
+                    )
                 } else {
                     translate(language, "subtitles_model_download_btn").to_string()
                 };
 
-                if ui.add_sized(
-                    [ui.available_width(), 22.0],
-                    egui::Button::new(egui::RichText::new(btn_text).size(12.0)),
-                ).clicked() {
+                if ui
+                    .add_sized(
+                        [ui.available_width(), 22.0],
+                        egui::Button::new(egui::RichText::new(btn_text).size(12.0)),
+                    )
+                    .clicked()
+                {
                     start_model_download(whisper_model, whisper_model_download, ctx);
                 }
             }
@@ -404,19 +461,29 @@ fn draw_whisperx_settings(
     ui.add_space(8.0);
 
     draw_lang_and_model(
-        ui, language,
-        "whisperx_lang_combo", "whisperx_model_combo",
+        ui,
+        language,
+        "whisperx_lang_combo",
+        "whisperx_model_combo",
         WHISPERX_MODELS,
-        whisper_language, whisper_model,
+        whisper_language,
+        whisper_model,
     );
 
     // Максимальна кількість символів на сегмент (передається через --max_line_width)
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
     ui.add_space(4.0);
     let mut max_len = *whisper_max_line_width;
-    let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+    let label_text = if max_len == 0 {
+        "∞".to_string()
+    } else {
+        max_len.to_string()
+    };
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut max_len, 0..=200).show_value(false))
+            .changed()
+        {
             *whisper_max_line_width = max_len;
         }
         ui.label(egui::RichText::new(label_text).monospace());
@@ -436,7 +503,8 @@ fn draw_assemblyai_settings(
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_lang_label")).strong());
     ui.add_space(4.0);
 
-    let lang_display = WHISPER_LANGUAGES.iter()
+    let lang_display = WHISPER_LANGUAGES
+        .iter()
         .find(|(code, _)| *code == whisper_language.as_str())
         .map(|(code, name)| {
             if *code == "auto" {
@@ -467,9 +535,16 @@ fn draw_assemblyai_settings(
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
     ui.add_space(4.0);
     let mut max_len = *whisper_max_line_width;
-    let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+    let label_text = if max_len == 0 {
+        "∞".to_string()
+    } else {
+        max_len.to_string()
+    };
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut max_len, 0..=200).show_value(false))
+            .changed()
+        {
             *whisper_max_line_width = max_len;
         }
         ui.label(egui::RichText::new(label_text).monospace());
@@ -487,7 +562,10 @@ fn draw_font_picker(
         return;
     }
 
-    ui.label(egui::RichText::new(translate(language, "subtitles_font_label")));
+    ui.label(egui::RichText::new(translate(
+        language,
+        "subtitles_font_label",
+    )));
     ui.add_space(2.0);
 
     let popup_id = ui.make_persistent_id("subtitle_font_popup");
@@ -508,26 +586,30 @@ fn draw_font_picker(
     }
 
     egui::popup::popup_below_widget(
-        ui, popup_id, &btn,
+        ui,
+        popup_id,
+        &btn,
         egui::PopupCloseBehavior::CloseOnClick,
         |ui| {
             ui.set_min_width(180.0);
-            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
-                for font_name in available_fonts {
-                    let font_id = egui::FontId::new(
-                        16.0,
-                        egui::FontFamily::Name(font_name.clone().into()),
-                    );
-                    let is_selected = font_name == subtitle_font;
-                    let resp = ui.add(egui::SelectableLabel::new(
-                        is_selected,
-                        egui::RichText::new(font_name.as_str()).font(font_id),
-                    ));
-                    if resp.clicked() {
-                        *subtitle_font = font_name.clone();
+            egui::ScrollArea::vertical()
+                .max_height(220.0)
+                .show(ui, |ui| {
+                    for font_name in available_fonts {
+                        let font_id = egui::FontId::new(
+                            16.0,
+                            egui::FontFamily::Name(font_name.clone().into()),
+                        );
+                        let is_selected = font_name == subtitle_font;
+                        let resp = ui.add(egui::SelectableLabel::new(
+                            is_selected,
+                            egui::RichText::new(font_name.as_str()).font(font_id),
+                        ));
+                        if resp.clicked() {
+                            *subtitle_font = font_name.clone();
+                        }
                     }
-                }
-            });
+                });
         },
     );
 }
@@ -555,11 +637,17 @@ fn draw_subtitle_style(
     ui.add_space(4.0);
 
     // Розмір шрифту
-    ui.label(egui::RichText::new(translate(language, "subtitles_font_size_label")));
+    ui.label(egui::RichText::new(translate(
+        language,
+        "subtitles_font_size_label",
+    )));
     ui.add_space(2.0);
     let mut font_size = *subtitle_font_size;
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut font_size, 10..=72).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut font_size, 10..=72).show_value(false))
+            .changed()
+        {
             *subtitle_font_size = font_size;
         }
         ui.label(egui::RichText::new(format!("{}pt", font_size)).monospace());
@@ -568,11 +656,17 @@ fn draw_subtitle_style(
     ui.add_space(6.0);
 
     // Відступ від нижнього краю
-    ui.label(egui::RichText::new(translate(language, "subtitles_margin_v_label")));
+    ui.label(egui::RichText::new(translate(
+        language,
+        "subtitles_margin_v_label",
+    )));
     ui.add_space(2.0);
     let mut margin = *subtitle_margin_v;
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut margin, 0..=200).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut margin, 0..=200).show_value(false))
+            .changed()
+        {
             *subtitle_margin_v = margin;
         }
         ui.label(egui::RichText::new(format!("{}px", margin)).monospace());
@@ -586,52 +680,85 @@ fn draw_subtitle_style(
     ui.add_space(6.0);
 
     // Колір тексту
-    ui.label(egui::RichText::new(translate(language, "subtitles_color_label")));
+    ui.label(egui::RichText::new(translate(
+        language,
+        "subtitles_color_label",
+    )));
     ui.add_space(2.0);
     ui.color_edit_button_srgb(subtitle_color);
 
     ui.add_space(6.0);
 
     // Колір обводки
-    ui.label(egui::RichText::new(translate(language, "subtitles_outline_color_label")));
+    ui.label(egui::RichText::new(translate(
+        language,
+        "subtitles_outline_color_label",
+    )));
     ui.add_space(2.0);
     ui.color_edit_button_srgb(subtitle_karaoke_outline_color);
 
     // Karaoke (тільки для WhisperX та AssemblyAI, бо потрібні word-level timestamps)
     if subtitles_service == "WhisperX" || subtitles_service == "AssemblyAI" {
         ui.add_space(6.0);
-        ui.checkbox(subtitle_karaoke, translate(language, "subtitles_karaoke_label"));
+        ui.checkbox(
+            subtitle_karaoke,
+            translate(language, "subtitles_karaoke_label"),
+        );
 
         if *subtitle_karaoke {
             ui.add_space(4.0);
             egui::Frame::none()
-                .inner_margin(egui::Margin { left: 12.0, ..Default::default() })
+                .inner_margin(egui::Margin {
+                    left: 12.0,
+                    ..Default::default()
+                })
                 .show(ui, |ui| {
                     // Режим анімації
-                    ui.label(egui::RichText::new(translate(language, "subtitles_karaoke_style_label")));
+                    ui.label(egui::RichText::new(translate(
+                        language,
+                        "subtitles_karaoke_style_label",
+                    )));
                     ui.add_space(2.0);
-                    ui.radio_value(subtitle_karaoke_mode, 0u8,
-                        translate(language, "subtitles_karaoke_fill"));
-                    ui.radio_value(subtitle_karaoke_mode, 1u8,
-                        translate(language, "subtitles_karaoke_switch"));
-                    ui.radio_value(subtitle_karaoke_mode, 2u8,
-                        translate(language, "subtitles_karaoke_follow"));
+                    ui.radio_value(
+                        subtitle_karaoke_mode,
+                        0u8,
+                        translate(language, "subtitles_karaoke_fill"),
+                    );
+                    ui.radio_value(
+                        subtitle_karaoke_mode,
+                        1u8,
+                        translate(language, "subtitles_karaoke_switch"),
+                    );
+                    ui.radio_value(
+                        subtitle_karaoke_mode,
+                        2u8,
+                        translate(language, "subtitles_karaoke_follow"),
+                    );
 
                     ui.add_space(6.0);
 
                     // Колір виділеного слова
-                    ui.label(egui::RichText::new(translate(language, "subtitles_karaoke_highlight_color_label")));
+                    ui.label(egui::RichText::new(translate(
+                        language,
+                        "subtitles_karaoke_highlight_color_label",
+                    )));
                     ui.add_space(2.0);
                     ui.color_edit_button_srgb(subtitle_karaoke_highlight_color);
 
                     // Масштаб слова (тільки для follow)
                     if *subtitle_karaoke_mode == 2 {
                         ui.add_space(6.0);
-                        ui.label(egui::RichText::new(translate(language, "subtitles_karaoke_scale_label")));
+                        ui.label(egui::RichText::new(translate(
+                            language,
+                            "subtitles_karaoke_scale_label",
+                        )));
                         ui.add_space(2.0);
                         let mut scale = *subtitle_karaoke_scale;
                         ui.horizontal(|ui| {
-                            if ui.add(egui::Slider::new(&mut scale, 100..=200).show_value(false)).changed() {
+                            if ui
+                                .add(egui::Slider::new(&mut scale, 100..=200).show_value(false))
+                                .changed()
+                            {
                                 *subtitle_karaoke_scale = scale;
                             }
                             ui.label(egui::RichText::new(format!("{}%", scale)).monospace());
@@ -641,7 +768,10 @@ fn draw_subtitle_style(
                     ui.add_space(6.0);
 
                     // Жирний текст
-                    ui.checkbox(subtitle_karaoke_bold, translate(language, "subtitles_karaoke_bold_label"));
+                    ui.checkbox(
+                        subtitle_karaoke_bold,
+                        translate(language, "subtitles_karaoke_bold_label"),
+                    );
                 });
         }
     }

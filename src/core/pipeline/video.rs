@@ -89,7 +89,11 @@ fn snap_context_end_to_sentence(text: &str, rough_end: usize) -> usize {
 }
 
 /// Шукає сегмент у повному тексті, рухаючись уперед, щоб однакові фрази не плутали порядок.
-fn find_segment_range(source_text: &str, segment: &str, cursor: &mut usize) -> Option<(usize, usize)> {
+fn find_segment_range(
+    source_text: &str,
+    segment: &str,
+    cursor: &mut usize,
+) -> Option<(usize, usize)> {
     if segment.is_empty() {
         return None;
     }
@@ -134,7 +138,8 @@ fn build_video_contexts(
     segments
         .iter()
         .map(|segment| {
-            let Some((seg_start, seg_end)) = find_segment_range(source_text, segment, &mut cursor) else {
+            let Some((seg_start, seg_end)) = find_segment_range(source_text, segment, &mut cursor)
+            else {
                 return format_around_context("", segment, "");
             };
 
@@ -174,12 +179,21 @@ fn write_prompt_substitution_debug(
     let mut content = String::new();
     let _ = writeln!(content, "=== {} ===", title);
     let _ = writeln!(content, "Total: {}", prompts.len());
-    let _ = writeln!(content, "\n--- ORIGINAL PROMPT TEMPLATE ---\n{}\n", prompt_template);
+    let _ = writeln!(
+        content,
+        "\n--- ORIGINAL PROMPT TEMPLATE ---\n{}\n",
+        prompt_template
+    );
 
     for (i, prompt) in prompts.iter().enumerate() {
         let segment = segments.get(i).map(String::as_str).unwrap_or("");
 
-        let _ = writeln!(content, "\n==================== [{} / {}] ====================", i + 1, prompts.len());
+        let _ = writeln!(
+            content,
+            "\n==================== [{} / {}] ====================",
+            i + 1,
+            prompts.len()
+        );
         let _ = writeln!(content, "\n{{{{text}}}}:\n{}", segment);
         let _ = writeln!(content, "\nFINAL REQUEST:\n{}", prompt);
     }
@@ -929,7 +943,9 @@ fn run_pexels_branch(
                         let user_prompt = substituted_keyword_prompts
                             .get(i)
                             .cloned()
-                            .unwrap_or_else(|| fill_video_prompt(&kw_instruction, &seg_clone, None));
+                            .unwrap_or_else(|| {
+                                fill_video_prompt(&kw_instruction, &seg_clone, None)
+                            });
                         let video_stage_c = Arc::clone(&video_stage);
                         let prompts_progress_c = Arc::clone(&prompts_progress);
                         let ctx_c = ctx.clone();

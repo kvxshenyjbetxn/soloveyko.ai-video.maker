@@ -54,7 +54,9 @@ pub fn run_montage(
         #[serde(default = "default_fade")]
         overlap_transition: String,
     }
-    fn default_fade() -> String { "fade".to_string() }
+    fn default_fade() -> String {
+        "fade".to_string()
+    }
 
     #[derive(serde::Deserialize)]
     struct OverlaySeg {
@@ -76,8 +78,12 @@ pub fn run_montage(
         #[serde(default)]
         is_embedded_audio: bool,
     }
-    fn default_scale() -> f64 { 1.0 }
-    fn default_opacity() -> f64 { 1.0 }
+    fn default_scale() -> f64 {
+        1.0
+    }
+    fn default_opacity() -> f64 {
+        1.0
+    }
 
     #[derive(serde::Deserialize)]
     struct OverlayTrack {
@@ -102,7 +108,9 @@ pub fn run_montage(
         /// None = старий формат (до f496eae): segments містить overlay, overlay_tracks — фон.
         background_track_idx: Option<u64>,
     }
-    fn default_volume() -> f64 { 1.0 }
+    fn default_volume() -> f64 {
+        1.0
+    }
 
     struct Clip {
         path: Option<String>, // None = чорна заставка (gap)
@@ -161,39 +169,51 @@ pub fn run_montage(
                 // Якщо поле відсутнє І є overlay_track з track_idx > 0, міняємо місцями.
                 if tl.background_track_idx.is_none() {
                     // Фон — завжди найнижчий шар = найбільший track_idx
-                    let bg_ot_pos = tl.overlay_tracks.iter()
+                    let bg_ot_pos = tl
+                        .overlay_tracks
+                        .iter()
                         .enumerate()
                         .filter(|(_, ot)| ot.track_idx > 0)
                         .max_by_key(|(_, ot)| ot.track_idx)
                         .map(|(i, _)| i);
                     if let Some(bg_ot_pos) = bg_ot_pos {
                         let bg_ot = tl.overlay_tracks.remove(bg_ot_pos);
-                        let old_segs = std::mem::replace(&mut tl.segments, bg_ot.segments
-                            .into_iter()
-                            .map(|s| SegTiming {
-                                start_secs: s.start_secs,
-                                end_secs: s.end_secs,
-                                media: s.media,
-                                trim_start: s.trim_start,
-                                overlap_transition: "fade".to_string(),
-                            })
-                            .collect());
-                        // Старі segments (overlay) → overlay_tracks[0]
-                        if !old_segs.is_empty() {
-                            tl.overlay_tracks.insert(0, OverlayTrack {
-                                track_idx: 0,
-                                segments: old_segs.into_iter().map(|s| OverlaySeg {
+                        let old_segs = std::mem::replace(
+                            &mut tl.segments,
+                            bg_ot
+                                .segments
+                                .into_iter()
+                                .map(|s| SegTiming {
                                     start_secs: s.start_secs,
                                     end_secs: s.end_secs,
                                     media: s.media,
                                     trim_start: s.trim_start,
-                                    scale: 1.0,
-                                    pos_x: 0.0,
-                                    pos_y: 0.0,
-                                    opacity: 1.0,
-                                    is_embedded_audio: false,
-                                }).collect(),
-                            });
+                                    overlap_transition: "fade".to_string(),
+                                })
+                                .collect(),
+                        );
+                        // Старі segments (overlay) → overlay_tracks[0]
+                        if !old_segs.is_empty() {
+                            tl.overlay_tracks.insert(
+                                0,
+                                OverlayTrack {
+                                    track_idx: 0,
+                                    segments: old_segs
+                                        .into_iter()
+                                        .map(|s| OverlaySeg {
+                                            start_secs: s.start_secs,
+                                            end_secs: s.end_secs,
+                                            media: s.media,
+                                            trim_start: s.trim_start,
+                                            scale: 1.0,
+                                            pos_x: 0.0,
+                                            pos_y: 0.0,
+                                            opacity: 1.0,
+                                            is_embedded_audio: false,
+                                        })
+                                        .collect(),
+                                },
+                            );
                         }
                         log_fn("timeline.json: старий формат виявлено — фон/overlay переставлено автоматично");
                     }
@@ -247,13 +267,27 @@ pub fn run_montage(
                                 track_idx: 0,
                             });
                         } else {
-                            clips.push(Clip { path: Some(media.clone()), duration: dur, start_secs: seg.start_secs, is_video: is_video_ext(media), trim_start: seg.trim_start, overlap_transition: seg.overlap_transition.clone() });
+                            clips.push(Clip {
+                                path: Some(media.clone()),
+                                duration: dur,
+                                start_secs: seg.start_secs,
+                                is_video: is_video_ext(media),
+                                trim_start: seg.trim_start,
+                                overlap_transition: seg.overlap_transition.clone(),
+                            });
                         }
                     } else {
                         if matches!(clips.last(), Some(Clip { path: None, .. })) {
                             clips.last_mut().unwrap().duration += dur;
                         } else {
-                            clips.push(Clip { path: None, duration: dur, start_secs: seg.start_secs, is_video: false, trim_start: 0.0, overlap_transition: "fade".to_string() });
+                            clips.push(Clip {
+                                path: None,
+                                duration: dur,
+                                start_secs: seg.start_secs,
+                                is_video: false,
+                                trim_start: 0.0,
+                                overlap_transition: "fade".to_string(),
+                            });
                         }
                     }
                 }
@@ -284,8 +318,19 @@ pub fn run_montage(
                 let name = e.file_name();
                 let s = name.to_string_lossy();
                 let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
-                matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" |
-                         "mp4" | "mov" | "avi" | "mkv" | "webm")
+                matches!(
+                    ext.as_str(),
+                    "jpg"
+                        | "jpeg"
+                        | "png"
+                        | "gif"
+                        | "webp"
+                        | "mp4"
+                        | "mov"
+                        | "avi"
+                        | "mkv"
+                        | "webm"
+                )
             })
             .map(|e| format!("media/{}", e.file_name().to_string_lossy()))
             .collect();
@@ -297,13 +342,22 @@ pub fn run_montage(
 
         total_dur = audio_duration_hint.unwrap_or(0.0);
         if total_dur <= 0.0 {
-            return Err("Cannot assemble: audio duration unknown and timeline.json missing".to_string());
+            return Err(
+                "Cannot assemble: audio duration unknown and timeline.json missing".to_string(),
+            );
         }
 
         let clip_dur = total_dur / files.len() as f64;
         for (idx, f) in files.iter().enumerate() {
             let is_vid = is_video_ext(f);
-            clips.push(Clip { path: Some(f.clone()), duration: clip_dur, start_secs: idx as f64 * clip_dur, is_video: is_vid, trim_start: 0.0, overlap_transition: "fade".to_string() });
+            clips.push(Clip {
+                path: Some(f.clone()),
+                duration: clip_dur,
+                start_secs: idx as f64 * clip_dur,
+                is_video: is_vid,
+                trim_start: 0.0,
+                overlap_transition: "fade".to_string(),
+            });
         }
     }
 
@@ -377,7 +431,11 @@ pub fn run_montage(
             });
         } else {
             // Без переходу
-            pairs.push(PairTransition { duration: 0.0, name: String::new(), is_overlap: false });
+            pairs.push(PairTransition {
+                duration: 0.0,
+                name: String::new(),
+                is_overlap: false,
+            });
         }
     }
 
@@ -390,7 +448,7 @@ pub fn run_montage(
     let mut adj_durs: Vec<f64> = Vec::with_capacity(n);
 
     let mut file_idx = 0usize; // input-файл index (тільки для media-кліпів, не для black)
-    let mut img_idx = 0usize;  // лічильник зображень для режиму "alternate"
+    let mut img_idx = 0usize; // лічильник зображень для режиму "alternate"
     for (i, clip) in clips.iter().enumerate() {
         let ext = if i < pairs.len() && pairs[i].duration > 0.001 && !pairs[i].is_overlap {
             // Глобальний перехід: подовжуємо кліп щоб xfade мав кадри для плавного переходу
@@ -419,9 +477,17 @@ pub fn run_montage(
         } else {
             // Зображення — застосовуємо ефекти зуму та покачування
             let img_parts = build_image_filter_parts(
-                i, file_idx, frames, adj_dur, fps,
-                image_zoom_enabled, image_zoom_scale, image_zoom_mode, img_idx,
-                image_shake_enabled, image_shake_intensity,
+                i,
+                file_idx,
+                frames,
+                adj_dur,
+                fps,
+                image_zoom_enabled,
+                image_zoom_scale,
+                image_zoom_mode,
+                img_idx,
+                image_shake_enabled,
+                image_shake_intensity,
             );
             filter_parts.extend(img_parts);
             file_idx += 1;
@@ -480,9 +546,7 @@ pub fn run_montage(
     if result_labels.len() == 1 {
         filter_parts.push(format!("[{}]null[v_montage_raw]", result_labels[0]));
     } else {
-        let inputs: String = result_labels.iter()
-            .map(|l| format!("[{l}]"))
-            .collect();
+        let inputs: String = result_labels.iter().map(|l| format!("[{l}]")).collect();
         let count = result_labels.len();
         filter_parts.push(format!("{inputs}concat=n={count}:v=1:a=0[v_montage_raw]"));
     }
@@ -507,7 +571,9 @@ pub fn run_montage(
             log_fn("Subtitles burn-in: subtitle.srt (fallback).");
             "v_with_subs".to_string()
         } else {
-            log_fn("Warning: subtitles_enabled=true but no subtitle file found — skipping burn-in.");
+            log_fn(
+                "Warning: subtitles_enabled=true but no subtitle file found — skipping burn-in.",
+            );
             "v_montage".to_string()
         }
     } else {
@@ -533,7 +599,13 @@ pub fn run_montage(
     let sub_path = {
         let ass = save_dir.join("subtitle.ass");
         let srt = save_dir.join("subtitle.srt");
-        if ass.exists() { Some(ass) } else if srt.exists() { Some(srt) } else { None }
+        if ass.exists() {
+            Some(ass)
+        } else if srt.exists() {
+            Some(srt)
+        } else {
+            None
+        }
     };
 
     // Список додаткових input-файлів тригерів: (шлях, is_video)
@@ -542,7 +614,9 @@ pub fn run_montage(
 
     if overlay_triggers_enabled && !overlay_triggers.is_empty() {
         for tr in overlay_triggers {
-            if tr.phrase.is_empty() || tr.path.is_empty() { continue; }
+            if tr.phrase.is_empty() || tr.path.is_empty() {
+                continue;
+            }
             let tr_path = std::path::Path::new(&tr.path);
             if !tr_path.exists() {
                 log_fn(&format!("Trigger path not found, skipping: {}", tr.path));
@@ -564,7 +638,10 @@ pub fn run_montage(
                     }
                 }
             } else {
-                log_fn(&format!("No subtitle file for trigger '{}', skipping", tr.phrase));
+                log_fn(&format!(
+                    "No subtitle file for trigger '{}', skipping",
+                    tr.phrase
+                ));
                 continue;
             };
 
@@ -578,12 +655,17 @@ pub fn run_montage(
                 let ffprobe = crate::bundle::ffprobe_path();
                 let mut ffprobe_proc = std::process::Command::new(&ffprobe);
                 ffprobe_proc.args([
-                    "-v", "error", "-show_entries", "format=duration",
-                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
                     &tr.path,
                 ]);
                 crate::bundle::set_no_window(&mut ffprobe_proc);
-                let out = ffprobe_proc.output()
+                let out = ffprobe_proc
+                    .output()
                     .ok()
                     .and_then(|o| String::from_utf8(o.stdout).ok())
                     .and_then(|s| s.trim().parse::<f64>().ok())
@@ -640,7 +722,11 @@ pub fn run_montage(
     for track in &overlay_tracks {
         // Відсортовані сегменти треку — потрібно для визначення overlap між сусідами
         let mut track_segs: Vec<&OverlaySeg> = track.segments.iter().collect();
-        track_segs.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+        track_segs.sort_by(|a, b| {
+            a.start_secs
+                .partial_cmp(&b.start_secs)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         for (j, seg) in track_segs.iter().enumerate() {
             let media_path_str = match &seg.media {
@@ -649,7 +735,9 @@ pub fn run_montage(
             };
             let media_abs = save_dir.join(&media_path_str);
             if !media_abs.exists() {
-                log_fn(&format!("Overlay media not found, skipping: {media_path_str}"));
+                log_fn(&format!(
+                    "Overlay media not found, skipping: {media_path_str}"
+                ));
                 continue;
             }
             let is_vid = is_video_ext(&media_path_str);
@@ -671,25 +759,51 @@ pub fn run_montage(
             let fade_in_dur = if j > 0 {
                 let prev = track_segs[j - 1];
                 let overlap = prev.end_secs - seg.start_secs;
-                if overlap > 0.001 { overlap.clamp(0.05, clip_dur * 0.49) } else { 0.0 }
-            } else { 0.0 };
+                if overlap > 0.001 {
+                    overlap.clamp(0.05, clip_dur * 0.49)
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
             let fade_out_dur = if j + 1 < track_segs.len() {
                 let next = track_segs[j + 1];
                 let overlap = seg.end_secs - next.start_secs;
-                if overlap > 0.001 { overlap.clamp(0.05, clip_dur * 0.49) } else { 0.0 }
-            } else { 0.0 };
-            let fade_out_start = if fade_out_dur > 0.0 { (clip_dur - fade_out_dur).max(0.0) } else { 0.0 };
+                if overlap > 0.001 {
+                    overlap.clamp(0.05, clip_dur * 0.49)
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
+            let fade_out_start = if fade_out_dur > 0.0 {
+                (clip_dur - fade_out_dur).max(0.0)
+            } else {
+                0.0
+            };
 
-            let input_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
+            let input_idx =
+                media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
             overlay_input_paths.push((media_path_str.clone(), is_vid));
 
             log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s fade_in={:.2} fade_out={:.2}",
                 seg.start_secs, seg.end_secs, fade_in_dur, fade_out_dur));
 
             overlay_items.push(OverlayItem {
-                input_idx, start: seg.start_secs, end: seg.end_secs,
-                trim_start: seg.trim_start, w: w as i32, h: h as i32, x, y, is_video: is_vid,
-                fade_in_dur, fade_out_start, fade_out_dur,
+                input_idx,
+                start: seg.start_secs,
+                end: seg.end_secs,
+                trim_start: seg.trim_start,
+                w: w as i32,
+                h: h as i32,
+                x,
+                y,
+                is_video: is_vid,
+                fade_in_dur,
+                fade_out_start,
+                fade_out_dur,
             });
         }
     }
@@ -774,7 +888,9 @@ pub fn run_montage(
                         scale={w}:{h}:force_original_aspect_ratio=decrease,\
                         pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format={pix_fmt},fps={fps},setsar=1\
                         {fade_chain},settb=AVTB,setpts=PTS+{start:.6}/TB[{prep}]",
-                        ov.input_idx, trim = ov.trim_start, start = ov.start,
+                        ov.input_idx,
+                        trim = ov.trim_start,
+                        start = ov.start,
                     ));
                     filter_parts.push(format!(
                         "[{current}][{prep}]overlay=x={x}:y={y}:enable='{enable_expr}':eof_action=pass[{out_label}]",
@@ -802,7 +918,8 @@ pub fn run_montage(
     };
 
     let audio_idx = media_file_count;
-    let extra_audio_start_idx = media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
+    let extra_audio_start_idx =
+        media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
 
     // Допоміжна функція: рядок фільтру гучності якщо відрізняється від 1.0
     let vol_filter = |vol: f64| -> String {
@@ -819,7 +936,11 @@ pub fn run_montage(
             let ms = (audio_start_secs * 1000.0).round() as i64;
             filter_parts.push(format!(
                 "[{audio_idx}:a]{vf_stripped}adelay={ms}|{ms}[a_delayed]",
-                vf_stripped = if vf.is_empty() { String::new() } else { format!("{}," , &vf[1..]) },
+                vf_stripped = if vf.is_empty() {
+                    String::new()
+                } else {
+                    format!("{},", &vf[1..])
+                },
             ));
             "[a_delayed]".to_string()
         } else if vf.is_empty() {
@@ -834,7 +955,11 @@ pub fn run_montage(
             let ms = (audio_start_secs * 1000.0).round() as i64;
             filter_parts.push(format!(
                 "[{audio_idx}:a]{vf_stripped}adelay={ms}|{ms}[a_orig]",
-                vf_stripped = if vf.is_empty() { String::new() } else { format!("{},", &vf[1..]) },
+                vf_stripped = if vf.is_empty() {
+                    String::new()
+                } else {
+                    format!("{},", &vf[1..])
+                },
             ));
         } else if vf.is_empty() {
             filter_parts.push(format!("[{audio_idx}:a]anull[a_orig]"));
@@ -868,12 +993,22 @@ pub fn run_montage(
     let script = filter_parts.join(";");
     std::fs::write(save_dir.join("montage_script.txt"), &script)
         .map_err(|e| format!("Failed to write montage_script.txt: {e}"))?;
-    log_fn(&format!("Filter graph: {} parts, {} chars", filter_parts.len(), script.len()));
+    log_fn(&format!(
+        "Filter graph: {} parts, {} chars",
+        filter_parts.len(),
+        script.len()
+    ));
 
     // ─── Ім'я вихідного файлу ─────────────────────────────────────────────────
     let safe_name: String = task_name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let output_file = format!("{}.mp4", safe_name.trim());
 
@@ -883,9 +1018,12 @@ pub fn run_montage(
     let bufsize = format!("{}M", bitrate_mbps * 2);
 
     let mut args: Vec<String> = vec![
-        "-y".into(), "-hide_banner".into(),
-        "-loglevel".into(), "error".into(),
-        "-progress".into(), "pipe:1".into(),
+        "-y".into(),
+        "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-progress".into(),
+        "pipe:1".into(),
     ];
 
     for clip in &clips {
@@ -919,20 +1057,34 @@ pub fn run_montage(
     }
 
     args.extend([
-        "-filter_complex_script".into(), "montage_script.txt".into(),
-        "-map".into(), video_map_label.clone(),
-        "-map".into(), audio_map_label,
-        "-c:v".into(), "libx264".into(),
-        "-preset".into(), preset.to_string(),
-        "-b:v".into(), bitr.clone(),
-        "-maxrate".into(), bitr,
-        "-bufsize".into(), bufsize,
-        "-pix_fmt".into(), "yuv420p".into(),
-        "-r".into(), fps.to_string(),
-        "-t".into(), format!("{total_dur:.3}"),
-        "-c:a".into(), "aac".into(),
-        "-b:a".into(), "192k".into(),
-        "-movflags".into(), "+faststart".into(),
+        "-filter_complex_script".into(),
+        "montage_script.txt".into(),
+        "-map".into(),
+        video_map_label.clone(),
+        "-map".into(),
+        audio_map_label,
+        "-c:v".into(),
+        "libx264".into(),
+        "-preset".into(),
+        preset.to_string(),
+        "-b:v".into(),
+        bitr.clone(),
+        "-maxrate".into(),
+        bitr,
+        "-bufsize".into(),
+        bufsize,
+        "-pix_fmt".into(),
+        "yuv420p".into(),
+        "-r".into(),
+        fps.to_string(),
+        "-t".into(),
+        format!("{total_dur:.3}"),
+        "-c:a".into(),
+        "aac".into(),
+        "-b:a".into(),
+        "192k".into(),
+        "-movflags".into(),
+        "+faststart".into(),
         output_file,
     ]);
 
@@ -942,12 +1094,14 @@ pub fn run_montage(
     use std::process::Stdio;
 
     let mut ffmpeg_proc = std::process::Command::new(&ffmpeg);
-    ffmpeg_proc.args(&args)
+    ffmpeg_proc
+        .args(&args)
         .current_dir(save_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::bundle::set_no_window(&mut ffmpeg_proc);
-    let mut child = ffmpeg_proc.spawn()
+    let mut child = ffmpeg_proc
+        .spawn()
         .map_err(|e| format!("FFmpeg launch error: {e}"))?;
 
     // Читаємо stderr у окремому потоці, щоб не заблокувати буфер
@@ -983,12 +1137,17 @@ pub fn run_montage(
             on_progress(pct);
             log_fn(&format!(
                 "{:.0}%  fps={}  speed={}  bitrate={}",
-                pct * 100.0, enc_fps, speed, bitrate
+                pct * 100.0,
+                enc_fps,
+                speed,
+                bitrate
             ));
         }
     }
 
-    let status = child.wait().map_err(|e| format!("FFmpeg wait error: {e}"))?;
+    let status = child
+        .wait()
+        .map_err(|e| format!("FFmpeg wait error: {e}"))?;
     let stderr_output = stderr_handle.join().unwrap_or_default();
 
     if !status.success() {
@@ -1003,7 +1162,6 @@ pub fn run_montage(
         .unwrap_or(0);
     Ok(file_size)
 }
-
 
 /// Будує ланцюжок FFmpeg-фільтрів для зображення з ефектами зуму та/або покачування.
 ///
@@ -1054,9 +1212,7 @@ fn build_image_filter_parts(
         // Формула: z = 1.0 + zAmp*(1-cos(2π*t/duration))/2, де t = on/fps.
         // `on` — номер вихідного кадру (доступна змінна zoompan).
         let z_amp = zoom_scale - 1.0;
-        let z_expr = format!(
-            "1.0+{z_amp:.4}*(1-cos(6.2832*(on/{fps}/{adj_dur:.6})))/2"
-        );
+        let z_expr = format!("1.0+{z_amp:.4}*(1-cos(6.2832*(on/{fps}/{adj_dur:.6})))/2");
         parts.push(format!(
             "[v{i}_up]zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':\
             d={frames}:s={canvas_w}x{canvas_h}:fps={fps},\
@@ -1120,7 +1276,8 @@ fn pick_transition(transition: &str) -> &'static str {
         XFADE_TRANSITIONS[idx]
     } else {
         // Повертаємо статичний рядок; якщо невідомо — fallback "fade"
-        XFADE_TRANSITIONS.iter()
+        XFADE_TRANSITIONS
+            .iter()
             .copied()
             .find(|&t| t == transition)
             .unwrap_or("fade")

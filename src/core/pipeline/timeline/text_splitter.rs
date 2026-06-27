@@ -2,10 +2,16 @@
 /// mode: "paragraphs" | "sentences" | "char_limit" | "full"
 pub fn split_text(text: &str, mode: &str, char_limit: usize) -> Vec<String> {
     match mode {
-        "sentences"  => split_by_sentences(text),
+        "sentences" => split_by_sentences(text),
         "char_limit" => split_by_char_limit(text, char_limit),
-        "full"       => if text.trim().is_empty() { vec![] } else { vec![text.to_string()] },
-        _            => split_by_paragraphs(text), // "paragraphs" та за замовчуванням
+        "full" => {
+            if text.trim().is_empty() {
+                vec![]
+            } else {
+                vec![text.to_string()]
+            }
+        }
+        _ => split_by_paragraphs(text), // "paragraphs" та за замовчуванням
     }
 }
 
@@ -40,10 +46,8 @@ fn split_by_sentences(text: &str) -> Vec<String> {
 
         if matches!(ch, '.' | '!' | '?') {
             let at_end = i + 1 >= len;
-            let next_is_boundary = at_end
-                || chars[i + 1] == ' '
-                || chars[i + 1] == '\n'
-                || chars[i + 1] == '\r';
+            let next_is_boundary =
+                at_end || chars[i + 1] == ' ' || chars[i + 1] == '\n' || chars[i + 1] == '\r';
 
             if next_is_boundary {
                 let sentence = current.trim().to_string();
@@ -94,23 +98,28 @@ fn split_by_char_limit(text: &str, limit: usize) -> Vec<String> {
         let slice = &remaining[..limit_byte];
 
         // Шукаємо останній знак пунктуації перед лімітом (включаємо його у чанк)
-        let split_byte = slice
-            .char_indices()
-            .rev()
-            .find_map(|(byte_idx, ch)| {
-                if matches!(ch, '.' | '!' | '?' | ',' | ';' | ':') {
-                    Some(byte_idx + ch.len_utf8())
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                // Немає пунктуації — шукаємо пробіл (розрив між словами)
-                slice.char_indices().rev().find_map(|(byte_idx, ch)| {
-                    if ch == ' ' { Some(byte_idx) } else { None }
+        let split_byte =
+            slice
+                .char_indices()
+                .rev()
+                .find_map(|(byte_idx, ch)| {
+                    if matches!(ch, '.' | '!' | '?' | ',' | ';' | ':') {
+                        Some(byte_idx + ch.len_utf8())
+                    } else {
+                        None
+                    }
                 })
-            })
-            .unwrap_or(limit_byte);
+                .or_else(|| {
+                    // Немає пунктуації — шукаємо пробіл (розрив між словами)
+                    slice.char_indices().rev().find_map(|(byte_idx, ch)| {
+                        if ch == ' ' {
+                            Some(byte_idx)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .unwrap_or(limit_byte);
 
         let chunk = remaining[..split_byte].trim().to_string();
         if !chunk.is_empty() {

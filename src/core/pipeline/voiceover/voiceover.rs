@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
-use std::path::{Path, PathBuf};
 use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 /// Синхронно виконує озвучку тексту через обраного провайдера (Voice Bot API або Edge TTS).
 pub fn run_voiceover_sync(
@@ -29,14 +29,21 @@ fn run_voicebot_voiceover(
     let voicebot_key = &settings.voicebot_key;
     let save_path = &settings.save_path;
 
-    let template_opt = if template_uuid.is_empty() { None } else { Some(template_uuid.as_str()) };
+    let template_opt = if template_uuid.is_empty() {
+        None
+    } else {
+        Some(template_uuid.as_str())
+    };
 
     let task_id = crate::api::voicebot::create_tts_task(voicebot_key, text, template_opt)?;
 
     crate::logger::log_job(
         job_id,
         job_name,
-        &format!("TTS task created (ID: {}). Polling status every 5 sec...", task_id),
+        &format!(
+            "TTS task created (ID: {}). Polling status every 5 sec...",
+            task_id
+        ),
     );
 
     loop {
@@ -94,7 +101,8 @@ fn run_edge_tts_voiceover(
     crate::logger::log_job(
         job_id,
         job_name,
-        &format!("[EdgeTTS] Starting voiceover. Voice: {}, Rate: {}, Pitch: {}, Volume: {}",
+        &format!(
+            "[EdgeTTS] Starting voiceover. Voice: {}, Rate: {}, Pitch: {}, Volume: {}",
             voice_id, settings.edge_tts_rate, settings.edge_tts_pitch, settings.edge_tts_volume
         ),
     );
@@ -108,15 +116,21 @@ fn run_edge_tts_voiceover(
         crate::logger::log_job(
             job_id,
             job_name,
-            &format!("[EdgeTTS] Text is too long ({} chars). Splitting into {} chunks (limit: {})...",
-                text.chars().count(), total_chunks_count, char_limit
+            &format!(
+                "[EdgeTTS] Text is too long ({} chars). Splitting into {} chunks (limit: {})...",
+                text.chars().count(),
+                total_chunks_count,
+                char_limit
             ),
         );
     }
 
     let temp_dir = save_path.join("temp_edgetts");
     if let Err(e) = std::fs::create_dir_all(&temp_dir) {
-        return Err(format!("Failed to create temp directory for voiceover chunks: {}", e));
+        return Err(format!(
+            "Failed to create temp directory for voiceover chunks: {}",
+            e
+        ));
     }
 
     let mut thread_handles = Vec::new();
@@ -149,7 +163,12 @@ fn run_edge_tts_voiceover(
             crate::logger::log_job(
                 job_id,
                 &job_name_clone,
-                &format!("[EdgeTTS] Synthesizing chunk {}/{} ({} chars)...", idx + 1, total_chunks_count, chunk.chars().count()),
+                &format!(
+                    "[EdgeTTS] Synthesizing chunk {}/{} ({} chars)...",
+                    idx + 1,
+                    total_chunks_count,
+                    chunk.chars().count()
+                ),
             );
 
             let backoffs = [
@@ -164,7 +183,13 @@ fn run_edge_tts_voiceover(
                     crate::logger::log_job(
                         job_id,
                         &job_name_clone,
-                        &format!("[EdgeTTS] Chunk {}/{} retry {}/3 after {:?}", idx + 1, total_chunks_count, attempt, backoffs[attempt - 1]),
+                        &format!(
+                            "[EdgeTTS] Chunk {}/{} retry {}/3 after {:?}",
+                            idx + 1,
+                            total_chunks_count,
+                            attempt,
+                            backoffs[attempt - 1]
+                        ),
                     );
                     std::thread::sleep(backoffs[attempt - 1]);
                 }
@@ -174,9 +199,21 @@ fn run_edge_tts_voiceover(
                 }
 
                 // Екрануємо/налаштовуємо параметри перед синтезом
-                let rate_param = if rate_clone.is_empty() { "0" } else { &rate_clone };
-                let pitch_param = if pitch_clone.is_empty() { "0" } else { &pitch_clone };
-                let volume_param = if volume_clone.is_empty() { "0" } else { &volume_clone };
+                let rate_param = if rate_clone.is_empty() {
+                    "0"
+                } else {
+                    &rate_clone
+                };
+                let pitch_param = if pitch_clone.is_empty() {
+                    "0"
+                } else {
+                    &pitch_clone
+                };
+                let volume_param = if volume_clone.is_empty() {
+                    "0"
+                } else {
+                    &volume_clone
+                };
 
                 match crate::api::edgetts::synthesize(
                     &chunk,
@@ -190,7 +227,11 @@ fn run_edge_tts_voiceover(
                         crate::logger::log_job(
                             job_id,
                             &job_name_clone,
-                            &format!("[EdgeTTS] Chunk {}/{} synthesized successfully.", idx + 1, total_chunks_count),
+                            &format!(
+                                "[EdgeTTS] Chunk {}/{} synthesized successfully.",
+                                idx + 1,
+                                total_chunks_count
+                            ),
                         );
                         return;
                     }
@@ -198,7 +239,13 @@ fn run_edge_tts_voiceover(
                         crate::logger::log_job(
                             job_id,
                             &job_name_clone,
-                            &format!("[EdgeTTS] Chunk {}/{} synthesis error (attempt {}): {}", idx + 1, total_chunks_count, attempt + 1, e),
+                            &format!(
+                                "[EdgeTTS] Chunk {}/{} synthesis error (attempt {}): {}",
+                                idx + 1,
+                                total_chunks_count,
+                                attempt + 1,
+                                e
+                            ),
                         );
                         attempt_err = Some(e);
                     }
@@ -208,7 +255,12 @@ fn run_edge_tts_voiceover(
             if let Some(err) = attempt_err {
                 let mut lock = first_error_clone.lock().unwrap();
                 if lock.is_none() {
-                    *lock = Some(format!("Chunk {}/{} synthesis failed: {}", idx + 1, total_chunks_count, err));
+                    *lock = Some(format!(
+                        "Chunk {}/{} synthesis failed: {}",
+                        idx + 1,
+                        total_chunks_count,
+                        err
+                    ));
                 }
             }
         });
@@ -227,10 +279,18 @@ fn run_edge_tts_voiceover(
 
     // Склеюємо чанки
     if total_chunks_count > 1 {
-        crate::logger::log_job(job_id, job_name, "[EdgeTTS] Merging voiceover chunks via FFmpeg...");
+        crate::logger::log_job(
+            job_id,
+            job_name,
+            "[EdgeTTS] Merging voiceover chunks via FFmpeg...",
+        );
         match merge_audio_ffmpeg(&chunk_paths, &final_output_path) {
             Ok(_) => {
-                crate::logger::log_job(job_id, job_name, "[EdgeTTS] Chunks merged successfully via FFmpeg.");
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    "[EdgeTTS] Chunks merged successfully via FFmpeg.",
+                );
             }
             Err(e) => {
                 crate::logger::log_job(
@@ -239,9 +299,16 @@ fn run_edge_tts_voiceover(
                     &format!("[EdgeTTS] Warning: FFmpeg merge failed ({}). Falling back to binary merge...", e),
                 );
                 if let Err(binary_err) = merge_audio_binary(&chunk_paths, &final_output_path) {
-                    return Err(format!("Failed to merge audio files via binary method: {}", binary_err));
+                    return Err(format!(
+                        "Failed to merge audio files via binary method: {}",
+                        binary_err
+                    ));
                 }
-                crate::logger::log_job(job_id, job_name, "[EdgeTTS] Chunks merged successfully via binary merge.");
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    "[EdgeTTS] Chunks merged successfully via binary merge.",
+                );
             }
         }
     } else if total_chunks_count == 1 {
@@ -254,7 +321,11 @@ fn run_edge_tts_voiceover(
     // Видаляємо тимчасову папку
     let _ = std::fs::remove_dir_all(&temp_dir);
 
-    crate::logger::log_job(job_id, job_name, "[EdgeTTS] Voiceover completed successfully.");
+    crate::logger::log_job(
+        job_id,
+        job_name,
+        "[EdgeTTS] Voiceover completed successfully.",
+    );
     Ok(())
 }
 
@@ -312,7 +383,9 @@ fn split_text_by_chunks(text: &str, max_chars: usize) -> Vec<String> {
 
 /// Об'єднання аудіофайлів через FFmpeg за допомогою concat demuxer.
 fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(), String> {
-    let parent_dir = output_path.parent().ok_or("Cannot get parent directory of output path")?;
+    let parent_dir = output_path
+        .parent()
+        .ok_or("Cannot get parent directory of output path")?;
     let concat_list_path = parent_dir.join("concat_list.txt");
 
     let mut file_content = String::new();
@@ -331,22 +404,21 @@ fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(),
 
     let ffmpeg_cmd = crate::bundle::ffmpeg_path();
     let mut ffmpeg_proc = std::process::Command::new(&ffmpeg_cmd);
-    ffmpeg_proc.current_dir(parent_dir)
-        .args(&[
-            "-y",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            "concat_list.txt",
-            "-c",
-            "copy",
-            output_path.file_name().unwrap().to_str().unwrap(),
-        ]);
+    ffmpeg_proc.current_dir(parent_dir).args(&[
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        "concat_list.txt",
+        "-c",
+        "copy",
+        output_path.file_name().unwrap().to_str().unwrap(),
+    ]);
     crate::bundle::set_no_window(&mut ffmpeg_proc);
     let output = ffmpeg_proc.output();
 
@@ -375,11 +447,13 @@ fn merge_audio_binary(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(),
             .map_err(|e| format!("Failed to open chunk file {:?}: {}", path, e))?;
 
         let mut buffer = Vec::new();
-        chunk_file.read_to_end(&mut buffer)
+        chunk_file
+            .read_to_end(&mut buffer)
             .map_err(|e| format!("Failed to read chunk file {:?}: {}", path, e))?;
 
         use std::io::Write;
-        output_file.write_all(&buffer)
+        output_file
+            .write_all(&buffer)
             .map_err(|e| format!("Failed to write chunk to final file: {}", e))?;
     }
 

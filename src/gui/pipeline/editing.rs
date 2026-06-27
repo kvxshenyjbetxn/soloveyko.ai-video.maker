@@ -1,22 +1,60 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 
 /// Всі доступні xfade переходи FFmpeg.
 pub const XFADE_TRANSITIONS: &[&str] = &[
-    "fade", "wipeleft", "wiperight", "wipeup", "wipedown",
-    "slideleft", "slideright", "slideup", "slidedown",
-    "smoothleft", "smoothright", "smoothup", "smoothdown",
-    "circlecrop", "rectcrop", "distance",
-    "fadeblack", "fadewhite", "fadegrays",
-    "pixelize", "diagtl", "diagtr", "diagbl", "diagbr",
-    "hlslice", "hrslice", "vuslice", "vdslice",
-    "dissolve", "hblur",
-    "hlwind", "hrwind", "vuwind", "vdwind",
-    "coverleft", "coverright", "coverup", "coverdown",
-    "revealleft", "revealright", "revealup", "revealdown",
-    "zoomin", "squeezeh", "squeezev",
-    "horzopen", "horzclose", "vertopen", "vertclose",
-    "circleopen", "circleclose", "radial",
+    "fade",
+    "wipeleft",
+    "wiperight",
+    "wipeup",
+    "wipedown",
+    "slideleft",
+    "slideright",
+    "slideup",
+    "slidedown",
+    "smoothleft",
+    "smoothright",
+    "smoothup",
+    "smoothdown",
+    "circlecrop",
+    "rectcrop",
+    "distance",
+    "fadeblack",
+    "fadewhite",
+    "fadegrays",
+    "pixelize",
+    "diagtl",
+    "diagtr",
+    "diagbl",
+    "diagbr",
+    "hlslice",
+    "hrslice",
+    "vuslice",
+    "vdslice",
+    "dissolve",
+    "hblur",
+    "hlwind",
+    "hrwind",
+    "vuwind",
+    "vdwind",
+    "coverleft",
+    "coverright",
+    "coverup",
+    "coverdown",
+    "revealleft",
+    "revealright",
+    "revealup",
+    "revealdown",
+    "zoomin",
+    "squeezeh",
+    "squeezev",
+    "horzopen",
+    "horzclose",
+    "vertopen",
+    "vertclose",
+    "circleopen",
+    "circleclose",
+    "radial",
 ];
 
 /// Малює секцію "Монтаж" на панелі пайплайну.
@@ -53,10 +91,16 @@ pub fn draw_editing_section(
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let w = (ui.available_width() - 60.0).max(60.0);
-                ui.add(egui::TextEdit::singleline(capcut_draft_path)
-                    .hint_text(translate(language, "capcut_draft_path_hint"))
-                    .desired_width(w));
-                if ui.button("📁").on_hover_text(translate(language, "capcut_draft_path_hint")).clicked() {
+                ui.add(
+                    egui::TextEdit::singleline(capcut_draft_path)
+                        .hint_text(translate(language, "capcut_draft_path_hint"))
+                        .desired_width(w),
+                );
+                if ui
+                    .button("📁")
+                    .on_hover_text(translate(language, "capcut_draft_path_hint"))
+                    .clicked()
+                {
                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                         *capcut_draft_path = folder.to_string_lossy().into_owned();
                     }
@@ -87,10 +131,7 @@ pub fn draw_editing_section(
             ui.label(egui::RichText::new(translate(language, "montage_fps_label")).strong());
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ui.add(
-                    egui::Slider::new(montage_fps, 1..=120)
-                        .suffix(" fps"),
-                );
+                ui.add(egui::Slider::new(montage_fps, 1..=120).suffix(" fps"));
             });
 
             ui.add_space(8.0);
@@ -102,7 +143,17 @@ pub fn draw_editing_section(
                 .selected_text(montage_preset.as_str())
                 .width(ui.available_width() - 8.0)
                 .show_ui(ui, |ui| {
-                    for p in &["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] {
+                    for p in &[
+                        "ultrafast",
+                        "superfast",
+                        "veryfast",
+                        "faster",
+                        "fast",
+                        "medium",
+                        "slow",
+                        "slower",
+                        "veryslow",
+                    ] {
                         ui.selectable_value(montage_preset, p.to_string(), *p);
                     }
                 });
@@ -113,7 +164,11 @@ pub fn draw_editing_section(
             ui.label(egui::RichText::new(translate(language, "montage_bitrate_label")).strong());
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ui.add(egui::DragValue::new(montage_bitrate).range(1..=100).suffix(" MB/s"));
+                ui.add(
+                    egui::DragValue::new(montage_bitrate)
+                        .range(1..=100)
+                        .suffix(" MB/s"),
+                );
             });
 
             ui.add_space(8.0);
@@ -123,19 +178,25 @@ pub fn draw_editing_section(
             ui.add_space(4.0);
 
             let selected_text = match montage_transition.as_str() {
-                "none"   => translate(language, "montage_transition_none").to_string(),
+                "none" => translate(language, "montage_transition_none").to_string(),
                 "random" => translate(language, "montage_transition_random").to_string(),
-                other    => other.to_string(),
+                other => other.to_string(),
             };
 
             egui::ComboBox::from_id_salt("montage_transition_combo")
                 .selected_text(selected_text)
                 .width(ui.available_width() - 8.0)
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(montage_transition, "none".to_string(),
-                        translate(language, "montage_transition_none"));
-                    ui.selectable_value(montage_transition, "random".to_string(),
-                        translate(language, "montage_transition_random"));
+                    ui.selectable_value(
+                        montage_transition,
+                        "none".to_string(),
+                        translate(language, "montage_transition_none"),
+                    );
+                    ui.selectable_value(
+                        montage_transition,
+                        "random".to_string(),
+                        translate(language, "montage_transition_random"),
+                    );
                     ui.separator();
                     for &t in XFADE_TRANSITIONS {
                         ui.selectable_value(montage_transition, t.to_string(), t);
@@ -145,7 +206,10 @@ pub fn draw_editing_section(
             // Тривалість переходу — тільки якщо перехід увімкнено
             if montage_transition.as_str() != "none" {
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new(translate(language, "montage_transition_duration_label")).strong());
+                ui.label(
+                    egui::RichText::new(translate(language, "montage_transition_duration_label"))
+                        .strong(),
+                );
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
@@ -173,7 +237,9 @@ pub fn draw_editing_section(
             // Ефект зуму
             ui.horizontal(|ui| {
                 crate::gui::pipeline::toggle_switch(ui, montage_image_zoom_enabled);
-                ui.label(egui::RichText::new(translate(language, "montage_image_zoom_label")).strong());
+                ui.label(
+                    egui::RichText::new(translate(language, "montage_image_zoom_label")).strong(),
+                );
             });
 
             if *montage_image_zoom_enabled {
@@ -181,10 +247,22 @@ pub fn draw_editing_section(
                 ui.label(translate(language, "montage_image_zoom_mode_label"));
                 ui.horizontal(|ui| {
                     let is_alternate = montage_image_zoom_mode == "alternate";
-                    if ui.selectable_label(is_alternate, translate(language, "montage_image_zoom_mode_alternate")).clicked() {
+                    if ui
+                        .selectable_label(
+                            is_alternate,
+                            translate(language, "montage_image_zoom_mode_alternate"),
+                        )
+                        .clicked()
+                    {
                         *montage_image_zoom_mode = "alternate".to_string();
                     }
-                    if ui.selectable_label(!is_alternate, translate(language, "montage_image_zoom_mode_oscillate")).clicked() {
+                    if ui
+                        .selectable_label(
+                            !is_alternate,
+                            translate(language, "montage_image_zoom_mode_oscillate"),
+                        )
+                        .clicked()
+                    {
                         *montage_image_zoom_mode = "oscillate".to_string();
                     }
                 });
@@ -202,7 +280,9 @@ pub fn draw_editing_section(
             // Ефект покачування
             ui.horizontal(|ui| {
                 crate::gui::pipeline::toggle_switch(ui, montage_image_shake_enabled);
-                ui.label(egui::RichText::new(translate(language, "montage_image_shake_label")).strong());
+                ui.label(
+                    egui::RichText::new(translate(language, "montage_image_shake_label")).strong(),
+                );
             });
 
             if *montage_image_shake_enabled {
@@ -214,7 +294,6 @@ pub fn draw_editing_section(
                         .show_value(true),
                 );
             }
-
         }
 
         ui.add_space(6.0);

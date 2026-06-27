@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 
 /// Стан одного вікна контролю перекладу (зберігається per-job).
 pub struct TranslationControlWindowState {
@@ -16,7 +16,8 @@ pub struct TranslationControlWindowState {
     pub regen_model_search: String,
     pub regen_prompt: String,
     pub regen_temperature: f32,
-    pub regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<(String, Option<f64>), String>>>>,
+    pub regen_result:
+        std::sync::Arc<std::sync::Mutex<Option<Result<(String, Option<f64>), String>>>>,
     pub regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     pub regen_error: Option<String>,
 }
@@ -52,7 +53,11 @@ pub fn draw_translation_control_windows(
     jobs: &[crate::queue::PipelineJob],
     open_job_controls: &mut std::collections::HashMap<u64, TranslationControlWindowState>,
     control_dismissed: &mut std::collections::HashSet<u64>,
-    openrouter_models: &std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
+    openrouter_models: &std::sync::Arc<
+        std::sync::Mutex<
+            Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>,
+        >,
+    >,
     openrouter_models_loading: &std::sync::Arc<std::sync::Mutex<bool>>,
 ) {
     let job_ids: Vec<u64> = open_job_controls.keys().cloned().collect();
@@ -80,7 +85,8 @@ pub fn draw_translation_control_windows(
         let montage_progress_arc = std::sync::Arc::clone(&jobs[job_idx].montage_progress);
         let montage_file_size_arc = std::sync::Arc::clone(&jobs[job_idx].montage_file_size);
         let media_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].media_control_resume);
-        let montage_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].montage_control_resume);
+        let montage_control_resume_arc =
+            std::sync::Arc::clone(&jobs[job_idx].montage_control_resume);
         let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
         let capcut_mode_override_arc = std::sync::Arc::clone(&jobs[job_idx].capcut_mode_override);
         let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
@@ -115,106 +121,171 @@ pub fn draw_translation_control_windows(
         let mut trigger_simple_regen = false;
         let mut open_extended = false;
 
-        egui::Window::new(format!("{} — {}", translate(language, "control_window_title"), job_name))
-            .id(egui::Id::new(("translation_control", job_id)))
-            .open(&mut is_open)
-            .resizable(true)
-            .default_size([500.0, 350.0])
-            .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    ui.label(egui::RichText::new(translate(language, "control_window_text")).strong().size(12.0));
-                    ui.add_space(4.0);
+        egui::Window::new(format!(
+            "{} — {}",
+            translate(language, "control_window_title"),
+            job_name
+        ))
+        .id(egui::Id::new(("translation_control", job_id)))
+        .open(&mut is_open)
+        .resizable(true)
+        .default_size([500.0, 350.0])
+        .show(ctx, |ui| {
+            ui.vertical(|ui| {
+                ui.label(
+                    egui::RichText::new(translate(language, "control_window_text"))
+                        .strong()
+                        .size(12.0),
+                );
+                ui.add_space(4.0);
 
-                    egui::ScrollArea::vertical()
-                        .max_height(200.0)
-                        .show(ui, |ui| {
-                            ui.add(
-                                egui::TextEdit::multiline(&mut state.text_input)
-                                    .hint_text("Перекладений текст...")
-                                    .desired_width(f32::INFINITY)
-                                    .desired_rows(10),
-                            );
-                        });
-
-                    ui.add_space(4.0);
-
-                    let translated_char_count = state.text_input.chars().count();
-                    let translated_word_count = state.text_input.split_whitespace().count();
-                    let translated_token_count = crate::gui::editor::count_tokens(&state.text_input);
-                    let cost_snapshot = *translation_cost_arc.lock().unwrap();
-
-                    let text_color = ui.visuals().widgets.noninteractive.text_color();
-                    let accent_color = ui.visuals().selection.bg_fill;
-                    let bullet_color = text_color.linear_multiply(0.3);
-
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(translate(language, "stats_chars")).size(12.0).color(text_color));
-                        ui.label(egui::RichText::new(format!(" {}", translated_char_count)).size(12.0).strong().color(accent_color));
-                        ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
-                        ui.label(egui::RichText::new(translate(language, "stats_words")).size(12.0).color(text_color));
-                        ui.label(egui::RichText::new(format!(" {}", translated_word_count)).size(12.0).strong().color(accent_color));
-                        ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
-                        ui.label(egui::RichText::new(translate(language, "stats_tokens")).size(12.0).color(text_color));
-                        ui.label(egui::RichText::new(format!(" {}", translated_token_count)).size(12.0).strong().color(accent_color));
-                        if let Some(cost) = cost_snapshot {
-                            ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
-                            ui.label(egui::RichText::new(translate(language, "control_window_cost")).size(12.0).color(text_color));
-                            ui.label(egui::RichText::new(format!(" ${:.5}", cost)).size(12.0).strong().color(accent_color));
-                        }
+                egui::ScrollArea::vertical()
+                    .max_height(200.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut state.text_input)
+                                .hint_text("Перекладений текст...")
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(10),
+                        );
                     });
 
-                    if let Some(ref err) = state.regen_error {
-                        ui.add_space(4.0);
-                        ui.add(egui::Label::new(
-                            egui::RichText::new(format!("{} {}", translate(language, "control_regen_error"), err))
-                                .color(egui::Color32::from_rgb(231, 76, 60))
-                                .size(11.0),
-                        ).wrap());
+                ui.add_space(4.0);
+
+                let translated_char_count = state.text_input.chars().count();
+                let translated_word_count = state.text_input.split_whitespace().count();
+                let translated_token_count = crate::gui::editor::count_tokens(&state.text_input);
+                let cost_snapshot = *translation_cost_arc.lock().unwrap();
+
+                let text_color = ui.visuals().widgets.noninteractive.text_color();
+                let accent_color = ui.visuals().selection.bg_fill;
+                let bullet_color = text_color.linear_multiply(0.3);
+
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(translate(language, "stats_chars"))
+                            .size(12.0)
+                            .color(text_color),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!(" {}", translated_char_count))
+                            .size(12.0)
+                            .strong()
+                            .color(accent_color),
+                    );
+                    ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
+                    ui.label(
+                        egui::RichText::new(translate(language, "stats_words"))
+                            .size(12.0)
+                            .color(text_color),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!(" {}", translated_word_count))
+                            .size(12.0)
+                            .strong()
+                            .color(accent_color),
+                    );
+                    ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
+                    ui.label(
+                        egui::RichText::new(translate(language, "stats_tokens"))
+                            .size(12.0)
+                            .color(text_color),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!(" {}", translated_token_count))
+                            .size(12.0)
+                            .strong()
+                            .color(accent_color),
+                    );
+                    if let Some(cost) = cost_snapshot {
+                        ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
+                        ui.label(
+                            egui::RichText::new(translate(language, "control_window_cost"))
+                                .size(12.0)
+                                .color(text_color),
+                        );
+                        ui.label(
+                            egui::RichText::new(format!(" ${:.5}", cost))
+                                .size(12.0)
+                                .strong()
+                                .color(accent_color),
+                        );
+                    }
+                });
+
+                if let Some(ref err) = state.regen_error {
+                    ui.add_space(4.0);
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!(
+                                "{} {}",
+                                translate(language, "control_regen_error"),
+                                err
+                            ))
+                            .color(egui::Color32::from_rgb(231, 76, 60))
+                            .size(11.0),
+                        )
+                        .wrap(),
+                    );
+                }
+
+                ui.add_space(8.0);
+
+                let is_regen_loading = *state.regen_loading.lock().unwrap();
+
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(translate(language, "job_name_cancel_btn"))
+                        .clicked()
+                    {
+                        control_closed = true;
                     }
 
-                    ui.add_space(8.0);
-
-                    let is_regen_loading = *state.regen_loading.lock().unwrap();
-
-                    ui.horizontal(|ui| {
-                        if ui.button(translate(language, "job_name_cancel_btn")).clicked() {
-                            control_closed = true;
-                        }
-
-                        if ui.add_enabled(
+                    if ui
+                        .add_enabled(
                             !is_regen_loading,
                             egui::Button::new(translate(language, "control_regen_btn")),
-                        ).clicked() {
-                            trigger_simple_regen = true;
-                        }
+                        )
+                        .clicked()
+                    {
+                        trigger_simple_regen = true;
+                    }
 
-                        if ui.add_enabled(
+                    if ui
+                        .add_enabled(
                             !is_regen_loading,
                             egui::Button::new(translate(language, "control_regen_extended_btn")),
-                        ).clicked() {
-                            open_extended = true;
-                        }
+                        )
+                        .clicked()
+                    {
+                        open_extended = true;
+                    }
 
-                        if is_regen_loading {
-                            ui.label(
-                                egui::RichText::new(translate(language, "control_regen_loading"))
-                                    .weak()
-                                    .size(11.0),
-                            );
-                        }
+                    if is_regen_loading {
+                        ui.label(
+                            egui::RichText::new(translate(language, "control_regen_loading"))
+                                .weak()
+                                .size(11.0),
+                        );
+                    }
 
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add(
-                                egui::Button::new(
-                                    egui::RichText::new(translate(language, "control_window_continue_btn")).strong()
-                                )
-                            ).clicked() {
-                                should_continue = true;
-                            }
-                        });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(egui::Button::new(
+                                egui::RichText::new(translate(
+                                    language,
+                                    "control_window_continue_btn",
+                                ))
+                                .strong(),
+                            ))
+                            .clicked()
+                        {
+                            should_continue = true;
+                        }
                     });
                 });
             });
+        });
 
         if control_closed {
             is_open = false;
@@ -238,7 +309,13 @@ pub fn draw_translation_control_windows(
             let save_path_for_regen = job_settings.save_path.clone();
             std::thread::spawn(move || {
                 let result = crate::core::llm::call_llm(
-                    &service, &key, &model, &prompt, &text, temperature, job_info,
+                    &service,
+                    &key,
+                    &model,
+                    &prompt,
+                    &text,
+                    temperature,
+                    job_info,
                     Some(save_path_for_regen.as_str()),
                     false,
                 );
@@ -258,27 +335,47 @@ pub fn draw_translation_control_windows(
                 state.regen_model_openrouter.clone()
             };
             state.regen_model_claude = if job_settings.translation_service == "Claude Code" {
-                if job_settings.translation_model.is_empty() { "sonnet".to_string() } else { job_settings.translation_model.clone() }
+                if job_settings.translation_model.is_empty() {
+                    "sonnet".to_string()
+                } else {
+                    job_settings.translation_model.clone()
+                }
             } else {
                 state.regen_model_claude.clone()
             };
             state.regen_model_gemini = if job_settings.translation_service == "Gemini CLI" {
-                if job_settings.translation_model.is_empty() { "gemini-2.5-flash".to_string() } else { job_settings.translation_model.clone() }
+                if job_settings.translation_model.is_empty() {
+                    "gemini-2.5-flash".to_string()
+                } else {
+                    job_settings.translation_model.clone()
+                }
             } else {
                 state.regen_model_gemini.clone()
             };
             state.regen_model_codex = if job_settings.translation_service == "Codex CLI" {
-                if job_settings.translation_model.is_empty() { "gpt-5.4-mini".to_string() } else { job_settings.translation_model.clone() }
+                if job_settings.translation_model.is_empty() {
+                    "gpt-5.4-mini".to_string()
+                } else {
+                    job_settings.translation_model.clone()
+                }
             } else {
                 state.regen_model_codex.clone()
             };
             state.regen_model_agy = if job_settings.translation_service == "AGY CLI" {
-                if job_settings.translation_model.is_empty() { "gemini-3.5-flash".to_string() } else { job_settings.translation_model.clone() }
+                if job_settings.translation_model.is_empty() {
+                    "gemini-3.5-flash".to_string()
+                } else {
+                    job_settings.translation_model.clone()
+                }
             } else {
                 state.regen_model_agy.clone()
             };
             state.regen_model_pi = if job_settings.translation_service == "Pi CLI" {
-                if job_settings.translation_model.is_empty() { "gemini-2.5-flash".to_string() } else { job_settings.translation_model.clone() }
+                if job_settings.translation_model.is_empty() {
+                    "gemini-2.5-flash".to_string()
+                } else {
+                    job_settings.translation_model.clone()
+                }
             } else {
                 state.regen_model_pi.clone()
             };
@@ -303,11 +400,14 @@ pub fn draw_translation_control_windows(
                 .resizable(true)
                 .default_size([450.0, 500.0])
                 .show(ctx, |ui| {
-                    ui.add(egui::Label::new(
-                        egui::RichText::new(translate(language, "control_regen_settings_note"))
-                            .weak()
-                            .size(11.0),
-                    ).wrap());
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(translate(language, "control_regen_settings_note"))
+                                .weak()
+                                .size(11.0),
+                        )
+                        .wrap(),
+                    );
                     ui.add_space(6.0);
                     ui.separator();
 
@@ -344,7 +444,10 @@ pub fn draw_translation_control_windows(
                             egui::RichText::new(translate(language, "control_regen_loading"))
                                 .weak(),
                         );
-                    } else if ui.button(translate(language, "control_regen_run_btn")).clicked() {
+                    } else if ui
+                        .button(translate(language, "control_regen_run_btn"))
+                        .clicked()
+                    {
                         trigger_ext_regen = true;
                     }
                 });
@@ -367,8 +470,13 @@ pub fn draw_translation_control_windows(
                 *loading_arc.lock().unwrap() = true;
                 std::thread::spawn(move || {
                     let result = crate::core::llm::call_llm(
-                        &service, &openrouter_key_ext, &model, &prompt, &text_to_translate,
-                        temperature, job_info_ext,
+                        &service,
+                        &openrouter_key_ext,
+                        &model,
+                        &prompt,
+                        &text_to_translate,
+                        temperature,
+                        job_info_ext,
                         Some(save_path_ext.as_str()),
                         false,
                     );

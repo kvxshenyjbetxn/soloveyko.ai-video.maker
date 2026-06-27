@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 
 /// Малює секцію "Контроль" на панелі пайплайну з налаштуваннями контролю етапів.
 pub fn draw_control_section(
@@ -22,7 +22,10 @@ pub fn draw_control_section(
 
         if *pipeline_translation_control_enabled {
             ui.add_space(4.0);
-            ui.checkbox(pipeline_control_auto_open, translate(language, "control_auto_open"));
+            ui.checkbox(
+                pipeline_control_auto_open,
+                translate(language, "control_auto_open"),
+            );
         }
 
         ui.add_space(4.0);

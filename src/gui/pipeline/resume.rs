@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 
 /// Файли попередньої обробки, знайдені в кінцевій папці задачі.
 pub struct FoundFiles {
@@ -40,7 +40,15 @@ impl ResumePendingData {
         // keep_timeline = true якщо є хоч один з файлів агента (segments.json або timeline.json)
         let keep_timeline = found.segments_json || found.timeline_json;
         let keep_video = found.media_images > 0 || found.media_videos > 0;
-        Self { task_name, found, settings, keep_voiceover, keep_subtitles, keep_timeline, keep_video }
+        Self {
+            task_name,
+            found,
+            settings,
+            keep_voiceover,
+            keep_subtitles,
+            keep_timeline,
+            keep_video,
+        }
     }
 
     /// Визначає з якого етапу фактично запустити пайплайн, з урахуванням чекбоксів.
@@ -77,8 +85,7 @@ impl FoundFiles {
     /// Сканує папку задачі та повертає знайдені файли попередньої обробки.
     pub fn scan(task_dir: &std::path::Path, task_name: &str) -> Self {
         let text_txt = task_dir.join("text.txt").exists();
-        let voice_file = task_dir.join("voice.mp3").exists()
-            || task_dir.join("voice.wav").exists();
+        let voice_file = task_dir.join("voice.mp3").exists() || task_dir.join("voice.wav").exists();
         let subtitle_srt = task_dir.join("subtitle.srt").exists();
         let segments_json = task_dir.join("segments.json").exists();
         let timeline_json = task_dir.join("timeline.json").exists();
@@ -106,28 +113,46 @@ impl FoundFiles {
         // Та сама логіка санітайзингу що в montage.rs
         let safe_name: String = task_name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
-        let output_video = task_dir
-            .join(format!("{}.mp4", safe_name.trim()))
-            .exists();
+        let output_video = task_dir.join(format!("{}.mp4", safe_name.trim())).exists();
 
         // Рахуємо очікувану кількість медіа: спочатку з timeline.json, потім з segments.json
         let expected_media = if timeline_json {
-            std::fs::read_to_string(task_dir.join("timeline.json")).ok()
+            std::fs::read_to_string(task_dir.join("timeline.json"))
+                .ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-                .and_then(|v| v["segments"].as_array().map(|a| {
-                    a.iter().filter(|seg| !seg["media"].is_null()).count()
-                }))
+                .and_then(|v| {
+                    v["segments"]
+                        .as_array()
+                        .map(|a| a.iter().filter(|seg| !seg["media"].is_null()).count())
+                })
         } else if segments_json {
-            std::fs::read_to_string(task_dir.join("segments.json")).ok()
+            std::fs::read_to_string(task_dir.join("segments.json"))
+                .ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
                 .and_then(|v| v["segments"].as_array().map(|a| a.len()))
         } else {
             None
         };
 
-        Self { text_txt, voice_file, subtitle_srt, segments_json, timeline_json, media_images, media_videos, output_video, expected_media }
+        Self {
+            text_txt,
+            voice_file,
+            subtitle_srt,
+            segments_json,
+            timeline_json,
+            media_images,
+            media_videos,
+            output_video,
+            expected_media,
+        }
     }
 
     pub fn has_any(&self) -> bool {
@@ -184,19 +209,22 @@ pub fn draw_resume_dialog(
     {
         let data = match pending.as_mut() {
             Some(d) => d,
-            None => { *open = false; return; }
+            None => {
+                *open = false;
+                return;
+            }
         };
 
         // Копіюємо значення для відображення всередині closure
         let task_name = data.task_name.clone();
-        let text_txt      = data.found.text_txt;
-        let voice_file    = data.found.voice_file;
-        let subtitle_srt  = data.found.subtitle_srt;
+        let text_txt = data.found.text_txt;
+        let voice_file = data.found.voice_file;
+        let subtitle_srt = data.found.subtitle_srt;
         let segments_json = data.found.segments_json;
         let timeline_json = data.found.timeline_json;
-        let media_images  = data.found.media_images;
-        let media_videos  = data.found.media_videos;
-        let output_video  = data.found.output_video;
+        let media_images = data.found.media_images;
+        let media_videos = data.found.media_videos;
+        let output_video = data.found.output_video;
         let expected_media = data.found.expected_media;
         let agent_file_exists = segments_json || timeline_json;
 
@@ -210,8 +238,15 @@ pub fn draw_resume_dialog(
             let temp = ResumePendingData {
                 task_name: String::new(),
                 found: FoundFiles {
-                    text_txt, voice_file, subtitle_srt, segments_json, timeline_json,
-                    media_images, media_videos, output_video, expected_media,
+                    text_txt,
+                    voice_file,
+                    subtitle_srt,
+                    segments_json,
+                    timeline_json,
+                    media_images,
+                    media_videos,
+                    output_video,
+                    expected_media,
                 },
                 settings: data.settings.clone(),
                 keep_voiceover: keep_vo,
@@ -223,7 +258,7 @@ pub fn draw_resume_dialog(
         };
 
         let green = egui::Color32::from_rgb(46, 204, 113);
-        let weak  = egui::Color32::from_rgb(140, 140, 140);
+        let weak = egui::Color32::from_rgb(140, 140, 140);
 
         egui::Window::new(translate(language, "resume_dialog_title"))
             .collapsible(false)
@@ -261,7 +296,11 @@ pub fn draw_resume_dialog(
                             keep_su = false;
                         }
                         ui.label(translate(language, "voiceover"));
-                        ui.label(egui::RichText::new("voice.mp3 / voice.wav").color(weak).size(11.0));
+                        ui.label(
+                            egui::RichText::new("voice.mp3 / voice.wav")
+                                .color(weak)
+                                .size(11.0),
+                        );
                     });
                 }
 
@@ -275,12 +314,13 @@ pub fn draw_resume_dialog(
                         ui.add_enabled_ui(subtitles_enabled, |ui| {
                             ui.checkbox(&mut keep_su, "");
                         });
-                        let label = egui::RichText::new(translate(language, "subtitles"))
-                            .color(if subtitles_enabled {
+                        let label = egui::RichText::new(translate(language, "subtitles")).color(
+                            if subtitles_enabled {
                                 ui.visuals().text_color()
                             } else {
                                 ui.visuals().weak_text_color()
-                            });
+                            },
+                        );
                         ui.label(label);
                         ui.label(egui::RichText::new("subtitle.srt").color(weak).size(11.0));
                         if !subtitles_enabled {
@@ -296,9 +336,9 @@ pub fn draw_resume_dialog(
                 // Файл агента (segments.json або timeline.json) — з чекбоксом
                 if agent_file_exists {
                     let file_hint = match (segments_json, timeline_json) {
-                        (true, true)  => "segments.json + timeline.json",
+                        (true, true) => "segments.json + timeline.json",
                         (true, false) => "segments.json",
-                        _             => "timeline.json",
+                        _ => "timeline.json",
                     };
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut keep_tl, "");
@@ -311,10 +351,18 @@ pub fn draw_resume_dialog(
                 if media_images > 0 || media_videos > 0 {
                     let mut parts = Vec::new();
                     if media_images > 0 {
-                        parts.push(format!("{} {}", media_images, translate(language, "resume_images")));
+                        parts.push(format!(
+                            "{} {}",
+                            media_images,
+                            translate(language, "resume_images")
+                        ));
                     }
                     if media_videos > 0 {
-                        parts.push(format!("{} {}", media_videos, translate(language, "resume_videos")));
+                        parts.push(format!(
+                            "{} {}",
+                            media_videos,
+                            translate(language, "resume_videos")
+                        ));
                     }
                     // Якщо є timeline.json — показуємо скільки є / скільки очікується
                     let count_label = if let Some(expected) = expected_media {
@@ -338,7 +386,8 @@ pub fn draw_resume_dialog(
                         ui.label(translate(language, "resume_output_video"));
                         ui.label(
                             egui::RichText::new(format!("{}.mp4", task_name))
-                                .color(weak).size(11.0),
+                                .color(weak)
+                                .size(11.0),
                         );
                     });
                 }
@@ -351,11 +400,13 @@ pub fn draw_resume_dialog(
                 match &resume_stage {
                     Some(stage) => {
                         let stage_name = match stage {
-                            crate::queue::RetryStage::Translation => translate(language, "translation"),
-                            crate::queue::RetryStage::Voiceover   => translate(language, "voiceover"),
-                            crate::queue::RetryStage::Subtitles   => translate(language, "subtitles"),
-                            crate::queue::RetryStage::Video       => translate(language, "video"),
-                            crate::queue::RetryStage::Montage     => translate(language, "editing"),
+                            crate::queue::RetryStage::Translation => {
+                                translate(language, "translation")
+                            }
+                            crate::queue::RetryStage::Voiceover => translate(language, "voiceover"),
+                            crate::queue::RetryStage::Subtitles => translate(language, "subtitles"),
+                            crate::queue::RetryStage::Video => translate(language, "video"),
+                            crate::queue::RetryStage::Montage => translate(language, "editing"),
                         };
                         ui.horizontal(|ui| {
                             ui.label(translate(language, "resume_resume_from"));
@@ -368,7 +419,8 @@ pub fn draw_resume_dialog(
                     }
                     None => {
                         ui.label(
-                            egui::RichText::new(translate(language, "resume_all_done")).color(green),
+                            egui::RichText::new(translate(language, "resume_all_done"))
+                                .color(green),
                         );
                     }
                 }
@@ -378,16 +430,27 @@ pub fn draw_resume_dialog(
                 // Кнопка "Догенерувати відсутні" — якщо є файл агента і медіа неповні
                 let missing_count = expected_media.and_then(|exp| {
                     let present = media_images + media_videos;
-                    if agent_file_exists && present < exp { Some(exp - present) } else { None }
+                    if agent_file_exists && present < exp {
+                        Some(exp - present)
+                    } else {
+                        None
+                    }
                 });
 
                 if let Some(missing) = missing_count {
                     ui.add_space(4.0);
-                    let fill_label = format!("{} ({})", translate(language, "resume_fill_missing_btn"), missing);
-                    if ui.add_sized(
-                        [ui.available_width(), 26.0],
-                        egui::Button::new(egui::RichText::new(fill_label).strong()),
-                    ).clicked() {
+                    let fill_label = format!(
+                        "{} ({})",
+                        translate(language, "resume_fill_missing_btn"),
+                        missing
+                    );
+                    if ui
+                        .add_sized(
+                            [ui.available_width(), 26.0],
+                            egui::Button::new(egui::RichText::new(fill_label).strong()),
+                        )
+                        .clicked()
+                    {
                         do_fill_missing = true;
                     }
                 }
@@ -395,20 +458,30 @@ pub fn draw_resume_dialog(
                 ui.add_space(6.0);
 
                 ui.horizontal(|ui| {
-                    if ui.add_sized(
-                        [140.0, 26.0],
-                        egui::Button::new(translate(language, "resume_fresh_btn")),
-                    ).clicked() {
+                    if ui
+                        .add_sized(
+                            [140.0, 26.0],
+                            egui::Button::new(translate(language, "resume_fresh_btn")),
+                        )
+                        .clicked()
+                    {
                         do_fresh = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if resume_stage.is_some() {
-                            if ui.add_sized(
-                                [140.0, 26.0],
-                                egui::Button::new(
-                                    egui::RichText::new(translate(language, "resume_continue_btn")).strong(),
-                                ),
-                            ).clicked() {
+                            if ui
+                                .add_sized(
+                                    [140.0, 26.0],
+                                    egui::Button::new(
+                                        egui::RichText::new(translate(
+                                            language,
+                                            "resume_continue_btn",
+                                        ))
+                                        .strong(),
+                                    ),
+                                )
+                                .clicked()
+                            {
                                 do_continue = true;
                             }
                         }
@@ -421,8 +494,8 @@ pub fn draw_resume_dialog(
         // Зберігаємо змінені стани чекбоксів назад
         data.keep_voiceover = keep_vo;
         data.keep_subtitles = keep_su;
-        data.keep_timeline  = keep_tl;
-        data.keep_video     = keep_vi;
+        data.keep_timeline = keep_tl;
+        data.keep_video = keep_vi;
     } // data borrow ends here
 
     if do_continue {
@@ -481,9 +554,8 @@ fn enqueue_with_resume(
 
     // Зчитуємо перекладений текст для озвучки при відновленні
     if text_txt_exists {
-        if let Ok(text) = std::fs::read_to_string(
-            std::path::Path::new(&save_path).join("text.txt"),
-        ) {
+        if let Ok(text) = std::fs::read_to_string(std::path::Path::new(&save_path).join("text.txt"))
+        {
             *job.translated_text.lock().unwrap() = Some(text);
         }
     }
@@ -494,10 +566,8 @@ fn enqueue_with_resume(
         if let Ok(msgs) = serde_json::from_str::<Vec<serde_json::Value>>(&text) {
             let mut chat = job.agent_chat.lock().unwrap();
             for msg in msgs {
-                if let (Some(role), Some(content)) = (
-                    msg["role"].as_str(),
-                    msg["content"].as_str(),
-                ) {
+                if let (Some(role), Some(content)) = (msg["role"].as_str(), msg["content"].as_str())
+                {
                     chat.push(crate::queue::AgentChatMessage {
                         role: role.to_string(),
                         content: content.to_string(),
@@ -539,7 +609,11 @@ fn enqueue_fresh(
     data.settings.resume_from_stage = None;
     let id = *job_counter;
     *job_counter += 1;
-    jobs.push(crate::queue::PipelineJob::new(id, data.task_name, data.settings));
+    jobs.push(crate::queue::PipelineJob::new(
+        id,
+        data.task_name,
+        data.settings,
+    ));
 }
 
 /// Додає задачу в чергу для догенерації відсутніх медіафайлів.
@@ -563,9 +637,8 @@ fn enqueue_fill_missing(
     let job = crate::queue::PipelineJob::new(id, data.task_name, settings);
 
     if text_txt_exists {
-        if let Ok(text) = std::fs::read_to_string(
-            std::path::Path::new(&save_path).join("text.txt"),
-        ) {
+        if let Ok(text) = std::fs::read_to_string(std::path::Path::new(&save_path).join("text.txt"))
+        {
             *job.translated_text.lock().unwrap() = Some(text);
         }
     }

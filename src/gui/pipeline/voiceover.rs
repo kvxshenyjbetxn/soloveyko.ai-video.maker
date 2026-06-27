@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 use std::sync::{Arc, Mutex};
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -50,17 +50,23 @@ pub fn draw_voiceover_section(
                 ui.label(
                     egui::RichText::new(translate(language, "voiceover_templates_loading"))
                         .weak()
-                        .size(12.0)
+                        .size(12.0),
                 );
             } else {
                 match templates_snapshot {
                     None => {
                         if voicebot_key.is_empty() {
-                            ui.add(egui::Label::new(
-                                egui::RichText::new(translate(language, "voicebot_key_required"))
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(translate(
+                                        language,
+                                        "voicebot_key_required",
+                                    ))
                                     .color(egui::Color32::from_rgb(231, 76, 60))
-                                    .size(12.0)
-                            ).wrap());
+                                    .size(12.0),
+                                )
+                                .wrap(),
+                            );
                         } else {
                             // Встановлюємо прапорець до spawn, щоб наступний фрейм не тригернув ще раз
                             *voicebot_loading.lock().unwrap() = true;
@@ -82,16 +88,28 @@ pub fn draw_voiceover_section(
                                     .set("Accept", "application/json")
                                     .call()
                                 {
-                                    Ok(response) => match response.into_json::<Vec<VoiceBotTemplate>>() {
-                                        Ok(templates) => Ok(templates),
-                                        Err(e) => Err(format!("Помилка парсингу: {}", e)),
-                                    },
-                                    Err(ureq::Error::Status(401, _)) => Err("Невірний ключ. Перевірте X-API-Key в секції АПІ.".to_string()),
-                                    Err(ureq::Error::Status(code, _)) if code >= 500 => {
-                                        Err(format!("Сервер тимчасово недоступний ({}). Спробуйте пізніше.", code))
+                                    Ok(response) => {
+                                        match response.into_json::<Vec<VoiceBotTemplate>>() {
+                                            Ok(templates) => Ok(templates),
+                                            Err(e) => Err(format!("Помилка парсингу: {}", e)),
+                                        }
                                     }
-                                    Err(ureq::Error::Status(code, _)) => Err(format!("Помилка запиту ({})", code)),
-                                    Err(_) => Err("Помилка мережі. Перевірте з'єднання.".to_string()),
+                                    Err(ureq::Error::Status(401, _)) => {
+                                        Err("Невірний ключ. Перевірте X-API-Key в секції АПІ."
+                                            .to_string())
+                                    }
+                                    Err(ureq::Error::Status(code, _)) if code >= 500 => {
+                                        Err(format!(
+                                            "Сервер тимчасово недоступний ({}). Спробуйте пізніше.",
+                                            code
+                                        ))
+                                    }
+                                    Err(ureq::Error::Status(code, _)) => {
+                                        Err(format!("Помилка запиту ({})", code))
+                                    }
+                                    Err(_) => {
+                                        Err("Помилка мережі. Перевірте з'єднання.".to_string())
+                                    }
                                 };
 
                                 *templates_arc.lock().unwrap() = Some(parsed);
@@ -120,13 +138,19 @@ pub fn draw_voiceover_section(
                             });
                     }
                     Some(Err(error)) => {
-                        ui.add(egui::Label::new(
-                            egui::RichText::new(format!("❌ {}", error))
-                                .color(egui::Color32::from_rgb(231, 76, 60))
-                                .size(12.0)
-                        ).wrap());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("❌ {}", error))
+                                    .color(egui::Color32::from_rgb(231, 76, 60))
+                                    .size(12.0),
+                            )
+                            .wrap(),
+                        );
                         ui.add_space(4.0);
-                        if ui.button(translate(language, "voiceover_templates_retry")).clicked() {
+                        if ui
+                            .button(translate(language, "voiceover_templates_retry"))
+                            .clicked()
+                        {
                             *voicebot_templates.lock().unwrap() = None;
                         }
                     }
@@ -144,7 +168,7 @@ pub fn draw_voiceover_section(
                     ui.label(
                         egui::RichText::new(translate(language, "edge_tts_voices_loading"))
                             .weak()
-                            .size(12.0)
+                            .size(12.0),
                     );
                 });
             } else {
@@ -168,13 +192,19 @@ pub fn draw_voiceover_section(
                                 } else {
                                     // Показуємо uk-UA, en-US, en-GB, ru-RU
                                     let loc = v.locale.to_lowercase();
-                                    loc == "uk-ua" || loc == "en-us" || loc == "en-gb" || loc == "ru-ru"
+                                    loc == "uk-ua"
+                                        || loc == "en-us"
+                                        || loc == "en-gb"
+                                        || loc == "ru-ru"
                                 }
                             })
                             .collect();
 
                         // 2. ComboBox вибору голосу
-                        ui.label(egui::RichText::new(translate(language, "edge_tts_voice_label")).size(12.0));
+                        ui.label(
+                            egui::RichText::new(translate(language, "edge_tts_voice_label"))
+                                .size(12.0),
+                        );
                         ui.add_space(2.0);
 
                         let current_voice_friendly = voices
@@ -199,7 +229,10 @@ pub fn draw_voiceover_section(
                         ui.add_space(4.0);
 
                         // Прапорець "Показати всі мови"
-                        ui.checkbox(edge_tts_show_all_languages, translate(language, "edge_tts_show_all"));
+                        ui.checkbox(
+                            edge_tts_show_all_languages,
+                            translate(language, "edge_tts_show_all"),
+                        );
 
                         ui.add_space(8.0);
 
@@ -218,7 +251,13 @@ pub fn draw_voiceover_section(
                                 ui.label(translate(language, "edge_tts_rate_label"));
                                 ui.scope(|ui| {
                                     ui.style_mut().spacing.slider_width = 120.0;
-                                    if ui.add(egui::Slider::new(&mut rate_val, -100..=100).suffix("%")).changed() {
+                                    if ui
+                                        .add(
+                                            egui::Slider::new(&mut rate_val, -100..=100)
+                                                .suffix("%"),
+                                        )
+                                        .changed()
+                                    {
                                         changed = true;
                                     }
                                 });
@@ -228,7 +267,13 @@ pub fn draw_voiceover_section(
                                 ui.label(translate(language, "edge_tts_pitch_label"));
                                 ui.scope(|ui| {
                                     ui.style_mut().spacing.slider_width = 120.0;
-                                    if ui.add(egui::Slider::new(&mut pitch_val, -100..=100).suffix("Hz")).changed() {
+                                    if ui
+                                        .add(
+                                            egui::Slider::new(&mut pitch_val, -100..=100)
+                                                .suffix("Hz"),
+                                        )
+                                        .changed()
+                                    {
                                         changed = true;
                                     }
                                 });
@@ -238,7 +283,13 @@ pub fn draw_voiceover_section(
                                 ui.label(translate(language, "edge_tts_volume_label"));
                                 ui.scope(|ui| {
                                     ui.style_mut().spacing.slider_width = 120.0;
-                                    if ui.add(egui::Slider::new(&mut volume_val, -100..=100).suffix("%")).changed() {
+                                    if ui
+                                        .add(
+                                            egui::Slider::new(&mut volume_val, -100..=100)
+                                                .suffix("%"),
+                                        )
+                                        .changed()
+                                    {
                                         changed = true;
                                     }
                                 });
@@ -252,13 +303,19 @@ pub fn draw_voiceover_section(
                         }
                     }
                     Some(Err(error)) => {
-                        ui.add(egui::Label::new(
-                            egui::RichText::new(format!("❌ {}", error))
-                                .color(egui::Color32::from_rgb(231, 76, 60))
-                                .size(12.0)
-                        ).wrap());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("❌ {}", error))
+                                    .color(egui::Color32::from_rgb(231, 76, 60))
+                                    .size(12.0),
+                            )
+                            .wrap(),
+                        );
                         ui.add_space(4.0);
-                        if ui.button(translate(language, "voiceover_templates_retry")).clicked() {
+                        if ui
+                            .button(translate(language, "voiceover_templates_retry"))
+                            .clicked()
+                        {
                             *edge_tts_voices.lock().unwrap() = None;
                         }
                     }
@@ -267,7 +324,10 @@ pub fn draw_voiceover_section(
         }
 
         ui.add_space(6.0);
-        ui.checkbox(voiceover_convert_to_wav, translate(language, "voiceover_convert_to_wav"));
+        ui.checkbox(
+            voiceover_convert_to_wav,
+            translate(language, "voiceover_convert_to_wav"),
+        );
         ui.add_space(4.0);
     });
 }

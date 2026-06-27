@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::localization::{Language, translate};
 use crate::api;
+use crate::localization::{translate, Language};
+use eframe::egui;
 use std::sync::{Arc, Mutex};
 
 /// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter, Voice Bot, Googler та AssemblyAI.
@@ -77,7 +77,7 @@ pub fn draw_api_section(
                 egui::TextEdit::singleline(openrouter_key)
                     .password(true)
                     .hint_text("sk-or-...")
-                    .desired_width((available_width - 90.0).max(100.0))
+                    .desired_width((available_width - 90.0).max(100.0)),
             );
 
             if response.changed() {
@@ -89,7 +89,7 @@ pub fn draw_api_section(
 
             let check_btn = ui.add_sized(
                 [70.0, 20.0],
-                egui::Button::new(translate(language, "api_check_btn"))
+                egui::Button::new(translate(language, "api_check_btn")),
             );
 
             if check_btn.clicked() {
@@ -97,14 +97,16 @@ pub fn draw_api_section(
                 if trimmed.is_empty() {
                     *openrouter_status = Some(translate(language, "api_status_empty").to_string());
                 } else if trimmed.starts_with("sk-or-") && trimmed.len() >= 15 {
-                    *openrouter_status = Some(translate(language, "api_status_success").to_string());
+                    *openrouter_status =
+                        Some(translate(language, "api_status_success").to_string());
                     api::openrouter::fetch_balance(
                         trimmed.to_string(),
                         Arc::clone(openrouter_balance),
                         ui.ctx().clone(),
                     );
                 } else {
-                    *openrouter_status = Some(translate(language, "api_status_invalid").to_string());
+                    *openrouter_status =
+                        Some(translate(language, "api_status_invalid").to_string());
                 }
             }
         });
@@ -119,8 +121,11 @@ pub fn draw_api_section(
             };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
-                ).wrap()
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
             );
         }
 
@@ -139,7 +144,7 @@ pub fn draw_api_section(
                 egui::TextEdit::singleline(voicebot_key)
                     .password(true)
                     .hint_text(translate(language, "voicebot_key_hint"))
-                    .desired_width((available_width - 90.0).max(100.0))
+                    .desired_width((available_width - 90.0).max(100.0)),
             );
 
             if vb_response.changed() {
@@ -151,7 +156,7 @@ pub fn draw_api_section(
 
             let test_btn = ui.add_sized(
                 [70.0, 20.0],
-                egui::Button::new(translate(language, "api_check_btn"))
+                egui::Button::new(translate(language, "api_check_btn")),
             );
 
             if test_btn.clicked() {
@@ -159,7 +164,8 @@ pub fn draw_api_section(
                 if trimmed.is_empty() {
                     *voicebot_status = Some(translate(language, "api_status_empty").to_string());
                 } else {
-                    *voicebot_status = Some(translate(language, "voicebot_status_checking").to_string());
+                    *voicebot_status =
+                        Some(translate(language, "voicebot_status_checking").to_string());
 
                     let result_arc = Arc::clone(voicebot_test_result);
                     let balance_arc = Arc::clone(voicebot_balance);
@@ -177,14 +183,18 @@ pub fn draw_api_section(
                             .set("Accept", "application/json")
                             .call()
                         {
-                            Ok(response) => match response.into_json::<api::voicebot::BalanceResponse>() {
-                                Ok(data) => (
-                                    format!("✔ Баланс: {}", data.balance_text),
-                                    Some(data.balance_text),
-                                ),
-                                Err(_) => ("✔ Ключ валідний".to_string(), None),
-                            },
-                            Err(ureq::Error::Status(401, _)) => ("❌ Невірний ключ".to_string(), None),
+                            Ok(response) => {
+                                match response.into_json::<api::voicebot::BalanceResponse>() {
+                                    Ok(data) => (
+                                        format!("✔ Баланс: {}", data.balance_text),
+                                        Some(data.balance_text),
+                                    ),
+                                    Err(_) => ("✔ Ключ валідний".to_string(), None),
+                                }
+                            }
+                            Err(ureq::Error::Status(401, _)) => {
+                                ("❌ Невірний ключ".to_string(), None)
+                            }
                             Err(ureq::Error::Status(code, _)) if code >= 500 => {
                                 (format!("⚠ Сервер тимчасово недоступний ({})", code), None)
                             }
@@ -215,8 +225,11 @@ pub fn draw_api_section(
             };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
-                ).wrap()
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
             );
         }
 
@@ -235,7 +248,7 @@ pub fn draw_api_section(
                 egui::TextEdit::singleline(googler_key)
                     .password(true)
                     .hint_text(translate(language, "googler_key_hint"))
-                    .desired_width((available_width - 90.0).max(100.0))
+                    .desired_width((available_width - 90.0).max(100.0)),
             );
 
             if gr_response.changed() {
@@ -247,7 +260,7 @@ pub fn draw_api_section(
 
             let test_btn = ui.add_sized(
                 [70.0, 20.0],
-                egui::Button::new(translate(language, "api_check_btn"))
+                egui::Button::new(translate(language, "api_check_btn")),
             );
 
             if test_btn.clicked() {
@@ -255,7 +268,8 @@ pub fn draw_api_section(
                 if trimmed.is_empty() {
                     *googler_status = Some(translate(language, "api_status_empty").to_string());
                 } else {
-                    *googler_status = Some(translate(language, "googler_status_checking").to_string());
+                    *googler_status =
+                        Some(translate(language, "googler_status_checking").to_string());
 
                     api::googler::check_key(
                         trimmed,
@@ -278,8 +292,11 @@ pub fn draw_api_section(
             };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
-                ).wrap()
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
             );
         }
 
@@ -298,7 +315,7 @@ pub fn draw_api_section(
                 egui::TextEdit::singleline(assemblyai_key)
                     .password(true)
                     .hint_text(translate(language, "assemblyai_key_hint"))
-                    .desired_width((available_width - 90.0).max(100.0))
+                    .desired_width((available_width - 90.0).max(100.0)),
             );
 
             if ai_response.changed() {
@@ -307,7 +324,7 @@ pub fn draw_api_section(
 
             let test_btn = ui.add_sized(
                 [70.0, 20.0],
-                egui::Button::new(translate(language, "api_check_btn"))
+                egui::Button::new(translate(language, "api_check_btn")),
             );
 
             if test_btn.clicked() {
@@ -340,8 +357,11 @@ pub fn draw_api_section(
             };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
-                ).wrap()
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
             );
         }
 
@@ -360,7 +380,7 @@ pub fn draw_api_section(
                 egui::TextEdit::singleline(pexels_key)
                     .password(true)
                     .hint_text(translate(language, "pexels_key_hint"))
-                    .desired_width((available_width - 90.0).max(100.0))
+                    .desired_width((available_width - 90.0).max(100.0)),
             );
 
             if px_response.changed() {
@@ -369,7 +389,7 @@ pub fn draw_api_section(
 
             let test_btn = ui.add_sized(
                 [70.0, 20.0],
-                egui::Button::new(translate(language, "api_check_btn"))
+                egui::Button::new(translate(language, "api_check_btn")),
             );
 
             if test_btn.clicked() {
@@ -377,7 +397,8 @@ pub fn draw_api_section(
                 if trimmed.is_empty() {
                     *pexels_status = Some(translate(language, "api_status_empty").to_string());
                 } else {
-                    *pexels_status = Some(translate(language, "pexels_status_checking").to_string());
+                    *pexels_status =
+                        Some(translate(language, "pexels_status_checking").to_string());
 
                     let result_arc = Arc::clone(pexels_test_result);
                     let ctx = ui.ctx().clone();
@@ -402,8 +423,11 @@ pub fn draw_api_section(
             };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
-                ).wrap()
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
             );
         }
 
@@ -422,7 +446,7 @@ pub fn draw_api_section(
                 egui::TextEdit::singleline(pixabay_key)
                     .password(true)
                     .hint_text(translate(language, "pixabay_key_hint"))
-                    .desired_width((available_width - 90.0).max(100.0))
+                    .desired_width((available_width - 90.0).max(100.0)),
             );
 
             if pbx_response.changed() {
@@ -431,7 +455,7 @@ pub fn draw_api_section(
 
             let test_btn = ui.add_sized(
                 [70.0, 20.0],
-                egui::Button::new(translate(language, "api_check_btn"))
+                egui::Button::new(translate(language, "api_check_btn")),
             );
 
             if test_btn.clicked() {
@@ -439,7 +463,8 @@ pub fn draw_api_section(
                 if trimmed.is_empty() {
                     *pixabay_status = Some(translate(language, "api_status_empty").to_string());
                 } else {
-                    *pixabay_status = Some(translate(language, "pexels_status_checking").to_string());
+                    *pixabay_status =
+                        Some(translate(language, "pexels_status_checking").to_string());
 
                     let result_arc = Arc::clone(pixabay_test_result);
                     let ctx = ui.ctx().clone();
@@ -464,8 +489,11 @@ pub fn draw_api_section(
             };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
-                ).wrap()
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
             );
         }
 

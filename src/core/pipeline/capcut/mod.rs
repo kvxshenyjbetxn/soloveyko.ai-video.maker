@@ -16,7 +16,8 @@ fn gen_uuid(seed: u64, n: usize) -> String {
     let x = x ^ (x >> 27);
     let x = x.wrapping_mul(0x94d049bb133111eb);
     let x = x ^ (x >> 31);
-    format!("{:08X}-{:04X}-4{:03X}-{:04X}-{:012X}",
+    format!(
+        "{:08X}-{:04X}-4{:03X}-{:04X}-{:012X}",
         (x >> 32) as u32,
         (x >> 16) as u16,
         (x >> 4) as u16 & 0x0FFF,
@@ -57,7 +58,15 @@ fn image_dims(path: &Path) -> (u32, u32) {
 fn probe_media(path: &Path) -> (u32, u32, f64) {
     let ffprobe = crate::bundle::ffprobe_path();
     let mut ffprobe_proc = std::process::Command::new(&ffprobe);
-    ffprobe_proc.args(["-v", "quiet", "-print_format", "json", "-show_streams", "-show_format"])
+    ffprobe_proc
+        .args([
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_streams",
+            "-show_format",
+        ])
         .arg(path);
     crate::bundle::set_no_window(&mut ffprobe_proc);
     let out = ffprobe_proc.output();
@@ -76,7 +85,8 @@ fn probe_media(path: &Path) -> (u32, u32, f64) {
                         }
                     }
                 }
-                let dur = v["format"]["duration"].as_str()
+                let dur = v["format"]["duration"]
+                    .as_str()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0.0);
                 return (w, h, dur);
@@ -88,7 +98,10 @@ fn probe_media(path: &Path) -> (u32, u32, f64) {
 
 /// Тип медіафайлу.
 #[derive(Clone, PartialEq)]
-enum MediaKind { Photo, Video }
+enum MediaKind {
+    Photo,
+    Video,
+}
 
 /// Дані про один медіафайл у пулі.
 struct MediaInfo {
@@ -111,7 +124,6 @@ pub fn generate_capcut_project(
     audio_duration_hint: Option<f64>,
     log_fn: impl Fn(&str),
 ) -> Result<(), String> {
-
     // ─── 1. Зчитуємо timeline.json ──────────────────────────────────────────
     #[derive(serde::Deserialize)]
     struct SegTiming {
@@ -133,7 +145,9 @@ pub fn generate_capcut_project(
         #[serde(default)]
         pos_y: f64,
     }
-    fn default_one() -> f64 { 1.0 }
+    fn default_one() -> f64 {
+        1.0
+    }
     #[derive(serde::Deserialize)]
     struct OverlayTrackData {
         track_idx: usize,
@@ -154,7 +168,10 @@ pub fn generate_capcut_project(
     let tl: TimelineData = serde_json::from_str(&tl_text)
         .map_err(|e| format!("Не вдалося розпарсити timeline.json: {}", e))?;
 
-    log_fn(&format!("CapCut: завантажено {} сегментів із timeline.json", tl.segments.len()));
+    log_fn(&format!(
+        "CapCut: завантажено {} сегментів із timeline.json",
+        tl.segments.len()
+    ));
 
     // ─── 2. Знаходимо аудіофайл ─────────────────────────────────────────────
     let voice_path: Option<PathBuf> = ["voice.wav", "voice.mp3"]
@@ -171,28 +188,38 @@ pub fn generate_capcut_project(
         .unwrap_or_default()
         .as_nanos() as u64;
     let mut n = 0usize;
-    let mut uid = || { let id = gen_uuid(seed, n); n += 1; id };
+    let mut uid = || {
+        let id = gen_uuid(seed, n);
+        n += 1;
+        id
+    };
 
     // ─── 4. Збираємо унікальні медіафайли ───────────────────────────────────
     let mut media_map: std::collections::HashMap<String, usize> = Default::default();
     let mut media_list: Vec<MediaInfo> = Vec::new();
 
     // Збираємо всі медіа-шляхи з основної доріжки та overlay-доріжок
-    let all_media_rels: Vec<String> = tl.segments.iter()
+    let all_media_rels: Vec<String> = tl
+        .segments
+        .iter()
         .filter_map(|s| s.media.clone())
         .chain(
-            tl.overlay_tracks.iter()
+            tl.overlay_tracks
+                .iter()
                 .flat_map(|t| t.segments.iter())
-                .filter_map(|s| s.media.clone())
+                .filter_map(|s| s.media.clone()),
         )
         .filter(|m| !m.is_empty())
         .collect();
 
     for rel in all_media_rels {
-        if media_map.contains_key(&rel) { continue; }
+        if media_map.contains_key(&rel) {
+            continue;
+        }
 
         let abs_path = save_dir.join(&rel);
-        let ext = abs_path.extension()
+        let ext = abs_path
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
@@ -211,7 +238,9 @@ pub fn generate_capcut_project(
             _ => (MediaKind::Photo, 1920, 1080, 10_800_000_000i64),
         };
 
-        let create_time = abs_path.metadata().ok()
+        let create_time = abs_path
+            .metadata()
+            .ok()
             .and_then(|m| m.modified().ok())
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_secs() as i64)
@@ -229,7 +258,10 @@ pub fn generate_capcut_project(
             create_time,
         });
     }
-    log_fn(&format!("CapCut: {} унікальних медіафайлів", media_list.len()));
+    log_fn(&format!(
+        "CapCut: {} унікальних медіафайлів",
+        media_list.len()
+    ));
 
     // ─── 4.5. macOS: CapCut sandboxed — копіюємо медіа у папку проекту ──────
     // На macOS CapCut не може читати файли поза ~/Movies/, тому копіюємо всі
@@ -254,8 +286,7 @@ pub fn generate_capcut_project(
             if p.exists() {
                 let fname = p.file_name().unwrap_or_default().to_os_string();
                 let dst = res_dir.join(&fname);
-                std::fs::copy(p, &dst)
-                    .map_err(|e| format!("Копіювання voice: {}", e))?;
+                std::fs::copy(p, &dst).map_err(|e| format!("Копіювання voice: {}", e))?;
                 vp = Some(dst);
             }
         }
@@ -264,49 +295,60 @@ pub fn generate_capcut_project(
     };
 
     // ─── 5. Тривалість аудіо ────────────────────────────────────────────────
-    let audio_dur_secs = audio_duration_hint
-        .filter(|&d| d > 0.0)
-        .unwrap_or_else(|| {
-            voice_path.as_ref()
-                .map(|p| probe_media(p).2)
-                .filter(|&d| d > 0.0)
-                .unwrap_or(tl.total_duration_secs)
-        });
+    let audio_dur_secs = audio_duration_hint.filter(|&d| d > 0.0).unwrap_or_else(|| {
+        voice_path
+            .as_ref()
+            .map(|p| probe_media(p).2)
+            .filter(|&d| d > 0.0)
+            .unwrap_or(tl.total_duration_secs)
+    });
     let audio_dur_us = secs_to_us(audio_dur_secs);
 
     // ─── 6. UUID-и для аудіо та проекту ─────────────────────────────────────
-    let audio_mat_id   = uid();
-    let audio_pool_id  = uid();
+    let audio_mat_id = uid();
+    let audio_pool_id = uid();
     let audio_music_id = uid();
-    let timeline_id    = uid(); // ID таймлайну (ім'я папки Timelines/{id}/)
-    let project_id     = uid(); // ID запису в Timelines/project.json
+    let timeline_id = uid(); // ID таймлайну (ім'я папки Timelines/{id}/)
+    let project_id = uid(); // ID запису в Timelines/project.json
     let video_track_id = uid();
     let audio_track_id = uid();
-    let project_uuid   = uid(); // draft_id у draft_meta_info
+    let project_uuid = uid(); // draft_id у draft_meta_info
 
     // ─── 7. Часові мітки ────────────────────────────────────────────────────
-    let now_us   = std::time::SystemTime::now()
+    let now_us = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_micros() as i64;
     let now_secs = now_us / 1_000_000;
 
     // ─── 8. Матеріали відео/фото ─────────────────────────────────────────────
-    let mut mat_videos:       Vec<Value> = Vec::new();
-    let mut mat_audios:       Vec<Value> = Vec::new();
-    let mut mat_speeds:       Vec<Value> = Vec::new();
-    let mut mat_canvases:     Vec<Value> = Vec::new();
-    let mut mat_sound_maps:   Vec<Value> = Vec::new();
-    let mut mat_colors:       Vec<Value> = Vec::new();
-    let mut mat_vocal_seps:   Vec<Value> = Vec::new();
-    let mut mat_ph_infos:     Vec<Value> = Vec::new();
-    let mut mat_beats:        Vec<Value> = Vec::new();
+    let mut mat_videos: Vec<Value> = Vec::new();
+    let mut mat_audios: Vec<Value> = Vec::new();
+    let mut mat_speeds: Vec<Value> = Vec::new();
+    let mut mat_canvases: Vec<Value> = Vec::new();
+    let mut mat_sound_maps: Vec<Value> = Vec::new();
+    let mut mat_colors: Vec<Value> = Vec::new();
+    let mut mat_vocal_seps: Vec<Value> = Vec::new();
+    let mut mat_ph_infos: Vec<Value> = Vec::new();
+    let mut mat_beats: Vec<Value> = Vec::new();
 
     for m in &media_list {
-        let type_str = if m.kind == MediaKind::Photo { "photo" } else { "video" };
-        let fname = m.path.file_name()
-            .and_then(|n| n.to_str()).unwrap_or("file").to_string();
-        let local_mat_id = if m.kind == MediaKind::Video { m.pool_id.clone() } else { String::new() };
+        let type_str = if m.kind == MediaKind::Photo {
+            "photo"
+        } else {
+            "video"
+        };
+        let fname = m
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file")
+            .to_string();
+        let local_mat_id = if m.kind == MediaKind::Video {
+            m.pool_id.clone()
+        } else {
+            String::new()
+        };
 
         let crop = json!({
             "upper_left_x": 0.0, "upper_left_y": 0.0,
@@ -379,16 +421,16 @@ pub fn generate_capcut_project(
             None => continue,
         };
 
-        let seg_id       = uid();
-        let speed_id     = uid();
-        let ph_id        = uid();
-        let canvas_id    = uid();
+        let seg_id = uid();
+        let speed_id = uid();
+        let ph_id = uid();
+        let canvas_id = uid();
         let sound_map_id = uid();
-        let color_id     = uid();
-        let vocal_id     = uid();
+        let color_id = uid();
+        let vocal_id = uid();
 
         let t_start = secs_to_us(seg.start_secs);
-        let t_dur   = secs_to_us(seg.end_secs - seg.start_secs);
+        let t_dur = secs_to_us(seg.end_secs - seg.start_secs);
 
         mat_speeds.push(json!({ "id": speed_id, "type": "speed", "mode": 0, "speed": 1.0, "curve_speed": null }));
         mat_ph_infos.push(json!({ "id": ph_id, "type": "placeholder_info", "meta_type": "none", "res_path": "", "res_text": "", "error_path": "", "error_text": "" }));
@@ -465,26 +507,32 @@ pub fn generate_capcut_project(
     }
 
     // ─── 10. Аудіосегмент ───────────────────────────────────────────────────
-    let a_seg_id    = uid();
-    let a_speed_id  = uid();
-    let a_ph_id     = uid();
-    let a_beats_id  = uid();
-    let a_sound_id  = uid();
-    let a_vocal_id  = uid();
+    let a_seg_id = uid();
+    let a_speed_id = uid();
+    let a_ph_id = uid();
+    let a_beats_id = uid();
+    let a_sound_id = uid();
+    let a_vocal_id = uid();
 
     let audio_target_start = secs_to_us(tl.audio_start_secs);
 
-    mat_speeds.push(json!({ "id": a_speed_id, "type": "speed", "mode": 0, "speed": 1.0, "curve_speed": null }));
+    mat_speeds.push(
+        json!({ "id": a_speed_id, "type": "speed", "mode": 0, "speed": 1.0, "curve_speed": null }),
+    );
     mat_ph_infos.push(json!({ "id": a_ph_id, "type": "placeholder_info", "meta_type": "none", "res_path": "", "res_text": "", "error_path": "", "error_text": "" }));
     mat_beats.push(json!({ "id": a_beats_id, "type": "beats", "enable_ai_beats": false, "gear": 404, "gear_count": 0, "mode": 404, "user_beats": [], "user_delete_ai_beats": null, "ai_beats": null }));
     mat_sound_maps.push(json!({ "id": a_sound_id, "type": "", "audio_channel_mapping": 0, "is_config_open": false }));
     mat_vocal_seps.push(json!({ "id": a_vocal_id, "type": "vocal_separation", "choice": 0, "removed_sounds": [], "time_range": null, "production_path": "", "final_algorithm": "", "enter_from": "" }));
 
     let voice_path_str = voice_path.as_deref().map(forward_path).unwrap_or_default();
-    let voice_name = voice_path.as_deref()
-        .and_then(|p| p.file_name()).and_then(|n| n.to_str())
-        .unwrap_or("voice.mp3").to_string();
-    let voice_ctime = voice_path.as_deref()
+    let voice_name = voice_path
+        .as_deref()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("voice.mp3")
+        .to_string();
+    let voice_ctime = voice_path
+        .as_deref()
         .and_then(|p| p.metadata().ok())
         .and_then(|m| m.modified().ok())
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
@@ -551,8 +599,7 @@ pub fn generate_capcut_project(
     });
 
     // ─── 11. Загальна тривалість ─────────────────────────────────────────────
-    let total_dur_us = secs_to_us(tl.total_duration_secs)
-        .max(audio_target_start + audio_dur_us);
+    let total_dur_us = secs_to_us(tl.total_duration_secs).max(audio_target_start + audio_dur_us);
 
     // ─── 12. Overlay-треки (доріжки 1+) ─────────────────────────────────────
     // pos_x/pos_y у редакторі: 0 = центр, ±1 = край canvas.
@@ -573,16 +620,16 @@ pub fn generate_capcut_project(
                 None => continue,
             };
 
-            let seg_id       = uid();
-            let speed_id     = uid();
-            let ph_id        = uid();
-            let canvas_id    = uid();
+            let seg_id = uid();
+            let speed_id = uid();
+            let ph_id = uid();
+            let canvas_id = uid();
             let sound_map_id = uid();
-            let color_id     = uid();
-            let vocal_id     = uid();
+            let color_id = uid();
+            let vocal_id = uid();
 
             let t_start = secs_to_us(seg.start_secs);
-            let t_dur   = secs_to_us(seg.end_secs - seg.start_secs);
+            let t_dur = secs_to_us(seg.end_secs - seg.start_secs);
             let tx = seg.pos_x * CANVAS_HALF_W;
             let ty = seg.pos_y * CANVAS_HALF_H;
 
@@ -697,7 +744,11 @@ pub fn generate_capcut_project(
     }
 
     // Назва ОС для блоку platform у draft_content.json
-    let os_name = if cfg!(target_os = "macos") { "mac" } else { "windows" };
+    let os_name = if cfg!(target_os = "macos") {
+        "mac"
+    } else {
+        "windows"
+    };
 
     // ─── 14. draft_content.json ──────────────────────────────────────────────
     let draft_content = json!({
@@ -950,15 +1001,27 @@ pub fn generate_capcut_project(
     }
 
     for m in &media_list {
-        let metetype = if m.kind == MediaKind::Photo { "photo" } else { "video" };
+        let metetype = if m.kind == MediaKind::Photo {
+            "photo"
+        } else {
+            "video"
+        };
         let roughcut = if m.kind == MediaKind::Photo {
             json!({ "duration": -1, "start": -1 })
         } else {
             json!({ "duration": m.duration_us, "start": 0 })
         };
-        let pool_dur = if m.kind == MediaKind::Photo { secs_to_us(5.0) } else { m.duration_us };
-        let fname = m.path.file_name()
-            .and_then(|n| n.to_str()).unwrap_or("file").to_string();
+        let pool_dur = if m.kind == MediaKind::Photo {
+            secs_to_us(5.0)
+        } else {
+            m.duration_us
+        };
+        let fname = m
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file")
+            .to_string();
 
         pool.push(json!({
             "ai_group_type": "",
@@ -1082,15 +1145,19 @@ pub fn generate_capcut_project(
     std::fs::write(project_dir.join("draft_info.json"), &content_json)
         .map_err(|e| format!("draft_info.json: {}", e))?;
 
-    std::fs::write(project_dir.join("draft_meta_info.json"),
+    std::fs::write(
+        project_dir.join("draft_meta_info.json"),
         serde_json::to_string_pretty(&draft_meta_info)
-            .map_err(|e| format!("Помилка серіалізації draft_meta_info: {}", e))?)
-        .map_err(|e| format!("draft_meta_info.json: {}", e))?;
+            .map_err(|e| format!("Помилка серіалізації draft_meta_info: {}", e))?,
+    )
+    .map_err(|e| format!("draft_meta_info.json: {}", e))?;
 
-    std::fs::write(project_dir.join("Timelines").join("project.json"),
+    std::fs::write(
+        project_dir.join("Timelines").join("project.json"),
         serde_json::to_string_pretty(&timelines_project)
-            .map_err(|e| format!("Помилка серіалізації Timelines/project.json: {}", e))?)
-        .map_err(|e| format!("Timelines/project.json: {}", e))?;
+            .map_err(|e| format!("Помилка серіалізації Timelines/project.json: {}", e))?,
+    )
+    .map_err(|e| format!("Timelines/project.json: {}", e))?;
 
     // Timelines/{uuid}/ — теж обидва файли для крос-платформеності
     std::fs::write(tl_uuid_dir.join("draft_content.json"), &content_json)
@@ -1106,6 +1173,9 @@ pub fn generate_capcut_project(
     std::fs::write(project_dir.join("draft_settings"), draft_settings)
         .map_err(|e| format!("draft_settings: {}", e))?;
 
-    log_fn(&format!("CapCut: проект створено — {}", forward_path(&project_dir)));
+    log_fn(&format!(
+        "CapCut: проект створено — {}",
+        forward_path(&project_dir)
+    ));
     Ok(())
 }

@@ -96,14 +96,57 @@ fn parse_srt(content: &str) -> Vec<SrtEntry> {
 // ─── Нормалізація тексту ─────────────────────────────────────────────────────
 
 fn is_punctuation(c: char) -> bool {
-    matches!(c,
-        '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' |
-        ',' | '.' | '/' | ':' | ';' | '<' | '=' | '>' | '?' | '@' | '[' |
-        '\\' | ']' | '^' | '_' | '{' | '|' | '}' | '~' |
-        '。' | '！' | '？' | '、' | '，' | '；' | '：' |
-        '\u{201C}' | '\u{201D}' | '\u{2018}' | '\u{2019}' |
-        '【' | '】' | '（' | '）' | '…' | '·' |
-        '\u{061F}' | '\u{060C}' | '\u{061B}'
+    matches!(
+        c,
+        '!' | '"'
+            | '#'
+            | '$'
+            | '%'
+            | '&'
+            | '\''
+            | '('
+            | ')'
+            | '*'
+            | '+'
+            | ','
+            | '.'
+            | '/'
+            | ':'
+            | ';'
+            | '<'
+            | '='
+            | '>'
+            | '?'
+            | '@'
+            | '['
+            | '\\'
+            | ']'
+            | '^'
+            | '_'
+            | '{'
+            | '|'
+            | '}'
+            | '~'
+            | '。'
+            | '！'
+            | '？'
+            | '、'
+            | '，'
+            | '；'
+            | '：'
+            | '\u{201C}'
+            | '\u{201D}'
+            | '\u{2018}'
+            | '\u{2019}'
+            | '【'
+            | '】'
+            | '（'
+            | '）'
+            | '…'
+            | '·'
+            | '\u{061F}'
+            | '\u{060C}'
+            | '\u{061B}'
     )
 }
 
@@ -122,7 +165,8 @@ fn normalize_text_with_mapping(text: &str) -> (String, Vec<usize>) {
             other => other,
         };
 
-        let normalized_c: char = if c == '-' || c == '—' || is_punctuation(c) || c.is_whitespace() {
+        let normalized_c: char = if c == '-' || c == '—' || is_punctuation(c) || c.is_whitespace()
+        {
             ' '
         } else {
             c.to_lowercase().next().unwrap_or(c)
@@ -380,7 +424,10 @@ fn collect_media_files(media_dir: &Path) -> Vec<String> {
             let name = e.file_name();
             let s = name.to_string_lossy();
             let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
-            matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" | "mp4" | "mov" | "avi" | "mkv" | "webm")
+            matches!(
+                ext.as_str(),
+                "jpg" | "jpeg" | "png" | "gif" | "webp" | "mp4" | "mov" | "avi" | "mkv" | "webm"
+            )
         })
         .map(|e| e.file_name().to_string_lossy().to_string())
         .collect();
@@ -510,7 +557,10 @@ pub fn build_timeline(
             }
 
             let next_valid_start = if gap_end < segments.len() {
-                matches[gap_end].as_ref().map(|m| m.start).unwrap_or(total_duration)
+                matches[gap_end]
+                    .as_ref()
+                    .map(|m| m.start)
+                    .unwrap_or(total_duration)
             } else {
                 total_duration
             };
@@ -579,7 +629,11 @@ pub fn build_timeline(
         // медіафайлів нема — один запис на сегмент
         for (i, &(s, e)) in final_timings.iter().enumerate() {
             results.push(ImageResult {
-                start: s, end: e, duration: e - s, seg_idx: i, filename: String::new(),
+                start: s,
+                end: e,
+                duration: e - s,
+                seg_idx: i,
+                filename: String::new(),
             });
         }
     } else if total_images < n_segs {
@@ -644,23 +698,32 @@ pub fn build_timeline(
     }
 
     // ─── Будуємо SegmentTiming на кожен медіафайл ─────────────────────────
-    let segment_timings: Vec<SegmentTiming> = results.iter().enumerate().map(|(i, r)| {
-        let text = segments.get(r.seg_idx).cloned().unwrap_or_default();
-        let confidence = matches.get(r.seg_idx)
-            .and_then(|m| m.as_ref())
-            .map(|m| m.confidence)
-            .unwrap_or(0.0);
-        SegmentTiming {
-            index: i + 1,
-            text,
-            start_secs: r.start,
-            end_secs: r.end,
-            duration_secs: r.duration,
-            confidence,
-            media: if r.filename.is_empty() { None } else { Some(format!("media/{}", r.filename)) },
-            trim_start: 0.0,
-        }
-    }).collect();
+    let segment_timings: Vec<SegmentTiming> = results
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let text = segments.get(r.seg_idx).cloned().unwrap_or_default();
+            let confidence = matches
+                .get(r.seg_idx)
+                .and_then(|m| m.as_ref())
+                .map(|m| m.confidence)
+                .unwrap_or(0.0);
+            SegmentTiming {
+                index: i + 1,
+                text,
+                start_secs: r.start,
+                end_secs: r.end,
+                duration_secs: r.duration,
+                confidence,
+                media: if r.filename.is_empty() {
+                    None
+                } else {
+                    Some(format!("media/{}", r.filename))
+                },
+                trim_start: 0.0,
+            }
+        })
+        .collect();
 
     let timeline = Timeline {
         total_duration_secs: total_duration,
@@ -668,13 +731,20 @@ pub fn build_timeline(
         segments: segment_timings.clone(),
     };
 
-    let json = serde_json::to_string_pretty(&timeline)
-        .map_err(|e| format!("JSON error: {}", e))?;
+    let json = serde_json::to_string_pretty(&timeline).map_err(|e| format!("JSON error: {}", e))?;
     std::fs::write(save_dir.join("segments.json"), json)
         .map_err(|e| format!("Write error: {}", e))?;
 
     // ─── Debug-звіт ───────────────────────────────────────────────────────
-    let _ = write_sync_debug(save_dir, segments, &matches, &results, &segment_timings, total_duration, task_label);
+    let _ = write_sync_debug(
+        save_dir,
+        segments,
+        &matches,
+        &results,
+        &segment_timings,
+        total_duration,
+        task_label,
+    );
 
     Ok(())
 }
@@ -697,7 +767,11 @@ fn write_sync_debug(
     };
 
     let matched_count = seg_matches.iter().filter(|m| m.is_some()).count();
-    let total_conf: f64 = seg_matches.iter().filter_map(|m| m.as_ref()).map(|m| m.confidence).sum();
+    let total_conf: f64 = seg_matches
+        .iter()
+        .filter_map(|m| m.as_ref())
+        .map(|m| m.confidence)
+        .sum();
     let avg_conf = if matched_count > 0 {
         (total_conf / matched_count as f64 * 100.0).round() as usize
     } else {
@@ -719,28 +793,49 @@ fn write_sync_debug(
     let _ = writeln!(report, "--------------------------------------------------");
     let _ = writeln!(report, "Total Segments: {}", segments.len());
     let _ = writeln!(report, "Final Visuals:  {}", results.len());
-    let _ = writeln!(report, "Total Duration: {} ({:.2}s)", fmt_time(total_duration), total_duration);
+    let _ = writeln!(
+        report,
+        "Total Duration: {} ({:.2}s)",
+        fmt_time(total_duration),
+        total_duration
+    );
     let _ = writeln!(report, "Avg Confidence: {}%\n", avg_conf);
     let _ = writeln!(report, "DETAILED SYNCHRONIZATION TABLE");
     let _ = writeln!(report, "====================================================================================================");
-    let _ = writeln!(report, "{:<5}{:<21}{:<21}{:<21}{:<9}{}", "#", "Image", "Display Time", "Subtitle Match", "Conf", "Text Segment");
+    let _ = writeln!(
+        report,
+        "{:<5}{:<21}{:<21}{:<21}{:<9}{}",
+        "#", "Image", "Display Time", "Subtitle Match", "Conf", "Text Segment"
+    );
     let _ = writeln!(report, "----------------------------------------------------------------------------------------------------");
 
     for (i, (r, st)) in results.iter().zip(segment_timings.iter()).enumerate() {
-        let img_name = if r.filename.is_empty() { "n/a" } else { &r.filename };
+        let img_name = if r.filename.is_empty() {
+            "n/a"
+        } else {
+            &r.filename
+        };
         let display_time = format!("{} - {}", fmt_time(st.start_secs), fmt_time(st.end_secs));
-        let (sub_match, conf_str) = seg_matches.get(r.seg_idx)
+        let (sub_match, conf_str) = seg_matches
+            .get(r.seg_idx)
             .and_then(|m| m.as_ref())
-            .map(|m| (
-                format!("{} - {}", fmt_time(m.start), fmt_time(m.end)),
-                format!("{}%", (m.confidence * 100.0).round() as usize),
-            ))
+            .map(|m| {
+                (
+                    format!("{} - {}", fmt_time(m.start), fmt_time(m.end)),
+                    format!("{}%", (m.confidence * 100.0).round() as usize),
+                )
+            })
             .unwrap_or_else(|| ("EST".to_string(), "EST".to_string()));
         let text_preview: String = st.text.chars().take(60).collect();
         let _ = writeln!(
             report,
             "{:<5}{:<21}{:<21}{:<21}{:<9}{}",
-            i + 1, img_name, display_time, sub_match, conf_str, text_preview
+            i + 1,
+            img_name,
+            display_time,
+            sub_match,
+            conf_str,
+            text_preview
         );
     }
 
