@@ -466,14 +466,23 @@ pub fn draw_montage_editor_window(
                 .map(|(p, _)| p != preview_path)
                 .unwrap_or(true);
             if need_load {
-                let tex = load_preview_texture(ctx, preview_path, &editor.media_pool);
-                editor.pool_preview_texture = tex.map(|t| (preview_path.clone(), t));
+                if let Some(tex) = load_preview_texture(ctx, preview_path, editor) {
+                    editor.pool_preview_texture = Some((preview_path.clone(), tex));
+                }
             }
 
-            if let Some((_, ref texture)) = editor.pool_preview_texture.clone() {
+            let texture = editor.pool_preview_texture.as_ref().and_then(|(p, t)| {
+                if p == preview_path {
+                    Some(t.clone())
+                } else {
+                    None
+                }
+            });
+
+            if let Some(texture) = texture {
                 let is_anim = anim_loading.lock().unwrap().contains(preview_path)
                     || regen_paths.contains(preview_path);
-                let (keep_open, regen_kind) = draw_montage_media_preview(ctx, texture, is_anim);
+                let (keep_open, regen_kind) = draw_montage_media_preview(ctx, &texture, is_anim);
                 if !keep_open {
                     editor.pool_preview = None;
                     editor.pool_preview_texture = None;
@@ -482,7 +491,11 @@ pub fn draw_montage_editor_window(
                     editor.pending_regen = Some((preview_path.clone(), is_custom));
                 }
             } else {
-                editor.pool_preview = None;
+                if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    editor.pool_preview = None;
+                } else {
+                    draw_preview_loading_overlay(ctx, "montage_preview_loading");
+                }
             }
         }
     }
@@ -496,11 +509,11 @@ pub fn draw_montage_editor_window(
 }
 
 /// Завантажує текстуру для fullscreen preview: зображення читає напряму,
-/// відео — перший кадр з cache_dir.
+/// для відео просить перший scrub-кадр ліниво, без масової передобробки всього пулу.
 fn load_preview_texture(
     ctx: &egui::Context,
     path: &Path,
-    media_pool: &[MediaItem],
+    editor: &mut MontageEditorState,
 ) -> Option<egui::TextureHandle> {
     let ext = path
         .extension()
@@ -510,17 +523,31 @@ fn load_preview_texture(
     if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
         crate::gui::gallery::preview::load_image_texture(ctx, path)
     } else if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
-        media_pool.iter().find(|m| m.path == path).and_then(|m| {
-            let frame = m.cache_dir.join("000001.jpg");
-            if frame.exists() {
-                crate::gui::gallery::preview::load_image_texture(ctx, &frame)
-            } else {
-                None
-            }
-        })
+        let media = editor.media_pool.iter().find(|m| m.path == path).cloned()?;
+        editor
+            .frame_cache
+            .get_frame(ctx, &media, 0.0, false, editor.preview_render)
     } else {
         None
     }
+}
+
+fn draw_preview_loading_overlay(ctx: &egui::Context, id: &str) {
+    let screen = ctx.screen_rect();
+    egui::Area::new(egui::Id::new(id))
+        .fixed_pos(egui::Pos2::ZERO)
+        .order(egui::Order::Tooltip)
+        .interactable(true)
+        .show(ctx, |ui| {
+            ui.allocate_rect(screen, Sense::hover());
+            ui.painter()
+                .rect_filled(screen, 0.0, Color32::from_black_alpha(215));
+            ui.put(
+                egui::Rect::from_center_size(screen.center(), Vec2::splat(40.0)),
+                egui::Spinner::new().size(40.0),
+            );
+        });
+    ctx.request_repaint();
 }
 
 /// Fullscreen preview поверх всього UI з повним блокуванням кліків.

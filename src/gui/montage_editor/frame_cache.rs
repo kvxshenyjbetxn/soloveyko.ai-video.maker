@@ -186,6 +186,46 @@ impl FrameCache {
         }
     }
 
+    fn generate_scrub_frame(
+        media: &MediaItem,
+        frame_idx: u32,
+        settings: PreviewRenderSettings,
+        out: &Path,
+    ) -> bool {
+        if !matches!(media.kind, ClipKind::Video) {
+            return false;
+        }
+        if std::fs::create_dir_all(&media.cache_dir).is_err() {
+            return false;
+        }
+
+        let seek = (frame_idx.saturating_sub(1) as f32 / settings.fps)
+            .min(media.duration_secs)
+            .max(0.0);
+        let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
+        cmd.args([
+            "-y",
+            "-v",
+            "error",
+            "-threads",
+            "1",
+            "-ss",
+            &format!("{seek:.3}"),
+            "-i",
+            media.path.to_string_lossy().as_ref(),
+            "-vframes",
+            "1",
+            "-vf",
+            &format!("scale={}:-2", settings.quality.scrub_width()),
+            "-q:v",
+            settings.quality.ffmpeg_qscale(),
+            out.to_string_lossy().as_ref(),
+        ]);
+        crate::bundle::set_no_window(&mut cmd);
+        matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success())
+            && out.exists()
+    }
+
     /// Ставить кадр у фонову чергу. UI-потік ніколи не чекає декодування JPEG.
     fn request_frame_async(
         &mut self,
@@ -204,19 +244,23 @@ impl FrameCache {
         }
 
         let frame_path = Self::frame_path(media, frame_idx, quality);
-        if quality == FrameQuality::Scrub && !frame_path.exists() {
-            return;
-        }
 
         self.loading_keys.insert(key.clone());
         let tx = self.tx.clone();
         let ctx_clone = ctx.clone();
         let media_clone = media.clone();
         std::thread::spawn(move || {
-            let ready = if quality == FrameQuality::Sharp && !frame_path.exists() {
-                Self::generate_sharp_frame(&media_clone, frame_idx, settings, &frame_path)
+            let ready = if frame_path.exists() {
+                true
             } else {
-                frame_path.exists()
+                match quality {
+                    FrameQuality::Sharp => {
+                        Self::generate_sharp_frame(&media_clone, frame_idx, settings, &frame_path)
+                    }
+                    FrameQuality::Scrub => {
+                        Self::generate_scrub_frame(&media_clone, frame_idx, settings, &frame_path)
+                    }
+                }
             };
             let texture = if ready {
                 Self::load_frame_from_disk(&ctx_clone, &frame_path, &key)

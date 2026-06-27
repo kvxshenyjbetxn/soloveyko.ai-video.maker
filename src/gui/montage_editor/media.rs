@@ -26,7 +26,7 @@ pub struct MediaItem {
     pub cache_dir: PathBuf,
     /// Папка для чітких still-кадрів, які генеруються на вимогу.
     pub sharp_cache_dir: PathBuf,
-    /// true = всі легкі кадри вже витягнуто на диск
+    /// true = прев'ю для медіа готове; для відео кадри витягуються ліниво на вимогу
     pub extraction_complete: Arc<AtomicBool>,
     /// true = відеофайл містить вбудовану аудіодоріжку
     pub has_audio: bool,
@@ -94,8 +94,8 @@ impl MediaItem {
         let sharp_cache_dir = sharp_frame_cache_dir(cache_base, &path, preview);
         let extraction_complete = Arc::new(AtomicBool::new(false));
 
-        if cache_dir.join(".complete").exists() {
-            // Вже витягнуто в попередній сесії
+        if cache_dir.join(".complete").exists() || cache_dir.join("000001.jpg").exists() {
+            // Вже є готовий прев'ю-кадр з попередньої сесії
             extraction_complete.store(true, Ordering::Relaxed);
         } else if is_image {
             // Зображення: декодуємо через image crate (без ffmpeg)
@@ -130,69 +130,10 @@ impl MediaItem {
                 flag.store(true, Ordering::Relaxed);
             });
         } else if is_video {
-            // Відео: витягуємо всі кадри через ffmpeg
-            let path_str = path.to_string_lossy().to_string();
-            let dir = cache_dir.clone();
-            let flag = extraction_complete.clone();
-            let scrub_w = preview.quality.scrub_width();
-            let qscale = preview.quality.ffmpeg_qscale();
-            let fps_val = preview.fps;
-            std::thread::spawn(move || {
-                std::fs::create_dir_all(&dir).ok();
-
-                // Крок 1: Швидко витягуємо перший кадр щоб UI одразу мав що показати.
-                let first_frame = dir.join("000001.jpg");
-                if !first_frame.exists() {
-                    let mut quick = std::process::Command::new(crate::bundle::ffmpeg_path());
-                    quick.args([
-                        "-y",
-                        "-v",
-                        "error",
-                        "-threads",
-                        "1",
-                        "-i",
-                        &path_str,
-                        "-vframes",
-                        "1",
-                        "-vf",
-                        &format!("scale={}:-2", scrub_w),
-                        "-q:v",
-                        qscale,
-                        first_frame.to_str().unwrap_or(""),
-                    ]);
-                    crate::bundle::set_no_window(&mut quick);
-                    let _ = crate::api::ffmpeg::run_tracked(&mut quick);
-                }
-
-                // Крок 2: Повна екстракція всіх кадрів для скрабінгу.
-                let out_pattern = dir.join("%06d.jpg");
-                let Some(out_str) = out_pattern.to_str() else {
-                    flag.store(true, Ordering::Relaxed);
-                    return;
-                };
-                let mut ffmpeg_preview = std::process::Command::new(crate::bundle::ffmpeg_path());
-                ffmpeg_preview.args([
-                    "-y",
-                    "-v",
-                    "error",
-                    "-threads",
-                    "1",
-                    "-i",
-                    &path_str,
-                    "-vf",
-                    &format!("scale={}:-2,fps={}", scrub_w, fps_val),
-                    "-q:v",
-                    qscale,
-                    out_str,
-                ]);
-                crate::bundle::set_no_window(&mut ffmpeg_preview);
-                let status = crate::api::ffmpeg::run_tracked(&mut ffmpeg_preview);
-                if matches!(status, Ok(s) if s.success()) {
-                    std::fs::write(dir.join(".complete"), b"1").ok();
-                }
-                // Незалежно від результату — перший кадр вже є з кроку 1
-                flag.store(true, Ordering::Relaxed);
-            });
+            // Відео не обробляємо наперед: кадри витягуються тільки коли їх реально
+            // просить preview/thumbnail. Це прибирає масовий старт ffmpeg при
+            // відкритті редактора з великим пулом відео.
+            extraction_complete.store(true, Ordering::Relaxed);
         } else {
             // Аудіо: вилучення не потрібне
             extraction_complete.store(true, Ordering::Relaxed);

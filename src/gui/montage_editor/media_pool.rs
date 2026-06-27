@@ -5,7 +5,7 @@ use crate::localization::{Language, translate};
 use eframe::egui;
 use egui::{Align2, Color32, Layout, Pos2, Rect, ScrollArea, Sense, Stroke, Vec2};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 const ITEM_H: f32 = 54.0;
@@ -15,15 +15,6 @@ const THUMB_AREA_W: f32 = 68.0;
 const TEXT_X: f32 = THUMB_AREA_W + 10.0;
 /// Максимум thumbnail-завантажень за один кадр (щоб не лагати при великому пулі)
 const MAX_THUMB_PER_FRAME: usize = 3;
-
-fn load_thumb_texture(ctx: &egui::Context, path: &Path, id: &str) -> Option<egui::TextureHandle> {
-    let bytes = std::fs::read(path).ok()?;
-    let img = image::load_from_memory(&bytes).ok()?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let ci = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &rgba.into_raw());
-    Some(ctx.load_texture(format!("pool_thumb_{id}"), ci, egui::TextureOptions::LINEAR))
-}
 
 // ─── Медіа-пул ───────────────────────────────────────────────────────────────
 
@@ -175,32 +166,24 @@ pub(super) fn draw_media_pool(
         .show(ui, |ui| {
             // Ліниве завантаження thumbnail для медіа в пулі (max MAX_THUMB_PER_FRAME за кадр)
             {
-                let needs: Vec<(String, PathBuf)> = editor
+                let needs: Vec<MediaItem> = editor
                     .media_pool
                     .iter()
                     .filter(|m| !matches!(m.kind, ClipKind::Audio))
                     .filter(|m| !editor.pool_thumbnails.contains_key(&m.id))
-                    .filter_map(|m| {
-                        let p = m.cache_dir.join("000001.jpg");
-                        if p.exists() {
-                            Some((m.id.clone(), p))
-                        } else {
-                            None
-                        }
-                    })
+                    .take(MAX_THUMB_PER_FRAME)
+                    .cloned()
                     .collect();
-                let mut loaded = 0;
-                for (id, path) in needs {
-                    if loaded >= MAX_THUMB_PER_FRAME {
-                        break;
+                for media in needs {
+                    if let Some(tex) = editor.frame_cache.get_frame(
+                        ui.ctx(),
+                        &media,
+                        0.0,
+                        false,
+                        editor.preview_render,
+                    ) {
+                        editor.pool_thumbnails.insert(media.id.clone(), tex);
                     }
-                    if let Some(tex) = load_thumb_texture(ui.ctx(), &path, &id) {
-                        editor.pool_thumbnails.insert(id, tex);
-                        loaded += 1;
-                    }
-                }
-                if loaded > 0 {
-                    ui.ctx().request_repaint();
                 }
             }
 
