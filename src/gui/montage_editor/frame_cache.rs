@@ -3,6 +3,7 @@ use super::types::{ClipKind, PreviewRenderSettings};
 use eframe::egui;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 
 const PREFETCH_AHEAD_FRAMES: u32 = 2;
 const MAX_PARALLEL_FRAME_LOADS: usize = 3;
@@ -57,11 +58,25 @@ impl FrameCache {
         Some(ctx.load_texture(key, ci, egui::TextureOptions::LINEAR))
     }
 
-    fn save_jpeg(img: &image::DynamicImage, out: &Path, quality: u8) -> image::ImageResult<()> {
+    fn save_jpeg_atomic(
+        img: &image::DynamicImage,
+        out: &Path,
+        quality: u8,
+    ) -> image::ImageResult<()> {
         let rgb = img.to_rgb8();
-        let file = std::fs::File::create(out)?;
+        let ext = out.extension().and_then(|s| s.to_str()).unwrap_or("jpg");
+        let tmp = out.with_extension(format!("{ext}.tmp"));
+        let _ = std::fs::remove_file(&tmp);
+
+        let file = std::fs::File::create(&tmp)?;
         let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
-        encoder.encode_image(&rgb)
+        encoder.encode_image(&rgb)?;
+
+        if out.exists() {
+            let _ = std::fs::remove_file(out);
+        }
+        std::fs::rename(&tmp, out)?;
+        Ok(())
     }
 
     fn frame_idx(media: &MediaItem, time: f32, settings: PreviewRenderSettings) -> u32 {
@@ -153,7 +168,7 @@ impl FrameCache {
                 };
                 let width = settings.quality.sharp_width();
                 let thumb = img.thumbnail(width, width * 2);
-                Self::save_jpeg(&thumb, out, settings.quality.sharp_jpeg_quality()).is_ok()
+                Self::save_jpeg_atomic(&thumb, out, settings.quality.sharp_jpeg_quality()).is_ok()
             }
             ClipKind::Video => {
                 let seek = (frame_idx.saturating_sub(1) as f32 / settings.fps)
@@ -192,38 +207,51 @@ impl FrameCache {
         settings: PreviewRenderSettings,
         out: &Path,
     ) -> bool {
-        if !matches!(media.kind, ClipKind::Video) {
-            return false;
-        }
         if std::fs::create_dir_all(&media.cache_dir).is_err() {
             return false;
         }
 
-        let seek = (frame_idx.saturating_sub(1) as f32 / settings.fps)
-            .min(media.duration_secs)
-            .max(0.0);
-        let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
-        cmd.args([
-            "-y",
-            "-v",
-            "error",
-            "-threads",
-            "1",
-            "-ss",
-            &format!("{seek:.3}"),
-            "-i",
-            media.path.to_string_lossy().as_ref(),
-            "-vframes",
-            "1",
-            "-vf",
-            &format!("scale={}:-2", settings.quality.scrub_width()),
-            "-q:v",
-            settings.quality.ffmpeg_qscale(),
-            out.to_string_lossy().as_ref(),
-        ]);
-        crate::bundle::set_no_window(&mut cmd);
-        matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success())
-            && out.exists()
+        match media.kind {
+            ClipKind::Image => {
+                let Ok(bytes) = std::fs::read(&media.path) else {
+                    return false;
+                };
+                let Ok(img) = image::load_from_memory(&bytes) else {
+                    return false;
+                };
+                let width = settings.quality.scrub_width();
+                let thumb = img.thumbnail(width, width * 2);
+                Self::save_jpeg_atomic(&thumb, out, settings.quality.jpeg_quality()).is_ok()
+            }
+            ClipKind::Video => {
+                let seek = (frame_idx.saturating_sub(1) as f32 / settings.fps)
+                    .min(media.duration_secs)
+                    .max(0.0);
+                let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
+                cmd.args([
+                    "-y",
+                    "-v",
+                    "error",
+                    "-threads",
+                    "1",
+                    "-ss",
+                    &format!("{seek:.3}"),
+                    "-i",
+                    media.path.to_string_lossy().as_ref(),
+                    "-vframes",
+                    "1",
+                    "-vf",
+                    &format!("scale={}:-2", settings.quality.scrub_width()),
+                    "-q:v",
+                    settings.quality.ffmpeg_qscale(),
+                    out.to_string_lossy().as_ref(),
+                ]);
+                crate::bundle::set_no_window(&mut cmd);
+                matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success())
+                    && out.exists()
+            }
+            ClipKind::Audio => false,
+        }
     }
 
     /// Ставить кадр у фонову чергу. UI-потік ніколи не чекає декодування JPEG.
@@ -262,6 +290,16 @@ impl FrameCache {
                     }
                 }
             };
+
+            if ready {
+                media_clone
+                    .extraction_complete
+                    .store(true, Ordering::Relaxed);
+                if matches!(quality, FrameQuality::Scrub) {
+                    let _ = std::fs::write(media_clone.cache_dir.join(".complete"), b"1");
+                }
+            }
+
             let texture = if ready {
                 Self::load_frame_from_disk(&ctx_clone, &frame_path, &key)
             } else {

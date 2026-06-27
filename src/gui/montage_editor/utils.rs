@@ -1,5 +1,6 @@
 use super::types::PreviewRenderSettings;
 use std::path::{Path, PathBuf};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::Instant;
 
 /// Стабільний хеш шляху → частина імені папки кешу.
@@ -70,46 +71,99 @@ fn clean_windows_path(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 
-/// Перевіряє чи є аудіодоріжка у відеофайлі (через ffprobe)
-pub fn probe_has_audio(path: &Path) -> bool {
+/// Лімітер одночасних ffprobe-процесів, щоб відкриття редактора не створювало
+/// десятки важких probe одночасно і не морозило систему.
+struct ProbeLimiter {
+    active: Mutex<usize>,
+    condvar: Condvar,
+}
+
+impl ProbeLimiter {
+    fn get() -> &'static Self {
+        static LIMITER: OnceLock<ProbeLimiter> = OnceLock::new();
+        LIMITER.get_or_init(|| ProbeLimiter {
+            active: Mutex::new(0),
+            condvar: Condvar::new(),
+        })
+    }
+
+    fn acquire(&self) -> ProbePermit<'_> {
+        let mut active = self.active.lock().unwrap();
+        while *active >= 2 {
+            active = self.condvar.wait(active).unwrap();
+        }
+        *active += 1;
+        ProbePermit { limiter: self }
+    }
+
+    fn release(&self) {
+        let mut active = self.active.lock().unwrap();
+        if *active > 0 {
+            *active -= 1;
+        }
+        self.condvar.notify_one();
+    }
+}
+
+struct ProbePermit<'a> {
+    limiter: &'a ProbeLimiter,
+}
+
+impl Drop for ProbePermit<'_> {
+    fn drop(&mut self) {
+        self.limiter.release();
+    }
+}
+
+fn probe_media_info(path: &Path) -> (Option<f32>, bool) {
+    let _permit = ProbeLimiter::get().acquire();
     let clean_path = clean_windows_path(path);
     let mut cmd = std::process::Command::new(crate::bundle::ffprobe_path());
     cmd.args([
         "-v",
         "error",
-        "-select_streams",
-        "a:0",
         "-show_entries",
-        "stream=codec_name",
+        "format=duration:stream=codec_type",
         "-of",
-        "default=nw=1:nk=1",
+        "json",
     ])
     .arg(&clean_path);
     crate::bundle::set_no_window(&mut cmd);
-    cmd.output()
-        .ok()
-        .map(|o| !String::from_utf8_lossy(&o.stdout).trim().is_empty())
-        .unwrap_or(false)
+
+    let Ok(out) = cmd.output() else {
+        return (None, false);
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
+        return (None, false);
+    };
+
+    let duration = json
+        .get("format")
+        .and_then(|v| v.get("duration"))
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.trim().parse::<f32>().ok());
+
+    let has_audio = json
+        .get("streams")
+        .and_then(|v| v.as_array())
+        .map(|streams| {
+            streams
+                .iter()
+                .any(|stream| stream.get("codec_type").and_then(|v| v.as_str()) == Some("audio"))
+        })
+        .unwrap_or(false);
+
+    (duration, has_audio)
 }
 
 /// Отримує тривалість медіафайлу через ffprobe
 pub fn probe_duration(path: &Path) -> Option<f32> {
-    let clean_path = clean_windows_path(path);
-    let mut ffprobe_cmd = std::process::Command::new(crate::bundle::ffprobe_path());
-    ffprobe_cmd
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(&clean_path);
-    crate::bundle::set_no_window(&mut ffprobe_cmd);
-    let out = ffprobe_cmd.output().ok()?;
-    let s = String::from_utf8_lossy(&out.stdout);
-    s.trim().parse::<f32>().ok()
+    probe_media_info(path).0
+}
+
+/// Одним викликом отримує duration та ознаку audio, щоб не ганяти ffprobe двічі.
+pub fn probe_duration_and_audio(path: &Path) -> (Option<f32>, bool) {
+    probe_media_info(path)
 }
 
 pub fn uuid_str() -> String {

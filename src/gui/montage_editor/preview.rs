@@ -126,10 +126,19 @@ fn render_clip_frame(
     alpha: u8,
 ) {
     let sz = tex.size_vec2();
-    let scale = (container.width() / sz.x).min(container.height() / sz.y);
+    let scale = (container.width() / sz.x).max(container.height() / sz.y);
     let img_rect = Rect::from_center_size(container.center(), sz * scale);
-    // Зміщуємо UV-crop, а не позицію зображення → без чорних країв
-    let shifted_uv = Rect::from_center_size(uv.center() + uv_shift, uv.size());
+
+    // Зміщуємо UV-crop, а не позицію зображення → без сірих полів і вибірки поза текстурою.
+    let uv_size = uv.size();
+    let uv_half = uv_size * 0.5;
+    let shifted_center = uv.center() + uv_shift;
+    let clamped_center = Pos2::new(
+        shifted_center.x.clamp(uv_half.x, 1.0 - uv_half.x),
+        shifted_center.y.clamp(uv_half.y, 1.0 - uv_half.y),
+    );
+    let shifted_uv = Rect::from_center_size(clamped_center, uv_size);
+
     painter.image(
         tex.id(),
         img_rect,
