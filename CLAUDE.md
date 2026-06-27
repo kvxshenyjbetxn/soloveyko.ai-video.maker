@@ -1,3 +1,8 @@
+## graphify
+- for questions about the codebase, architecture, file relationships, function callers, and data flow, check graphify first
+- if `graphify-out/graph.json` exists and the request is not an explicit graph rebuild, use `/graphify query "<question>"` before manually reading files
+- after code changes, update the graph with `/graphify --update` for incremental refresh or `/graphify` for a full rebuild
+
 - не роби коміти  до поки я не скажу.
 Before editing any file, read it first. Before modifying a function, grep for all callers. Research before you edit.
 - відповідаеш завжди українською мовою.
