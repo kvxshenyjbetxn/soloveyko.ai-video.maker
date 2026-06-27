@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 use std::sync::{Arc, Mutex};
 
 /// Кнопка "дублювати" — коло з плюсом (⊕), намальоване через Painter (незалежно від шрифту).
@@ -16,7 +16,8 @@ pub(crate) fn duplicate_button(ui: &mut egui::Ui) -> egui::Response {
             ui.visuals().widgets.inactive
         };
 
-        ui.painter().rect(rect, visuals.rounding, visuals.bg_fill, visuals.bg_stroke);
+        ui.painter()
+            .rect(rect, visuals.rounding, visuals.bg_fill, visuals.bg_stroke);
 
         let c = rect.center();
         let r = 5.0_f32;
@@ -40,7 +41,11 @@ pub(crate) fn duplicate_button(ui: &mut egui::Ui) -> egui::Response {
 /// Кнопка зі стрілкою вгору або вниз, намальованою через Painter (незалежно від шрифту).
 pub(crate) fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::Response {
     let size = egui::vec2(20.0, 20.0);
-    let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
+    let sense = if enabled {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
     let (rect, response) = ui.allocate_exact_size(size, sense);
 
     if ui.is_rect_visible(rect) {
@@ -54,38 +59,38 @@ pub(crate) fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::
             ui.visuals().widgets.inactive
         };
 
-        ui.painter().rect(rect, visuals.rounding, visuals.bg_fill, visuals.bg_stroke);
+        ui.painter()
+            .rect(rect, visuals.rounding, visuals.bg_fill, visuals.bg_stroke);
 
         let c = rect.center();
         let h: f32 = 5.0;
         let w: f32 = 5.0;
         let points = if up {
             vec![
-                egui::pos2(c.x,     c.y - h * 0.6),
+                egui::pos2(c.x, c.y - h * 0.6),
                 egui::pos2(c.x - w, c.y + h * 0.4),
                 egui::pos2(c.x + w, c.y + h * 0.4),
             ]
         } else {
             vec![
-                egui::pos2(c.x,     c.y + h * 0.6),
+                egui::pos2(c.x, c.y + h * 0.6),
                 egui::pos2(c.x - w, c.y - h * 0.4),
                 egui::pos2(c.x + w, c.y - h * 0.4),
             ]
         };
         let color = visuals.fg_stroke.color;
-        ui.painter().add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+        ui.painter().add(egui::Shape::convex_polygon(
+            points,
+            color,
+            egui::Stroke::NONE,
+        ));
     }
 
     response
 }
 
 /// Вставляє плейсхолдер у TextEdit за поточною позицією курсора.
-fn insert_at_cursor(
-    ui: &mut egui::Ui,
-    edit_id: egui::Id,
-    text: &mut String,
-    placeholder: &str,
-) {
+fn insert_at_cursor(ui: &mut egui::Ui, edit_id: egui::Id, text: &mut String, placeholder: &str) {
     if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), edit_id) {
         if let Some(cursor_range) = state.cursor.char_range() {
             let cursor_idx = cursor_range.primary.index;
@@ -98,7 +103,9 @@ fn insert_at_cursor(
 
             let new_char_idx = cursor_idx + placeholder.chars().count();
             let new_cursor = egui::text::CCursor::new(new_char_idx);
-            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+            state
+                .cursor
+                .set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
             state.store(ui.ctx(), edit_id);
         } else {
             text.push_str(placeholder);
@@ -111,27 +118,27 @@ fn insert_at_cursor(
 /// Повертає відображувану назву та вартість провайдера зображень.
 pub(crate) fn image_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
-        "flow_IMAGEN_3_5" => ("Imagen 4 (Flow)",        "4 кр."),
-        "flow_GEM_PIX_2"  => ("Nano Banana Pro (Flow)", "4 кр."),
-        "flow_NARWHAL"    => ("Nano Banana 2 (Flow)",   "4 кр."),
-        "flower"          => ("Nano Banana 2 (Flower)", "1 кр."),
-        "grok"            => ("Grok",                    "1 кр."),
-        "openai"          => ("ChatGPT Images 2.0",      "1 кр."),
-        _                 => ("Unknown",                 ""),
+        "flow_IMAGEN_3_5" => ("Imagen 4 (Flow)", "4 кр."),
+        "flow_GEM_PIX_2" => ("Nano Banana Pro (Flow)", "4 кр."),
+        "flow_NARWHAL" => ("Nano Banana 2 (Flow)", "4 кр."),
+        "flower" => ("Nano Banana 2 (Flower)", "1 кр."),
+        "grok" => ("Grok", "1 кр."),
+        "openai" => ("ChatGPT Images 2.0", "1 кр."),
+        _ => ("Unknown", ""),
     }
 }
 
 /// Повертає відображувану назву та вартість провайдера відео.
 pub(crate) fn video_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
-        "flow"            => ("Flow (VEO)",         "1 кр."),
-        "flower"          => ("Flower (Veo 3.1)",  "1 кр."),
-        "grok"            => ("Grok",              "1 кр."),
-        "flow_omni_flash" => ("Omni Flash (Flow)",     "1 кр."),
-        "flow_fast"       => ("Veo 3.1 Fast (Flow)",  "1 кр."),
-        "flow_light"      => ("Veo 3.1 Light (Flow)",    "1 кр."),
-        "flow_quality"    => ("Veo 3.1 Quality (Flow)", "10 кр."),
-        _                 => ("Unknown",               ""),
+        "flow" => ("Flow (VEO)", "1 кр."),
+        "flower" => ("Flower (Veo 3.1)", "1 кр."),
+        "grok" => ("Grok", "1 кр."),
+        "flow_omni_flash" => ("Omni Flash (Flow)", "1 кр."),
+        "flow_fast" => ("Veo 3.1 Fast (Flow)", "1 кр."),
+        "flow_light" => ("Veo 3.1 Light (Flow)", "1 кр."),
+        "flow_quality" => ("Veo 3.1 Quality (Flow)", "10 кр."),
+        _ => ("Unknown", ""),
     }
 }
 
@@ -148,6 +155,7 @@ pub fn draw_video_section(
     video_context_enabled: &mut bool,
     video_context_mode: &mut String,
     video_context_chars: &mut usize,
+    video_agent_mode: &mut String,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
     googler_video_disabled: &mut Vec<String>,
@@ -164,7 +172,9 @@ pub fn draw_video_section(
     video_style_enabled: &mut bool,
     video_style_prompt: &mut String,
     video_llm_model_search: &mut String,
-    openrouter_models: &Arc<Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
+    openrouter_models: &Arc<
+        Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>,
+    >,
     openrouter_models_loading: &Arc<Mutex<bool>>,
     overlay_triggers_enabled: &mut bool,
     overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
@@ -172,39 +182,12 @@ pub fn draw_video_section(
     googler_video_upscale_resolution: &mut String,
     googler_video_upscale_quality: &mut String,
 ) {
-
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
-        let is_cli_service = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI" || video_llm_service == "AGY CLI" || video_llm_service == "Pi CLI";
-        if is_cli_service {
-            *text_split_mode = "full".to_string();
-        } else {
-            // Режим нарізання тексту — вгорі, бо визначає логіку передачі тексту в промт
-            ui.label(egui::RichText::new(translate(language, "text_split_mode_label")).strong());
-            ui.add_space(4.0);
-
-            ui.horizontal(|ui| {
-                ui.radio_value(text_split_mode, "paragraphs".to_string(), translate(language, "text_split_paragraphs"))
-                    .on_hover_text(translate(language, "text_split_paragraphs_hint"));
-                ui.radio_value(text_split_mode, "sentences".to_string(), translate(language, "text_split_sentences"))
-                    .on_hover_text(translate(language, "text_split_sentences_hint"));
-            });
-            ui.horizontal(|ui| {
-                ui.radio_value(text_split_mode, "char_limit".to_string(), translate(language, "text_split_char_limit"))
-                    .on_hover_text(translate(language, "text_split_char_limit_hint"));
-                if text_split_mode.as_str() == "char_limit" {
-                    ui.add(egui::DragValue::new(text_split_char_limit).range(50..=5000).suffix(" симв."));
-                }
-            });
-            ui.radio_value(text_split_mode, "full".to_string(), translate(language, "text_split_full"))
-                .on_hover_text(translate(language, "text_split_full_hint"));
-
-            ui.add_space(8.0);
-        }
-
         // Перемикач режиму роботи: API / Agent
         let previous_llm_service = video_llm_service.clone();
+        let previous_agent_submode = video_agent_mode.clone();
         let mut switched_llm_mode = false;
 
         let mut api_mode = *video_llm_service == "OpenRouter" || *video_llm_service == "None";
@@ -216,7 +199,7 @@ pub fn draw_video_section(
             let was_api = api_mode;
             let was_agent = agent_mode;
             if ui.radio_value(&mut api_mode, true, translate(language, "video_llm_mode_api")).changed() && !was_api {
-                // Перехід з Agent → API: зберігаємо модель, встановлюємо OpenRouter
+                // Перехід з Agent → API: зберігаємо модель та відновлюємо режим нарізки.
                 if previous_llm_service == "Claude Code" {
                     *video_llm_model_claude = video_llm_model.clone();
                 } else if previous_llm_service == "Gemini CLI" {
@@ -228,23 +211,29 @@ pub fn draw_video_section(
                 } else if previous_llm_service == "Pi CLI" {
                     *video_llm_model_pi = video_llm_model.clone();
                 }
+                if previous_agent_submode == "prompt_only" {
+                    *text_split_mode_openrouter = text_split_mode.clone();
+                }
                 *video_llm_service = "OpenRouter".to_string();
                 *video_llm_model = video_llm_model_openrouter.clone();
                 switched_llm_mode = true;
                 agent_mode = false;
-                // Відновлюємо режим нарізки
-                *text_split_mode = text_split_mode_openrouter.clone();
+                *text_split_mode = if text_split_mode_openrouter.is_empty() {
+                    "paragraphs".to_string()
+                } else {
+                    text_split_mode_openrouter.clone()
+                };
             }
             if ui.radio_value(&mut agent_mode, true, translate(language, "video_llm_mode_agent")).changed() && !was_agent {
-                // Перехід з API → Agent: зберігаємо модель OpenRouter, встановлюємо Claude Code
+                // Перехід з API → Agent: зберігаємо модель OpenRouter і стартуємо з Full Agent.
                 if previous_llm_service == "OpenRouter" {
                     *video_llm_model_openrouter = video_llm_model.clone();
                 }
                 *video_llm_service = "Claude Code".to_string();
                 *video_llm_model = if video_llm_model_claude.is_empty() { "sonnet".to_string() } else { video_llm_model_claude.clone() };
+                *video_agent_mode = "full".to_string();
                 switched_llm_mode = true;
                 api_mode = false;
-                // Зберігаємо режим нарізки та встановлюємо full для агента
                 *text_split_mode_openrouter = text_split_mode.clone();
                 *text_split_mode = "full".to_string();
             }
@@ -271,7 +260,7 @@ pub fn draw_video_section(
                     ui.selectable_value(video_llm_service, "OpenRouter".to_string(), translate(language, "translation_service_openrouter"));
                 });
         } else if agent_mode {
-            // Режим Agent: Claude Code / Gemini CLI / Codex CLI / AGY CLI
+            // Режим Agent: Claude Code / Gemini CLI / Codex CLI / AGY CLI / Pi CLI
             egui::ComboBox::from_id_salt("video_llm_service_combo")
                 .selected_text(
                     if *video_llm_service == "Claude Code" {
@@ -323,11 +312,82 @@ pub fn draw_video_section(
             } else if video_llm_service == "Pi CLI" {
                 *video_llm_model = if video_llm_model_pi.is_empty() { "gemini-2.5-flash".to_string() } else { video_llm_model_pi.clone() };
             }
-
-            // text_split_mode зберігається/відновлюється при перемиканні режиму через радіо-кнопки вище
         }
 
         let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI" || video_llm_service == "Codex CLI" || video_llm_service == "AGY CLI" || video_llm_service == "Pi CLI";
+        if is_agent_mode && video_agent_mode.as_str() != "prompt_only" {
+            *video_agent_mode = "full".to_string();
+        }
+
+        if is_agent_mode {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(translate(language, "video_agent_mode_label")).strong());
+            ui.add_space(4.0);
+
+            let mut selected_agent_mode = video_agent_mode.clone();
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut selected_agent_mode,
+                    "full".to_string(),
+                    translate(language, "video_agent_mode_full"),
+                )
+                .on_hover_text(translate(language, "video_agent_mode_full_hint"));
+                ui.radio_value(
+                    &mut selected_agent_mode,
+                    "prompt_only".to_string(),
+                    translate(language, "video_agent_mode_prompt_only"),
+                )
+                .on_hover_text(translate(language, "video_agent_mode_prompt_only_hint"));
+            });
+
+            if selected_agent_mode != *video_agent_mode {
+                if selected_agent_mode == "full" {
+                    if text_split_mode.as_str() != "full" {
+                        *text_split_mode_openrouter = text_split_mode.clone();
+                    }
+                    *text_split_mode = "full".to_string();
+                } else {
+                    *text_split_mode = if text_split_mode_openrouter.is_empty() {
+                        "paragraphs".to_string()
+                    } else {
+                        text_split_mode_openrouter.clone()
+                    };
+                }
+                *video_agent_mode = selected_agent_mode;
+            }
+        }
+
+        let show_split_controls = !is_agent_mode || video_agent_mode.as_str() == "prompt_only";
+        if !show_split_controls {
+            if text_split_mode.as_str() != "full" {
+                *text_split_mode_openrouter = text_split_mode.clone();
+            }
+            *text_split_mode = "full".to_string();
+        } else {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(translate(language, "text_split_mode_label")).strong());
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                ui.radio_value(text_split_mode, "paragraphs".to_string(), translate(language, "text_split_paragraphs"))
+                    .on_hover_text(translate(language, "text_split_paragraphs_hint"));
+                ui.radio_value(text_split_mode, "sentences".to_string(), translate(language, "text_split_sentences"))
+                    .on_hover_text(translate(language, "text_split_sentences_hint"));
+            });
+            ui.horizontal(|ui| {
+                ui.radio_value(text_split_mode, "char_limit".to_string(), translate(language, "text_split_char_limit"))
+                    .on_hover_text(translate(language, "text_split_char_limit_hint"));
+                if text_split_mode.as_str() == "char_limit" {
+                    ui.add(egui::DragValue::new(text_split_char_limit).range(50..=5000).suffix(" симв."));
+                }
+            });
+            ui.radio_value(text_split_mode, "full".to_string(), translate(language, "text_split_full"))
+                .on_hover_text(translate(language, "text_split_full_hint"));
+
+            *text_split_mode_openrouter = text_split_mode.clone();
+
+            ui.add_space(8.0);
+        }
 
         // Промт для генерації зображень — прихований в агентному режимі
         let expand_id = ui.make_persistent_id("video_prompt_expand");
@@ -863,8 +923,7 @@ pub fn draw_video_section(
             });
 
             ui.add_space(8.0);
-            
-            
+
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(translate(language, "video_upscale_label")).strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -876,13 +935,13 @@ pub fn draw_video_section(
                 ui.add_space(6.0);
                 ui.label(translate(language, "video_upscale_resolution_label"));
                 ui.add_space(2.0);
-                
+
                 let selected_res_text = match googler_video_upscale_resolution.as_str() {
                     "2K" => "2K (2560x1440)",
                     "4K" => "4K (3840x2160)",
                     _ => "1080p (1920x1080)",
                 };
-                
+
                 egui::ComboBox::from_id_salt("googler_video_upscale_resolution_combo")
                     .selected_text(selected_res_text)
                     .width(ui.available_width() - 8.0)

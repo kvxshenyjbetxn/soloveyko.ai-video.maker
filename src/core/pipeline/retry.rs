@@ -4,9 +4,9 @@ use eframe::egui;
 
 use super::agent_timeline::{assign_media_to_timeline, run_agent_timeline};
 use super::final_stages::run_final_stages;
-use super::run_pipeline;
 use super::subtitles::{run_av_branch, run_subtitles_only};
 use super::video::run_video_branch;
+use super::{prepare_prompt_only_segments, run_pipeline, source_text_for_segments};
 
 /// Повторює пайплайн починаючи з вказаного етапу.
 /// Скидає статуси цього та всіх наступних етапів, потім запускає їх у фоновому потоці.
@@ -124,20 +124,37 @@ pub fn retry_from_stage(
 
                 // В агентному режимі після AV гілки запускаємо агента та відеогілку
                 // (якщо відеоряд ще не був виконаний раніше — тобто немає збережених медіафайлів)
-                let is_agent_mode = settings.video_enabled
-                    && (settings.video_llm_service == "Claude Code"
-                        || settings.video_llm_service == "Gemini CLI"
-                        || settings.video_llm_service == "Codex CLI"
-                        || settings.video_llm_service == "AGY CLI"
-                        || settings.video_llm_service == "Pi CLI");
+                let is_agent_mode = settings.video_enabled && settings.is_agent_service();
                 let video_already_done =
                     *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
 
                 if is_agent_mode && !video_already_done {
+                    if settings.is_prompt_only_agent_mode() {
+                        let source_text = source_text_for_segments(&settings, &translated_text);
+                        let audio_dur = *audio_duration.lock().unwrap();
+                        if let Err(e) = prepare_prompt_only_segments(
+                            job_id,
+                            &job_name,
+                            &settings,
+                            &source_text,
+                            audio_dur,
+                        ) {
+                            crate::logger::log_job(
+                                job_id,
+                                &job_name,
+                                &format!("Prompt Only base timeline error: {}", e),
+                            );
+                            *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                            ctx.request_repaint();
+                            return;
+                        }
+                    }
+
                     crate::logger::log_job(
                         job_id,
                         &job_name,
-                        "Agent mode: creating segments.json...",
+                        "Agent mode: processing segments.json...",
                     );
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
                     ctx.request_repaint();
@@ -240,18 +257,36 @@ pub fn retry_from_stage(
 
                 let is_agent_mode = !settings.skip_agent_on_resume
                     && settings.video_enabled
-                    && (settings.video_llm_service == "Claude Code"
-                        || settings.video_llm_service == "Gemini CLI"
-                        || settings.video_llm_service == "Codex CLI"
-                        || settings.video_llm_service == "AGY CLI"
-                        || settings.video_llm_service == "Pi CLI");
+                    && settings.is_agent_service();
 
-                // В агентному режимі спочатку запускаємо агента для створення segments.json
+                // В агентному режимі спочатку запускаємо агента для створення або редагування segments.json
                 if is_agent_mode {
+                    if settings.is_prompt_only_agent_mode() {
+                        let source_text = source_text_for_segments(&settings, &translated_text);
+                        let audio_dur = *audio_duration.lock().unwrap();
+                        if let Err(e) = prepare_prompt_only_segments(
+                            job_id,
+                            &job_name,
+                            &settings,
+                            &source_text,
+                            audio_dur,
+                        ) {
+                            crate::logger::log_job(
+                                job_id,
+                                &job_name,
+                                &format!("Prompt Only base timeline error: {}", e),
+                            );
+                            *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                            ctx.request_repaint();
+                            return;
+                        }
+                    }
+
                     crate::logger::log_job(
                         job_id,
                         &job_name,
-                        "Retry Video (agent mode): creating segments.json...",
+                        "Retry Video (agent mode): processing segments.json...",
                     );
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
                     ctx.request_repaint();
@@ -389,20 +424,37 @@ pub fn retry_from_stage(
 
                 // В агентному режимі після субтитрів запускаємо агента та відеогілку
                 // (якщо відеоряд ще не був виконаний раніше)
-                let is_agent_mode = settings.video_enabled
-                    && (settings.video_llm_service == "Claude Code"
-                        || settings.video_llm_service == "Gemini CLI"
-                        || settings.video_llm_service == "Codex CLI"
-                        || settings.video_llm_service == "AGY CLI"
-                        || settings.video_llm_service == "Pi CLI");
+                let is_agent_mode = settings.video_enabled && settings.is_agent_service();
                 let video_already_done =
                     *video_stage.lock().unwrap() == crate::queue::StageStatus::Done;
 
                 if is_agent_mode && !video_already_done {
+                    if settings.is_prompt_only_agent_mode() {
+                        let source_text = source_text_for_segments(&settings, &translated_text);
+                        let audio_dur = *audio_duration.lock().unwrap();
+                        if let Err(e) = prepare_prompt_only_segments(
+                            job_id,
+                            &job_name,
+                            &settings,
+                            &source_text,
+                            audio_dur,
+                        ) {
+                            crate::logger::log_job(
+                                job_id,
+                                &job_name,
+                                &format!("Prompt Only base timeline error: {}", e),
+                            );
+                            *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                            ctx.request_repaint();
+                            return;
+                        }
+                    }
+
                     crate::logger::log_job(
                         job_id,
                         &job_name,
-                        "Agent mode: creating segments.json...",
+                        "Agent mode: processing segments.json...",
                     );
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
                     ctx.request_repaint();

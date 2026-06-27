@@ -1,16 +1,16 @@
 use crate::gui;
 use crate::gui::settings::storage::AppSettings;
-use eframe::egui;
-use crate::theme::AppTheme;
 use crate::localization::Language;
+use crate::theme::AppTheme;
+use eframe::egui;
 
-mod settings_sync;
-mod pipeline_host;
-mod windows;
-mod lifecycle;
-mod queue_host;
 mod gallery_host;
+mod lifecycle;
 mod montage_host;
+mod pipeline_host;
+mod queue_host;
+mod settings_sync;
+mod windows;
 
 /// Перерахування для представлення доступних вкладок програми.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +24,6 @@ pub enum Tab {
     /// Вкладка логів
     Logs,
 }
-
 
 /// Головна структура нашого GUI додатку, що зберігає його поточний стан.
 pub struct VideoMakerApp {
@@ -81,13 +80,18 @@ pub struct VideoMakerApp {
     /// Результат фонового тесту API ключа Googler.
     pub googler_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Баланс Googler для відображення у топбарі.
-    pub googler_balance: std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
+    pub googler_balance:
+        std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
     /// Обраний провайдер озвучки.
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки.
     pub voiceover_template_uuid: String,
     /// Завантажені шаблони Voice Bot.
-    pub voicebot_templates: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::gui::pipeline::voiceover::VoiceBotTemplate>, String>>>>,
+    pub voicebot_templates: std::sync::Arc<
+        std::sync::Mutex<
+            Option<Result<Vec<crate::gui::pipeline::voiceover::VoiceBotTemplate>, String>>,
+        >,
+    >,
     /// Прапорець завантаження шаблонів Voice Bot.
     pub voicebot_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Результат фонового тесту API ключа Voice Bot.
@@ -107,15 +111,19 @@ pub struct VideoMakerApp {
     /// Стан редактора монтажу (завантажений timeline, аудіо тощо).
     pub montage_editor_state: Option<crate::gui::montage_editor::MontageEditorState>,
     /// Кеш текстур для галереї медіафайлів. None означає що ще завантажується або помилка.
-    pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    pub gallery_textures:
+        std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Набір шляхів зображень, які зараз завантажуються у фоні.
-    pub gallery_image_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    pub gallery_image_loading:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Результат фонового завантаження зображень галереї.
-    pub gallery_image_result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
+    pub gallery_image_result:
+        std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
     /// Зображення, яке зараз відкрите у повноекранному перегляді.
     pub gallery_preview: Option<std::path::PathBuf>,
     /// Набір шляхів зображень, які зараз анімуються у фоні (image-to-video).
-    pub gallery_anim_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    pub gallery_anim_loading:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Прапорець виконання перегенерації медіафайлу у фоні (для custom regen window).
     pub media_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Результат перегенерації для custom regen window. None = ще не завершено.
@@ -123,9 +131,11 @@ pub struct VideoMakerApp {
     /// Файл, що зараз перегенеровується у custom regen window.
     pub media_regen_target: Option<std::path::PathBuf>,
     /// Набір шляхів усіх файлів що зараз перегенеровуються (підтримка паралельних).
-    pub media_regen_paths: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    pub media_regen_paths:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Черга результатів перегенерацій для обробки кешу (усі паралельні).
-    pub media_regen_results_queue: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>,
+    pub media_regen_results_queue:
+        std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>,
     /// Чи відкрите вікно кастомної перегенерації.
     pub media_regen_window_open: bool,
     /// Базові налаштування задачі (googler_key тощо) для перегенерації.
@@ -171,7 +181,11 @@ pub struct VideoMakerApp {
     /// Рядок пошуку у дропдауні вибору моделі (ephemeral UI state).
     pub translation_model_search: String,
     /// Список моделей OpenRouter, завантажених у фоні.
-    pub openrouter_models: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
+    pub openrouter_models: std::sync::Arc<
+        std::sync::Mutex<
+            Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>,
+        >,
+    >,
     /// Прапорець завантаження моделей OpenRouter.
     pub openrouter_models_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Баланс OpenRouter для відображення у топбарі.
@@ -196,6 +210,8 @@ pub struct VideoMakerApp {
     pub video_context_mode: String,
     /// Кількість символів контексту навколо сегмента для режиму "around".
     pub video_context_chars: usize,
+    /// Підрежим агента відеоряду: "full" або "prompt_only".
+    pub video_agent_mode: String,
     /// Чи увімкнено автоматичний апскейл Googler відео
     pub googler_video_upscale_enabled: bool,
     /// Роздільна здатність апскейлу ("1080p", "2K", "4K")
@@ -262,9 +278,13 @@ pub struct VideoMakerApp {
     /// Відкриті вікна логів задач: job_id → job_name.
     pub open_job_logs: std::collections::HashMap<u64, String>,
     /// Відкриті вікна контролю перекладу: job_id → стан вікна.
-    pub open_job_controls: std::collections::HashMap<u64, crate::gui::pipeline::translation_control::TranslationControlWindowState>,
+    pub open_job_controls: std::collections::HashMap<
+        u64,
+        crate::gui::pipeline::translation_control::TranslationControlWindowState,
+    >,
     /// Відкриті вікна чату з агентом: job_id → стан вікна.
-    pub open_agent_chats: std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
+    pub open_agent_chats:
+        std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
     /// Задачі, для яких користувач вручну закрив вікно контролю (авто-відкриття їх пропускає).
     pub control_dismissed: std::collections::HashSet<u64>,
     /// Чи відкрите вікно введення назви задачі.
@@ -308,7 +328,9 @@ pub struct VideoMakerApp {
     /// Максимальна кількість одночасних процесів FFmpeg.
     pub ffmpeg_max_threads: usize,
     /// Завантажені голоси Edge TTS.
-    pub edge_tts_voices: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>>,
+    pub edge_tts_voices: std::sync::Arc<
+        std::sync::Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>,
+    >,
     /// Прапорець завантаження голосів Edge TTS.
     pub edge_tts_loading_voices: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Показувати всі мови для Edge TTS.
@@ -328,7 +350,8 @@ pub struct VideoMakerApp {
     /// Максимальна кількість символів у сегменті субтитрів (0 = без обмеження).
     pub whisper_max_line_width: usize,
     /// Стан завантаження ggml-моделі whisper.cpp у фоні.
-    pub whisper_model_download: std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
+    pub whisper_model_download:
+        std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     /// Розмір шрифту субтитрів (пунктів).
     pub subtitle_font_size: u32,
     /// RGB колір тексту субтитрів.
@@ -390,17 +413,23 @@ pub struct VideoMakerApp {
     /// Кеш кадрів hover-анімації відео: path → список текстур кадрів.
     pub video_hover_frames: std::collections::HashMap<std::path::PathBuf, Vec<egui::TextureHandle>>,
     /// Стан hover-анімації відео: path → (поточний кадр, час останнього переходу).
-    pub video_hover_state: std::collections::HashMap<std::path::PathBuf, (usize, std::time::Instant)>,
+    pub video_hover_state:
+        std::collections::HashMap<std::path::PathBuf, (usize, std::time::Instant)>,
     /// Набір шляхів відео, для яких зараз витягуються hover-кадри.
-    pub video_hover_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    pub video_hover_loading:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Результат фонового витягування hover-кадрів.
-    pub video_hover_result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Vec<egui::TextureHandle>)>>>,
+    pub video_hover_result:
+        std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Vec<egui::TextureHandle>)>>>,
     /// Кеш першого кадру відео як thumbnail: path → текстура.
-    pub video_thumbnails: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    pub video_thumbnails:
+        std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Набір шляхів відео, для яких зараз витягується thumbnail.
-    pub video_thumb_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    pub video_thumb_loading:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Результат фонового витягування thumbnail.
-    pub video_thumb_result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
+    pub video_thumb_result:
+        std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
     /// Активний повноекранний відеоплеєр (якщо відео відкрите).
     pub video_player: Option<crate::gui::gallery::video_player::VideoPlayer>,
     /// Текст промту, який зараз показується у popup-вікні галереї. None = вікно закрите.
@@ -448,8 +477,7 @@ impl eframe::App for VideoMakerApp {
                 .fill(ctx.style().visuals.panel_fill) // Насичуємо фоновим кольором поточної теми
                 .inner_margin(egui::Margin::same(0.0))
         } else {
-            egui::Frame::central_panel(ctx.style().as_ref())
-                .stroke(egui::Stroke::NONE)
+            egui::Frame::central_panel(ctx.style().as_ref()).stroke(egui::Stroke::NONE)
         };
 
         // Central Panel
@@ -463,58 +491,64 @@ impl eframe::App for VideoMakerApp {
         let thumb_loading_snapshot = self.video_thumb_loading.lock().unwrap().clone();
         let image_loading_snapshot = self.gallery_image_loading.lock().unwrap().clone();
         let regen_paths_snapshot = self.media_regen_paths.lock().unwrap().clone();
-        egui::CentralPanel::default()
-            .frame(frame)
-            .show(ctx, |ui| {
-                if self.draw_fullscreen_queue_if_needed(ui) {
-                    return;
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
+            if self.draw_fullscreen_queue_if_needed(ui) {
+                return;
+            }
+            match self.active_tab {
+                Tab::Main => {
+                    gui::editor::draw_editor(
+                        ui,
+                        &mut self.text_input,
+                        self.language,
+                        self.text_split_char_limit,
+                        &mut self.editor_stats,
+                    );
                 }
-                match self.active_tab {
-                    Tab::Main => {
-                        gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit, &mut self.editor_stats);
-                    }
-                    Tab::Gallery => {
-                        let switch_to_main = crate::gui::gallery::draw_gallery_tab(
-                            ui, self.language, &self.jobs,
-                            &mut self.gallery_textures,
-                            &mut self.gallery_preview,
-                            &regen_paths_snapshot,
-                            &mut regen_action,
-                            &self.gallery_anim_loading,
-                            &mut animate_all,
-                            &self.video_hover_frames,
-                            &mut self.video_hover_state,
-                            &hover_loading_snapshot,
-                            &mut hover_extract_request,
-                            &self.video_thumbnails,
-                            &thumb_loading_snapshot,
-                            &mut thumb_requests,
-                            &mut prompt_view_request,
-                            &mut image_load_requests,
-                            &image_loading_snapshot,
-                        );
-                        if switch_to_main {
-                            self.active_tab = Tab::Main;
-                        }
-                    }
-                    Tab::Settings => {
-                        let welcome_changed = gui::settings::draw_settings(
-                            ui,
-                            &mut self.theme,
-                            &mut self.accent_color,
-                            &mut self.language,
-                            &mut self.last_saved_settings.show_welcome,
-                        );
-                        if welcome_changed {
-                            let new_settings = self.last_saved_settings.clone();
-                            crate::gui::settings::storage::save_settings(&new_settings);
-                        }
-                    }
-                    Tab::Logs => {
-                        self.draw_logs_tab(ui);
+                Tab::Gallery => {
+                    let switch_to_main = crate::gui::gallery::draw_gallery_tab(
+                        ui,
+                        self.language,
+                        &self.jobs,
+                        &mut self.gallery_textures,
+                        &mut self.gallery_preview,
+                        &regen_paths_snapshot,
+                        &mut regen_action,
+                        &self.gallery_anim_loading,
+                        &mut animate_all,
+                        &self.video_hover_frames,
+                        &mut self.video_hover_state,
+                        &hover_loading_snapshot,
+                        &mut hover_extract_request,
+                        &self.video_thumbnails,
+                        &thumb_loading_snapshot,
+                        &mut thumb_requests,
+                        &mut prompt_view_request,
+                        &mut image_load_requests,
+                        &image_loading_snapshot,
+                    );
+                    if switch_to_main {
+                        self.active_tab = Tab::Main;
                     }
                 }
-            });
+                Tab::Settings => {
+                    let welcome_changed = gui::settings::draw_settings(
+                        ui,
+                        &mut self.theme,
+                        &mut self.accent_color,
+                        &mut self.language,
+                        &mut self.last_saved_settings.show_welcome,
+                    );
+                    if welcome_changed {
+                        let new_settings = self.last_saved_settings.clone();
+                        crate::gui::settings::storage::save_settings(&new_settings);
+                    }
+                }
+                Tab::Logs => {
+                    self.draw_logs_tab(ui);
+                }
+            }
+        });
 
         self.handle_gallery_runtime(
             ctx,

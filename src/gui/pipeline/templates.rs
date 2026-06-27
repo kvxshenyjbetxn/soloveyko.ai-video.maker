@@ -1,5 +1,5 @@
+use crate::localization::{translate, Language};
 use eframe::egui;
-use crate::localization::{Language, translate};
 
 /// Малює секцію "Шаблони" на панелі пайплайну з можливістю завантаження та видалення.
 pub fn draw_templates_section(
@@ -36,11 +36,13 @@ pub fn draw_templates_section(
     video_service: &mut String,
     video_media_type: &mut String,
     text_split_mode: &mut String,
+    text_split_mode_openrouter: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
     video_context_enabled: &mut bool,
     video_context_mode: &mut String,
     video_context_chars: &mut usize,
+    video_agent_mode: &mut String,
     video_agent_prompt: &mut String,
     video_style_enabled: &mut bool,
     video_style_prompt: &mut String,
@@ -99,7 +101,6 @@ pub fn draw_templates_section(
     googler_video_upscale_resolution: &mut String,
     googler_video_upscale_quality: &mut String,
 ) {
-
     ui.vertical(|ui| {
         ui.add_space(2.0);
 
@@ -107,7 +108,7 @@ pub fn draw_templates_section(
             ui.label(
                 egui::RichText::new(translate(language, "templates_empty"))
                     .weak()
-                    .size(12.0)
+                    .size(12.0),
             );
         } else {
             // Клонуємо список для безпечного ітерування, оскільки всередині циклу
@@ -115,14 +116,15 @@ pub fn draw_templates_section(
             for template_name in saved_templates.clone() {
                 let btn_width = (ui.available_width() - 30.0).max(50.0);
                 ui.horizontal(|ui| {
-
                     let btn = ui.add_sized(
                         [btn_width, 20.0],
-                        egui::Button::new(format!("📄 {}", template_name))
+                        egui::Button::new(format!("📄 {}", template_name)),
                     );
 
                     if btn.clicked() {
-                        if let Some(template) = crate::gui::settings::storage::load_template(&template_name) {
+                        if let Some(template) =
+                            crate::gui::settings::storage::load_template(&template_name)
+                        {
                             *openrouter_key = template.openrouter_key;
                             *openrouter_status = None;
                             *assemblyai_key = template.assemblyai_key;
@@ -133,61 +135,132 @@ pub fn draw_templates_section(
                             *voiceover_template_uuid = template.voiceover_template_uuid;
                             *template_name_input = template_name.clone();
                             *pipeline_translation_enabled = template.pipeline_translation_enabled;
-                            *pipeline_translation_control_enabled = template.pipeline_translation_control_enabled;
+                            *pipeline_translation_control_enabled =
+                                template.pipeline_translation_control_enabled;
                             *pipeline_control_auto_open = template.pipeline_control_auto_open;
-                            *pipeline_media_control_enabled = template.pipeline_media_control_enabled;
-                            *pipeline_montage_control_enabled = template.pipeline_montage_control_enabled;
+                            *pipeline_media_control_enabled =
+                                template.pipeline_media_control_enabled;
+                            *pipeline_montage_control_enabled =
+                                template.pipeline_montage_control_enabled;
                             *pipeline_voiceover_enabled = template.pipeline_voiceover_enabled;
                             *pipeline_video_enabled = template.pipeline_video_enabled;
                             *pipeline_subtitles_enabled = template.pipeline_subtitles_enabled;
                             *pipeline_editing_enabled = template.pipeline_editing_enabled;
                             *translation_prompt = template.translation_prompt;
                             *translation_model = template.translation_model.clone();
-                            
-                            *translation_model_openrouter = template.translation_model_openrouter;
-                            *translation_model_claude = if template.translation_model_claude.is_empty() { "sonnet".to_string() } else { template.translation_model_claude };
-                            *translation_model_gemini = if template.translation_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { template.translation_model_gemini };
-                            *translation_model_codex = if template.translation_model_codex.is_empty() { "o3-mini".to_string() } else { template.translation_model_codex };
-                            *translation_model_agy = if template.translation_model_agy.is_empty() { "gemini-3.5-flash".to_string() } else { template.translation_model_agy };
-                            *translation_model_pi = if template.translation_model_pi.is_empty() { "gemini-2.5-flash".to_string() } else { template.translation_model_pi };
 
-                            if template.translation_service == "OpenRouter" && translation_model_openrouter.is_empty() {
+                            *translation_model_openrouter = template.translation_model_openrouter;
+                            *translation_model_claude =
+                                if template.translation_model_claude.is_empty() {
+                                    "sonnet".to_string()
+                                } else {
+                                    template.translation_model_claude
+                                };
+                            *translation_model_gemini =
+                                if template.translation_model_gemini.is_empty() {
+                                    "gemini-2.5-flash".to_string()
+                                } else {
+                                    template.translation_model_gemini
+                                };
+                            *translation_model_codex =
+                                if template.translation_model_codex.is_empty() {
+                                    "o3-mini".to_string()
+                                } else {
+                                    template.translation_model_codex
+                                };
+                            *translation_model_agy = if template.translation_model_agy.is_empty() {
+                                "gemini-3.5-flash".to_string()
+                            } else {
+                                template.translation_model_agy
+                            };
+                            *translation_model_pi = if template.translation_model_pi.is_empty() {
+                                "gemini-2.5-flash".to_string()
+                            } else {
+                                template.translation_model_pi
+                            };
+
+                            if template.translation_service == "OpenRouter"
+                                && translation_model_openrouter.is_empty()
+                            {
                                 *translation_model_openrouter = template.translation_model.clone();
                             }
-                            if template.translation_service == "Claude Code" && translation_model_claude.is_empty() {
+                            if template.translation_service == "Claude Code"
+                                && translation_model_claude.is_empty()
+                            {
                                 *translation_model_claude = template.translation_model.clone();
                             }
-                            if template.translation_service == "Gemini CLI" && translation_model_gemini.is_empty() {
+                            if template.translation_service == "Gemini CLI"
+                                && translation_model_gemini.is_empty()
+                            {
                                 *translation_model_gemini = template.translation_model.clone();
                             }
-                            if template.translation_service == "Codex CLI" && translation_model_codex.is_empty() {
+                            if template.translation_service == "Codex CLI"
+                                && translation_model_codex.is_empty()
+                            {
                                 *translation_model_codex = template.translation_model.clone();
                             }
-                            if template.translation_service == "AGY CLI" && translation_model_agy.is_empty() {
+                            if template.translation_service == "AGY CLI"
+                                && translation_model_agy.is_empty()
+                            {
                                 *translation_model_agy = template.translation_model.clone();
                             }
-                            if template.translation_service == "Pi CLI" && translation_model_pi.is_empty() {
+                            if template.translation_service == "Pi CLI"
+                                && translation_model_pi.is_empty()
+                            {
                                 *translation_model_pi = template.translation_model.clone();
                             }
 
                             *video_service = template.video_service;
                             *video_media_type = template.video_media_type;
                             *text_split_mode = template.text_split_mode;
+                            *text_split_mode_openrouter = template.text_split_mode_openrouter;
                             *text_split_char_limit = template.text_split_char_limit;
                             *video_prompt = template.video_prompt;
                             *video_context_enabled = template.video_context_enabled;
-                            *video_context_mode = if template.video_context_mode.is_empty() { "around".to_string() } else { template.video_context_mode };
+                            *video_context_mode = if template.video_context_mode.is_empty() {
+                                "around".to_string()
+                            } else {
+                                template.video_context_mode
+                            };
                             *video_context_chars = template.video_context_chars.max(10);
+                            *video_agent_mode = if template.video_agent_mode.is_empty() {
+                                "full".to_string()
+                            } else {
+                                template.video_agent_mode
+                            };
                             *video_agent_prompt = template.video_agent_prompt;
                             *video_style_enabled = template.video_style_enabled;
                             *video_style_prompt = template.video_style_prompt;
                             *video_llm_service = template.video_llm_service.clone();
-                            *video_llm_model_openrouter = template.video_llm_model_openrouter.clone();
-                            *video_llm_model_claude = if template.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { template.video_llm_model_claude.clone() };
-                            *video_llm_model_gemini = if template.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { template.video_llm_model_gemini.clone() };
-                            *video_llm_model_codex = if template.video_llm_model_codex.is_empty() { "o3-mini".to_string() } else { template.video_llm_model_codex.clone() };
-                            *video_llm_model_agy = if template.video_llm_model_agy.is_empty() { "gemini-3.5-flash".to_string() } else { template.video_llm_model_agy.clone() };
-                            *video_llm_model_pi = if template.video_llm_model_pi.is_empty() { "gemini-2.5-flash".to_string() } else { template.video_llm_model_pi.clone() };
+                            *video_llm_model_openrouter =
+                                template.video_llm_model_openrouter.clone();
+                            *video_llm_model_claude = if template.video_llm_model_claude.is_empty()
+                            {
+                                "sonnet".to_string()
+                            } else {
+                                template.video_llm_model_claude.clone()
+                            };
+                            *video_llm_model_gemini = if template.video_llm_model_gemini.is_empty()
+                            {
+                                "gemini-2.5-flash".to_string()
+                            } else {
+                                template.video_llm_model_gemini.clone()
+                            };
+                            *video_llm_model_codex = if template.video_llm_model_codex.is_empty() {
+                                "o3-mini".to_string()
+                            } else {
+                                template.video_llm_model_codex.clone()
+                            };
+                            *video_llm_model_agy = if template.video_llm_model_agy.is_empty() {
+                                "gemini-3.5-flash".to_string()
+                            } else {
+                                template.video_llm_model_agy.clone()
+                            };
+                            *video_llm_model_pi = if template.video_llm_model_pi.is_empty() {
+                                "gemini-2.5-flash".to_string()
+                            } else {
+                                template.video_llm_model_pi.clone()
+                            };
                             *video_llm_temperature = template.video_llm_temperature;
                             *video_llm_model = match template.video_llm_service.as_str() {
                                 "OpenRouter" => template.video_llm_model_openrouter.clone(),
@@ -219,8 +292,10 @@ pub fn draw_templates_section(
                             *subtitle_margin_v = template.subtitle_margin_v;
                             *subtitle_karaoke = template.subtitle_karaoke;
                             *subtitle_karaoke_mode = template.subtitle_karaoke_mode;
-                            *subtitle_karaoke_highlight_color = template.subtitle_karaoke_highlight_color;
-                            *subtitle_karaoke_outline_color = template.subtitle_karaoke_outline_color;
+                            *subtitle_karaoke_highlight_color =
+                                template.subtitle_karaoke_highlight_color;
+                            *subtitle_karaoke_outline_color =
+                                template.subtitle_karaoke_outline_color;
                             *subtitle_karaoke_bold = template.subtitle_karaoke_bold;
                             *subtitle_karaoke_scale = template.subtitle_karaoke_scale;
                             *subtitle_font = template.subtitle_font;
@@ -241,8 +316,18 @@ pub fn draw_templates_section(
                             *overlay_triggers_enabled = template.overlay_triggers_enabled;
                             *overlay_triggers = template.overlay_triggers;
                             *googler_video_upscale_enabled = template.googler_video_upscale_enabled;
-                            *googler_video_upscale_resolution = if template.googler_video_upscale_resolution.is_empty() { "1080p".to_string() } else { template.googler_video_upscale_resolution };
-                            *googler_video_upscale_quality = if template.googler_video_upscale_quality.is_empty() { "balanced".to_string() } else { template.googler_video_upscale_quality };
+                            *googler_video_upscale_resolution =
+                                if template.googler_video_upscale_resolution.is_empty() {
+                                    "1080p".to_string()
+                                } else {
+                                    template.googler_video_upscale_resolution
+                                };
+                            *googler_video_upscale_quality =
+                                if template.googler_video_upscale_quality.is_empty() {
+                                    "balanced".to_string()
+                                } else {
+                                    template.googler_video_upscale_quality
+                                };
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),
@@ -254,9 +339,8 @@ pub fn draw_templates_section(
                     let del_btn = ui.add_sized(
                         [22.0, 20.0],
                         egui::Button::new(
-                            egui::RichText::new("🗑")
-                                .color(egui::Color32::from_rgb(231, 76, 60))
-                        )
+                            egui::RichText::new("🗑").color(egui::Color32::from_rgb(231, 76, 60)),
+                        ),
                     );
 
                     if del_btn.clicked() {
@@ -264,11 +348,10 @@ pub fn draw_templates_section(
                             dir.push(format!("{}.json", template_name));
                             if dir.exists() {
                                 let _ = std::fs::remove_file(dir);
-                                *template_status = Some(format!(
-                                    "{} 🗑",
-                                    translate(language, "template_deleted")
-                                ));
-                                *saved_templates = crate::gui::settings::storage::load_saved_templates();
+                                *template_status =
+                                    Some(format!("{} 🗑", translate(language, "template_deleted")));
+                                *saved_templates =
+                                    crate::gui::settings::storage::load_saved_templates();
                             }
                         }
                     }

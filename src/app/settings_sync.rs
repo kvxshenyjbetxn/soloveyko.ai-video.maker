@@ -75,6 +75,7 @@ impl VideoMakerApp {
                 || self.video_context_enabled != self.last_saved_settings.video_context_enabled
                 || self.video_context_mode != self.last_saved_settings.video_context_mode
                 || self.video_context_chars != self.last_saved_settings.video_context_chars
+                || self.video_agent_mode != self.last_saved_settings.video_agent_mode
                 || self.video_agent_prompt != self.last_saved_settings.video_agent_prompt
                 || self.video_style_enabled != self.last_saved_settings.video_style_enabled
                 || self.video_style_prompt != self.last_saved_settings.video_style_prompt
@@ -89,6 +90,8 @@ impl VideoMakerApp {
                 || self.video_llm_model_pi != self.last_saved_settings.video_llm_model_pi
                 || self.video_llm_temperature != self.last_saved_settings.video_llm_temperature
                 || self.text_split_mode != self.last_saved_settings.text_split_mode
+                || self.text_split_mode_openrouter
+                    != self.last_saved_settings.text_split_mode_openrouter
                 || self.text_split_char_limit != self.last_saved_settings.text_split_char_limit
                 || self.translation_service != self.last_saved_settings.translation_service
                 || self.save_path_macos != self.last_saved_settings.save_path_macos
@@ -209,6 +212,7 @@ impl VideoMakerApp {
                     video_context_enabled: self.video_context_enabled,
                     video_context_mode: self.video_context_mode.clone(),
                     video_context_chars: self.video_context_chars,
+                    video_agent_mode: self.video_agent_mode.clone(),
                     video_agent_prompt: self.video_agent_prompt.clone(),
                     video_style_enabled: self.video_style_enabled,
                     video_style_prompt: self.video_style_prompt.clone(),

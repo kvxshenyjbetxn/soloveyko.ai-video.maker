@@ -114,6 +114,7 @@ impl Default for VideoMakerApp {
             video_context_enabled: false,
             video_context_mode: "around".to_string(),
             video_context_chars: 500,
+            video_agent_mode: "full".to_string(),
             googler_video_upscale_enabled: default_settings.googler_video_upscale_enabled,
             googler_video_upscale_resolution: default_settings
                 .googler_video_upscale_resolution
@@ -367,6 +368,7 @@ impl VideoMakerApp {
         let video_context_enabled = saved.video_context_enabled;
         let video_context_mode = saved.video_context_mode.clone();
         let video_context_chars = saved.video_context_chars;
+        let video_agent_mode = saved.video_agent_mode.clone();
         let video_agent_prompt = saved.video_agent_prompt.clone();
         let video_style_enabled = saved.video_style_enabled;
         let video_style_prompt = saved.video_style_prompt.clone();
@@ -574,6 +576,7 @@ impl VideoMakerApp {
             video_context_enabled,
             video_context_mode,
             video_context_chars,
+            video_agent_mode,
             googler_video_upscale_enabled,
             googler_video_upscale_resolution,
             googler_video_upscale_quality,

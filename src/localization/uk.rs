@@ -32,7 +32,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "agent_chat_title" => "Чат з агентом",
         "agent_chat_send_btn" => "Надіслати",
         "agent_chat_rebuild_btn" => "Перебудувати таймлінію",
-        "agent_awaiting_hint" => "Пайплайн призупинено. Поспілкуйся з агентом і натисни «Продовжити», коли segments.json буде готовий.",
+        "agent_awaiting_hint" => {
+            "Пайплайн призупинено. Поспілкуйся з агентом і натисни «Продовжити», коли segments.json буде готовий."
+        }
         "agent_resume_pipeline_btn" => "▶ Продовжити пайплайн",
         "agent_chat_confirm_btn" => "✓ Підтвердити",
         "agent_chat_confirm_tooltip" => "Підтвердити — пайплайн продовжить виконання",
@@ -120,7 +122,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "color_red" => "Червоний",
         "color_orange" => "Помаранчевий",
         "color_purple" => "Фіолетовий",
-"api_key" => "API Ключ",
+        "api_key" => "API Ключ",
         "api_provider" => "Провайдер",
         "api_model" => "Модель за замовчуванням",
         "api_voice" => "Голос за замовчуванням",
@@ -192,41 +194,70 @@ pub fn translate_uk(key: &str) -> &'static str {
         "assemblyai_key_hint" => "Введіть API ключ AssemblyAI...",
         "pexels_key_hint" => "Введіть API ключ Pexels...",
         "pexels_status_checking" => "⏳ Перевірка...",
-        "pexels_service_note" => "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері.",
+        "pexels_service_note" => {
+            "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері."
+        }
         "pixabay_key_hint" => "Введіть API ключ Pixabay...",
-        "pixabay_service_note" => "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері.",
+        "pixabay_service_note" => {
+            "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері."
+        }
         "googler_status_checking" => "⏳ Перевірка...",
-        "text_split_mode_label"   => "Режим нарізання тексту",
-        "text_split_paragraphs"      => "Абзаци",
-        "text_split_paragraphs_hint" => "Текст розбивається на абзаци. Кожен абзац окремо підставляється в промт замість {{text}}.",
-        "text_split_sentences"       => "Речення",
-        "text_split_sentences_hint"  => "Текст розбивається на речення по знаках . ! ? Кожне речення — окремий кадр.",
-        "text_split_char_limit"      => "Ліміт символів",
-        "text_split_char_limit_hint" => "Текст ділиться на частини до вказаної кількості символів. Розрив відбувається по знаку пунктуації або пробілу, щоб не розривати слова.",
-        "text_split_full"            => "Весь текст",
-        "text_split_full_hint"       => "Весь текст передається в промт як один блок. {{text}} замінюється повністю.",
+        "text_split_mode_label" => "Режим нарізання тексту",
+        "text_split_paragraphs" => "Абзаци",
+        "text_split_paragraphs_hint" => {
+            "Текст розбивається на абзаци. Кожен абзац окремо підставляється в промт замість {{text}}."
+        }
+        "text_split_sentences" => "Речення",
+        "text_split_sentences_hint" => {
+            "Текст розбивається на речення по знаках . ! ? Кожне речення — окремий кадр."
+        }
+        "text_split_char_limit" => "Ліміт символів",
+        "text_split_char_limit_hint" => {
+            "Текст ділиться на частини до вказаної кількості символів. Розрив відбувається по знаку пунктуації або пробілу, щоб не розривати слова."
+        }
+        "text_split_full" => "Весь текст",
+        "text_split_full_hint" => {
+            "Весь текст передається в промт як один блок. {{text}} замінюється повністю."
+        }
         "video_service_label" => "Сервіс відеоряду",
         "video_media_type_label" => "Тип медіа",
         "video_media_type_image" => "Зображення",
         "video_media_type_video" => "Відео",
         "video_prompt_label" => "Промт для відеоряду",
         "video_prompt_hint" => "Введіть інструкцію для генерації зображень...",
-        "video_agent_prompt_label" => "Інструкція агенту (timeline)",
+        "video_agent_mode_label" => "Підрежим агента",
+        "video_agent_mode_full" => "Full Agent",
+        "video_agent_mode_full_hint" => {
+            "Агент сам повністю створює весь segments.json разом із таймінгами та text."
+        }
+        "video_agent_mode_prompt_only" => "Prompt Only",
+        "video_agent_mode_prompt_only_hint" => {
+            "Програма сама будує segments.json за налаштуваннями нарізки, а агент змінює лише поле text."
+        }
+        "video_agent_prompt_label" => "Інструкція агенту (segments.json)",
         "video_style_label" => "Вказати стиль",
         "video_style_prompt_label" => "Промт стилю для генерації медіа",
-        "video_style_prompt_hint" => "{{text}} — текст з поля text у segments.json підставиться сюди",
+        "video_style_prompt_hint" => {
+            "{{text}} — текст з поля text у segments.json підставиться сюди"
+        }
         "video_style_insert_placeholder" => "{{text}}",
         "video_insert_placeholder" => "{{text}}",
         "video_insert_context_placeholder" => "{{context}}",
         "video_placeholder_hint_basic" => "{{text}} — текст сегмента.",
-        "video_placeholder_hint" => "{{text}} — текст сегмента, {{context}} — додатковий контекст для API-режиму.",
+        "video_placeholder_hint" => {
+            "{{text}} — текст сегмента, {{context}} — додатковий контекст для API-режиму."
+        }
         "video_context_label" => "Контекст для API-промту",
         "video_context_around" => "Навколо сегмента",
-        "video_context_around_hint" => "У {{context}} підставляється сегмент разом із текстом перед ним і після нього. Кількість символів є орієнтиром, межі вирівнюються по кінцях речень.",
+        "video_context_around_hint" => {
+            "У {{context}} підставляється сегмент разом із текстом перед ним і після нього. Кількість символів є орієнтиром, межі вирівнюються по кінцях речень."
+        }
         "video_context_full" => "Весь текст",
         "video_context_full_hint" => "У {{context}} підставляється повний текст історії.",
         "video_context_chars_label" => "Орієнтир символів навколо:",
-        "video_context_hint" => "Якщо {{context}} немає в промті, контекст буде додано в кінець автоматично.",
+        "video_context_hint" => {
+            "Якщо {{context}} немає в промті, контекст буде додано в кінець автоматично."
+        }
         "balance_window_title" => "Баланси",
         "threads_window_title" => "Потоки",
         "balance_refresh" => "Оновити",
@@ -264,20 +295,26 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stock_trim_end" => "До:",
         "stock_trim_confirm" => "Підтвердити",
         "stock_trim_cancel" => "Скасувати",
-        "stock_key_missing_warning" => "⚠️ Відсутній API-ключ для обраного стокового сервісу. Додайте його в налаштуваннях API.",
+        "stock_key_missing_warning" => {
+            "⚠️ Відсутній API-ключ для обраного стокового сервісу. Додайте його в налаштуваннях API."
+        }
         "stock_services_btn" => "🌐 Сервіси",
         "stock_search_in" => "Шукати в:",
         "queue_status_done" => "Готово",
         "queue_status_failed" => "Помилка",
         "control_window_title" => "Контроль перекладу",
-        "control_window_text" => "Перевірте та відредагуйте перекладений текст перед тим, як продовжити пайплайн:",
+        "control_window_text" => {
+            "Перевірте та відредагуйте перекладений текст перед тим, як продовжити пайплайн:"
+        }
         "control_window_continue_btn" => "Підтвердити та продовжити",
         "control_window_cost" => "Вартість:",
         "control_regen_btn" => "🔄 Перегенерувати",
         "control_regen_extended_btn" => "⚙ Розширена",
         "control_regen_extended_title" => "Розширена перегенерація",
         "control_regen_loading" => "Перегенерація...",
-        "control_regen_settings_note" => "Ці налаштування одноразові і не змінюють налаштування пайплайну.",
+        "control_regen_settings_note" => {
+            "Ці налаштування одноразові і не змінюють налаштування пайплайну."
+        }
         "control_regen_run_btn" => "🔄 Перегенерувати з цими налаштуваннями",
         "control_regen_error" => "❌ Помилка перегенерації:",
         "queue_error_no_text" => "⚠ Текст сценарію порожній",
@@ -301,8 +338,12 @@ pub fn translate_uk(key: &str) -> &'static str {
         "welcome_title" => "Ласкаво просимо!",
         "welcome_desc" => "Перевіримо, чи встановлені необхідні інструменти командного рядка.",
 
-        "welcome_gemini_desc" => "Google Gemini CLI — для роботи з підпискою Gemini та генерації промтів",
-        "welcome_claude_desc" => "Claude Code CLI — для роботи з підпискою Claude та текстових завдань",
+        "welcome_gemini_desc" => {
+            "Google Gemini CLI — для роботи з підпискою Gemini та генерації промтів"
+        }
+        "welcome_claude_desc" => {
+            "Claude Code CLI — для роботи з підпискою Claude та текстових завдань"
+        }
         "welcome_codex_desc" => "Codex CLI — для роботи з моделями та локальних агентних завдань",
         "welcome_dont_show" => "Не показувати при наступному запуску",
         "welcome_close_btn" => "Зрозуміло",
@@ -311,11 +352,17 @@ pub fn translate_uk(key: &str) -> &'static str {
         "welcome_recheck_btn" => "↺ Перевірити знову",
         "welcome_ffmpeg_desc" => "FFmpeg — обробка аудіо/відео, конвертація у формат WAV",
         "welcome_whisper_desc" => "Whisper — розпізнавання мовлення для генерації субтитрів",
-        "welcome_whisperx_desc" => "WhisperX — покращений двигун субтитрів з точнішою синхронізацією",
-        "welcome_whisper_amd_desc" => "Whisper AMD — версія Whisper з підтримкою відеокарт AMD (ROCm). Опційна заміна для власників AMD GPU.",
+        "welcome_whisperx_desc" => {
+            "WhisperX — покращений двигун субтитрів з точнішою синхронізацією"
+        }
+        "welcome_whisper_amd_desc" => {
+            "Whisper AMD — версія Whisper з підтримкою відеокарт AMD (ROCm). Опційна заміна для власників AMD GPU."
+        }
         "welcome_whisper_amd_optional" => "опційно",
         "welcome_whisper_amd_install_btn" => "Встановити",
-        "subtitles_whisper_amd_not_installed" => "⚠ Whisper AMD не встановлено. Натисніть 'Встановити' у вікні привітання.",
+        "subtitles_whisper_amd_not_installed" => {
+            "⚠ Whisper AMD не встановлено. Натисніть 'Встановити' у вікні привітання."
+        }
         "balance_edge_tts_status" => "Безкоштовно (Без лімітів)",
         "balance_voicebot_limit" => "Обмеження потоків: 5 (фіксовано)",
         "balance_assemblyai_limit" => "Обмеження потоків: 5 (фіксовано)",
@@ -333,8 +380,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stats_paragraphs" => "Абзаци:",
         "stats_tokens" => "Токени:",
         "stats_fragments_paragraphs" => "Абз.:",
-        "stats_fragments_sentences"  => "Реч.:",
-        "stats_fragments_chars"      => "Ліміт:",
+        "stats_fragments_sentences" => "Реч.:",
+        "stats_fragments_chars" => "Ліміт:",
         "stats_chars_short" => "симв.",
         "stats_tokens_short" => "ток.",
         "voiceover_convert_to_wav" => "Конвертувати в WAV",
@@ -351,7 +398,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "subtitles_whisper_model_label" => "Модель Whisper",
         "subtitles_whisper_lang_label" => "Мова розпізнавання",
         "subtitles_whisper_lang_auto" => "Авто (визначити)",
-        "subtitles_no_audio" => "⚠ Аудіо-файл не знайдено. Увімкніть етап озвучки або переконайтесь, що voice.mp3/voice.wav існує.",
+        "subtitles_no_audio" => {
+            "⚠ Аудіо-файл не знайдено. Увімкніть етап озвучки або переконайтесь, що voice.mp3/voice.wav існує."
+        }
         "subtitles_stage_log_start" => "Запуск генерації субтитрів через Whisper...",
         "subtitles_stage_log_done" => "Субтитри збережено: subtitle.srt",
         "subtitles_model_downloaded" => "✓ Модель завантажена",
@@ -428,30 +477,30 @@ pub fn translate_uk(key: &str) -> &'static str {
         "gallery_prompt_empty" => "Промт не знайдено",
         "gallery_prompt_copy_btn" => "Копіювати",
         "resume_depends_on_voice" => "(залежить від озвучки)",
-        "resume_dialog_title"   => "Знайдено наявні файли",
-        "resume_dialog_folder"  => "Папка:",
-        "resume_resume_from"    => "Продовжити з:",
-        "resume_all_done"       => "✓ Всі етапи вже завершено",
-        "resume_continue_btn"   => "Продовжити",
-        "resume_fresh_btn"      => "Почати заново",
-        "resume_images"         => "зображень",
-        "resume_videos"         => "відео",
-        "resume_output_video"   => "Готове відео",
-        "resume_timeline"       => "Таймлайн",
+        "resume_dialog_title" => "Знайдено наявні файли",
+        "resume_dialog_folder" => "Папка:",
+        "resume_resume_from" => "Продовжити з:",
+        "resume_all_done" => "✓ Всі етапи вже завершено",
+        "resume_continue_btn" => "Продовжити",
+        "resume_fresh_btn" => "Почати заново",
+        "resume_images" => "зображень",
+        "resume_videos" => "відео",
+        "resume_output_video" => "Готове відео",
+        "resume_timeline" => "Таймлайн",
         "resume_fill_missing_btn" => "Догенерувати відсутні",
-        "task_history_title"          => "Задачі",
-        "task_history_empty"          => "Ще немає задач",
+        "task_history_title" => "Задачі",
+        "task_history_empty" => "Ще немає задач",
         "task_history_delete_tooltip" => "Видалити з історії",
-        "task_history_stage_t"        => "Пер",
-        "task_history_stage_v"        => "Озв",
-        "task_history_stage_vid"      => "Відео",
-        "task_history_stage_s"        => "Суб",
-        "task_history_stage_m"        => "Монт",
-        "update_title"         => "Доступне оновлення",
-        "update_new_version"   => "Нова версія:",
-        "update_changelog"     => "Список змін:",
-        "update_download_btn"  => "Завантажити",
-        "update_later_btn"     => "Пізніше",
+        "task_history_stage_t" => "Пер",
+        "task_history_stage_v" => "Озв",
+        "task_history_stage_vid" => "Відео",
+        "task_history_stage_s" => "Суб",
+        "task_history_stage_m" => "Монт",
+        "update_title" => "Доступне оновлення",
+        "update_new_version" => "Нова версія:",
+        "update_changelog" => "Список змін:",
+        "update_download_btn" => "Завантажити",
+        "update_later_btn" => "Пізніше",
         _ => "",
     }
 }

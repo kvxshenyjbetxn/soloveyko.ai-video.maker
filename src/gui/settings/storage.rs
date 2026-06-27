@@ -2,79 +2,222 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-fn default_true() -> bool { true }
-fn default_upscale_quality() -> String { "balanced".to_string() }
-fn default_upscale_resolution() -> String { "1080p".to_string() }
+fn default_true() -> bool {
+    true
+}
+fn default_upscale_quality() -> String {
+    "balanced".to_string()
+}
+fn default_upscale_resolution() -> String {
+    "1080p".to_string()
+}
 
 fn default_image_priority() -> Vec<String> {
-    vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()]
+    vec![
+        "flow_IMAGEN_3_5".to_string(),
+        "flow_GEM_PIX_2".to_string(),
+        "flow_NARWHAL".to_string(),
+        "flower".to_string(),
+        "grok".to_string(),
+        "openai".to_string(),
+    ]
 }
 fn default_video_priority() -> Vec<String> {
-    vec!["flow".to_string(), "flower".to_string(), "grok".to_string(), "flow_omni_flash".to_string(), "flow_fast".to_string(), "flow_light".to_string(), "flow_quality".to_string()]
+    vec![
+        "flow".to_string(),
+        "flower".to_string(),
+        "grok".to_string(),
+        "flow_omni_flash".to_string(),
+        "flow_fast".to_string(),
+        "flow_light".to_string(),
+        "flow_quality".to_string(),
+    ]
 }
-fn default_video_service() -> String { "Googler".to_string() }
-fn default_video_llm_service() -> String { "None".to_string() }
-fn default_video_llm_model_claude() -> String { "sonnet".to_string() }
-fn default_video_llm_model_gemini() -> String { "gemini-2.5-flash".to_string() }
-fn default_text_split_mode() -> String { "paragraphs".to_string() }
-fn default_text_split_char_limit() -> usize { 500 }
-fn default_temperature() -> f32 { 0.7 }
-fn default_openrouter_max_threads() -> usize { 5 }
-fn default_claude_max_threads() -> usize { 5 }
-fn default_gemini_max_threads() -> usize { 5 }
-fn default_translation_service() -> String { "OpenRouter".to_string() }
-fn default_show_welcome() -> bool { true }
-fn default_model_claude() -> String { "sonnet".to_string() }
-fn default_model_gemini() -> String { "gemini-2.5-flash".to_string() }
-fn default_model_codex() -> String { "gpt-5.4-mini".to_string() }
-fn default_video_llm_model_codex() -> String { "gpt-5.4-mini".to_string() }
-fn default_codex_max_threads() -> usize { 5 }
-fn default_model_agy() -> String { "gemini-3.5-flash".to_string() }
-fn default_agy_max_threads() -> usize { 5 }
-fn default_model_pi() -> String { "gemini-2.5-flash".to_string() }
-fn default_pi_max_threads() -> usize { 5 }
-fn default_edge_tts_voice() -> String { "uk-UA-PolinaNeural".to_string() }
-fn default_edge_tts_rate() -> String { "0".to_string() }
-fn default_edge_tts_pitch() -> String { "0".to_string() }
-fn default_edge_tts_volume() -> String { "0".to_string() }
-fn default_edge_tts_max_threads() -> usize { 5 }
-fn default_ffmpeg_max_threads() -> usize { 2 }
-fn default_googler_threads() -> usize { 5 }
-fn default_video_media_type() -> String { "image".to_string() }
-fn default_video_context_mode() -> String { "around".to_string() }
-fn default_video_context_chars() -> usize { 500 }
-fn default_subtitles_service() -> String { "Whisper".to_string() }
-fn default_assemblyai_key() -> String { String::new() }
-fn default_pexels_key() -> String { String::new() }
-fn default_pixabay_key() -> String { String::new() }
-fn default_whisper_language() -> String { "auto".to_string() }
-fn default_whisper_model() -> String { "base".to_string() }
-fn default_whisper_max_line_width() -> usize { 42 }
-fn default_montage_service() -> String { "FFmpeg".to_string() }
-fn default_capcut_draft_path() -> String { String::new() }
-fn default_montage_fps() -> u32 { 30 }
-fn default_montage_preset() -> String { "medium".to_string() }
-fn default_montage_bitrate() -> u32 { 8 }
-fn default_montage_transition() -> String { "none".to_string() }
-fn default_montage_transition_duration() -> f32 { 0.5 }
-fn default_montage_image_zoom_intensity() -> f32 { 0.5 }
-fn default_montage_image_zoom_mode() -> String { "alternate".to_string() }
-fn default_montage_image_zoom_scale() -> f32 { 1.3 }
-fn default_montage_image_shake_intensity() -> f32 { 0.5 }
-fn default_subtitle_font_size() -> u32 { 24 }
-fn default_subtitle_color() -> [u8; 3] { [255, 255, 255] }
-fn default_subtitle_margin_v() -> u32 { 30 }
-fn default_subtitle_font() -> String { "Arial".to_string() }
-fn default_subtitle_karaoke_mode() -> u8 { 0 }
-fn default_subtitle_karaoke_highlight_color() -> [u8; 3] { [255, 255, 0] }
-fn default_subtitle_karaoke_outline_color() -> [u8; 3] { [0, 0, 0] }
-fn default_subtitle_karaoke_scale() -> u32 { 120 }
-fn default_preview_quality() -> String { "balanced".to_string() }
-fn default_preview_fps() -> f32 { 30.0 }
+fn default_video_service() -> String {
+    "Googler".to_string()
+}
+fn default_video_agent_mode() -> String {
+    "full".to_string()
+}
+fn default_video_llm_service() -> String {
+    "None".to_string()
+}
+fn default_video_llm_model_claude() -> String {
+    "sonnet".to_string()
+}
+fn default_video_llm_model_gemini() -> String {
+    "gemini-2.5-flash".to_string()
+}
+fn default_text_split_mode() -> String {
+    "paragraphs".to_string()
+}
+fn default_text_split_char_limit() -> usize {
+    500
+}
+fn default_temperature() -> f32 {
+    0.7
+}
+fn default_openrouter_max_threads() -> usize {
+    5
+}
+fn default_claude_max_threads() -> usize {
+    5
+}
+fn default_gemini_max_threads() -> usize {
+    5
+}
+fn default_translation_service() -> String {
+    "OpenRouter".to_string()
+}
+fn default_show_welcome() -> bool {
+    true
+}
+fn default_model_claude() -> String {
+    "sonnet".to_string()
+}
+fn default_model_gemini() -> String {
+    "gemini-2.5-flash".to_string()
+}
+fn default_model_codex() -> String {
+    "gpt-5.4-mini".to_string()
+}
+fn default_video_llm_model_codex() -> String {
+    "gpt-5.4-mini".to_string()
+}
+fn default_codex_max_threads() -> usize {
+    5
+}
+fn default_model_agy() -> String {
+    "gemini-3.5-flash".to_string()
+}
+fn default_agy_max_threads() -> usize {
+    5
+}
+fn default_model_pi() -> String {
+    "gemini-2.5-flash".to_string()
+}
+fn default_pi_max_threads() -> usize {
+    5
+}
+fn default_edge_tts_voice() -> String {
+    "uk-UA-PolinaNeural".to_string()
+}
+fn default_edge_tts_rate() -> String {
+    "0".to_string()
+}
+fn default_edge_tts_pitch() -> String {
+    "0".to_string()
+}
+fn default_edge_tts_volume() -> String {
+    "0".to_string()
+}
+fn default_edge_tts_max_threads() -> usize {
+    5
+}
+fn default_ffmpeg_max_threads() -> usize {
+    2
+}
+fn default_googler_threads() -> usize {
+    5
+}
+fn default_video_media_type() -> String {
+    "image".to_string()
+}
+fn default_video_context_mode() -> String {
+    "around".to_string()
+}
+fn default_video_context_chars() -> usize {
+    500
+}
+fn default_subtitles_service() -> String {
+    "Whisper".to_string()
+}
+fn default_assemblyai_key() -> String {
+    String::new()
+}
+fn default_pexels_key() -> String {
+    String::new()
+}
+fn default_pixabay_key() -> String {
+    String::new()
+}
+fn default_whisper_language() -> String {
+    "auto".to_string()
+}
+fn default_whisper_model() -> String {
+    "base".to_string()
+}
+fn default_whisper_max_line_width() -> usize {
+    42
+}
+fn default_montage_service() -> String {
+    "FFmpeg".to_string()
+}
+fn default_capcut_draft_path() -> String {
+    String::new()
+}
+fn default_montage_fps() -> u32 {
+    30
+}
+fn default_montage_preset() -> String {
+    "medium".to_string()
+}
+fn default_montage_bitrate() -> u32 {
+    8
+}
+fn default_montage_transition() -> String {
+    "none".to_string()
+}
+fn default_montage_transition_duration() -> f32 {
+    0.5
+}
+fn default_montage_image_zoom_intensity() -> f32 {
+    0.5
+}
+fn default_montage_image_zoom_mode() -> String {
+    "alternate".to_string()
+}
+fn default_montage_image_zoom_scale() -> f32 {
+    1.3
+}
+fn default_montage_image_shake_intensity() -> f32 {
+    0.5
+}
+fn default_subtitle_font_size() -> u32 {
+    24
+}
+fn default_subtitle_color() -> [u8; 3] {
+    [255, 255, 255]
+}
+fn default_subtitle_margin_v() -> u32 {
+    30
+}
+fn default_subtitle_font() -> String {
+    "Arial".to_string()
+}
+fn default_subtitle_karaoke_mode() -> u8 {
+    0
+}
+fn default_subtitle_karaoke_highlight_color() -> [u8; 3] {
+    [255, 255, 0]
+}
+fn default_subtitle_karaoke_outline_color() -> [u8; 3] {
+    [0, 0, 0]
+}
+fn default_subtitle_karaoke_scale() -> u32 {
+    120
+}
+fn default_preview_quality() -> String {
+    "balanced".to_string()
+}
+fn default_preview_fps() -> f32 {
+    30.0
+}
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
-    let cleaned: String = s.chars()
+    let cleaned: String = s
+        .chars()
         .filter(|c| c.is_ascii_digit() || *c == '-' || *c == '+')
         .collect();
     if cleaned.is_empty() {
@@ -266,6 +409,9 @@ pub struct AppSettings {
     /// Кількість символів контексту навколо сегмента для режиму "around".
     #[serde(default = "default_video_context_chars")]
     pub video_context_chars: usize,
+    /// Підрежим агента відеоряду: "full" або "prompt_only"
+    #[serde(default = "default_video_agent_mode")]
+    pub video_agent_mode: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -412,7 +558,6 @@ pub struct AppSettings {
     pub preview_fps: f32,
 }
 
-
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -478,6 +623,7 @@ impl Default for AppSettings {
             video_context_enabled: false,
             video_context_mode: default_video_context_mode(),
             video_context_chars: default_video_context_chars(),
+            video_agent_mode: default_video_agent_mode(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
             googler_video_disabled: vec![],
@@ -530,7 +676,6 @@ impl Default for AppSettings {
     }
 }
 
-
 /// Повертає кросплатформений шлях до папки конфігурації проєкту: <UserConfigDir>/Soloveyko.AI-Video.Maker
 pub fn get_settings_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|mut path| {
@@ -548,7 +693,7 @@ pub fn get_settings_path() -> Option<PathBuf> {
 }
 
 /// Завантажує налаштування користувача з файлу settings.json.
-/// 
+///
 /// Якщо файл не існує або пошкоджений, повертає налаштування за замовчуванням.
 pub fn load_settings() -> AppSettings {
     if let Some(path) = get_settings_path() {
@@ -578,13 +723,13 @@ pub fn load_settings() -> AppSettings {
 }
 
 /// Зберігає поточні налаштування користувача у файл settings.json.
-/// 
+///
 /// Автоматично створює папку конфігурації проєкту, якщо вона ще не існує.
 pub fn save_settings(settings: &AppSettings) {
     if let Some(dir) = get_settings_dir() {
         // Створюємо директорію, якщо вона відсутня
         let _ = fs::create_dir_all(&dir);
-        
+
         if let Some(path) = get_settings_path() {
             if let Ok(json) = serde_json::to_string_pretty(settings) {
                 let _ = fs::write(path, json);
@@ -598,17 +743,17 @@ pub fn open_settings_folder() {
     if let Some(dir) = get_settings_dir() {
         // Гарантуємо, що папка існує перед відкриттям
         let _ = fs::create_dir_all(&dir);
-        
+
         #[cfg(target_os = "windows")]
         {
             let _ = Command::new("explorer").arg(dir).spawn();
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             let _ = Command::new("open").arg(dir).spawn();
         }
-        
+
         #[cfg(not(any(target_os = "windows", target_os = "macos")))]
         {
             let _ = Command::new("xdg-open").arg(dir).spawn();
@@ -750,6 +895,9 @@ pub struct PipelineTemplate {
     /// Кількість символів контексту навколо сегмента для режиму "around".
     #[serde(default = "default_video_context_chars")]
     pub video_context_chars: usize,
+    /// Підрежим агента відеоряду: "full" або "prompt_only"
+    #[serde(default = "default_video_agent_mode")]
+    pub video_agent_mode: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -884,7 +1032,6 @@ pub struct PipelineTemplate {
     pub googler_video_upscale_quality: String,
 }
 
-
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
 pub fn get_templates_dir() -> Option<PathBuf> {
     get_settings_dir().map(|mut path| {
@@ -934,6 +1081,7 @@ pub fn save_template(
     googler_video_max_threads: usize,
     voiceover_convert_to_wav: bool,
     video_prompt: &str,
+    video_agent_mode: &str,
     video_agent_prompt: &str,
     video_style_enabled: bool,
     video_style_prompt: &str,
@@ -987,7 +1135,6 @@ pub fn save_template(
     googler_video_upscale_resolution: &str,
     googler_video_upscale_quality: &str,
 ) -> Result<(), std::io::Error> {
-
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
 
@@ -1032,6 +1179,7 @@ pub fn save_template(
             googler_video_max_threads,
             voiceover_convert_to_wav,
             video_prompt: video_prompt.to_string(),
+            video_agent_mode: video_agent_mode.to_string(),
             video_agent_prompt: video_agent_prompt.to_string(),
             video_style_enabled,
             video_style_prompt: video_style_prompt.to_string(),
@@ -1086,7 +1234,6 @@ pub fn save_template(
             googler_video_upscale_quality: googler_video_upscale_quality.to_string(),
         };
 
-
         let json = serde_json::to_string_pretty(&template)?;
         fs::write(path, json)?;
     }
@@ -1098,7 +1245,7 @@ pub fn load_template(name: &str) -> Option<PipelineTemplate> {
     if let Some(dir) = get_templates_dir() {
         let mut path = dir;
         path.push(format!("{}.json", name));
-        
+
         if path.exists() {
             if let Ok(content) = fs::read_to_string(path) {
                 if let Ok(mut template) = serde_json::from_str::<PipelineTemplate>(&content) {

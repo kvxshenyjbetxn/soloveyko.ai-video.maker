@@ -79,7 +79,9 @@ pub struct JobSettings {
     #[allow(dead_code)]
     pub video_service: String,
     pub video_prompt: String,
-    /// Системна інструкція агенту для створення timeline.json (Claude Code / Gemini CLI)
+    /// Підрежим агента відеоряду: "full" або "prompt_only"
+    pub video_agent_mode: String,
+    /// Додаткова користувацька інструкція агенту для роботи з segments.json
     pub video_agent_prompt: String,
     pub video_style_enabled: bool,
     pub video_style_prompt: String,
@@ -154,6 +156,21 @@ pub struct JobSettings {
 }
 
 /// Одна задача в черзі пайплайну.
+impl JobSettings {
+    /// Чи використовує задача CLI-агента для побудови/редагування segments.json.
+    pub fn is_agent_service(&self) -> bool {
+        matches!(
+            self.video_llm_service.as_str(),
+            "Claude Code" | "Gemini CLI" | "Codex CLI" | "AGY CLI" | "Pi CLI"
+        )
+    }
+
+    /// Чи увімкнено новий режим Prompt Only.
+    pub fn is_prompt_only_agent_mode(&self) -> bool {
+        self.video_enabled && self.is_agent_service() && self.video_agent_mode == "prompt_only"
+    }
+}
+
 pub struct PipelineJob {
     pub id: u64,
     /// Назва задачі, яку ввів користувач
@@ -280,14 +297,28 @@ impl PipelineJob {
                 }
                 StageStatus::Running => {
                     // Підетап промтів (0..0.5) + підетап медіа (0.5..1.0)
-                    let prompts_done = self.prompts_progress.lock().unwrap()
+                    let prompts_done = self
+                        .prompts_progress
+                        .lock()
+                        .unwrap()
                         .and_then(|(done, total)| {
-                            if total > 0 { Some(done as f32 / total as f32) } else { None }
+                            if total > 0 {
+                                Some(done as f32 / total as f32)
+                            } else {
+                                None
+                            }
                         })
                         .unwrap_or(0.0);
-                    let media_done = self.media_progress.lock().unwrap()
+                    let media_done = self
+                        .media_progress
+                        .lock()
+                        .unwrap()
                         .and_then(|(done, total)| {
-                            if total > 0 { Some(done as f32 / total as f32) } else { None }
+                            if total > 0 {
+                                Some(done as f32 / total as f32)
+                            } else {
+                                None
+                            }
                         })
                         .unwrap_or(0.0);
                     completed_score += (prompts_done * 0.5 + media_done * 0.5).min(0.99);

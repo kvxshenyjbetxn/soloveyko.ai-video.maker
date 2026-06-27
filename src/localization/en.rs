@@ -32,7 +32,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "agent_chat_title" => "Chat with Agent",
         "agent_chat_send_btn" => "Send",
         "agent_chat_rebuild_btn" => "Rebuild Timeline",
-        "agent_awaiting_hint" => "Pipeline paused. Chat with the agent and press 'Resume' when segments.json is ready.",
+        "agent_awaiting_hint" => {
+            "Pipeline paused. Chat with the agent and press 'Resume' when segments.json is ready."
+        }
         "agent_resume_pipeline_btn" => "▶ Resume Pipeline",
         "agent_chat_confirm_btn" => "✓ Confirm",
         "agent_chat_confirm_tooltip" => "Confirm — pipeline will continue",
@@ -120,7 +122,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "color_red" => "Red",
         "color_orange" => "Orange",
         "color_purple" => "Purple",
-"api_key" => "API Key",
+        "api_key" => "API Key",
         "api_provider" => "Provider",
         "api_model" => "Default Model",
         "api_voice" => "Default Voice",
@@ -156,7 +158,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "translation_prompt_label" => "Translation Prompt",
         "translation_prompt_hint" => "Enter instructions for the translation model...",
         "translation_insert_placeholder" => "{{text}}",
-        "translation_placeholder_hint" => "{{text}} - place where the translation text will be inserted.",
+        "translation_placeholder_hint" => {
+            "{{text}} - place where the translation text will be inserted."
+        }
         "translation_model_label" => "Translation Model",
         "model_label" => "Model",
         "translation_model_hint" => "Select model...",
@@ -192,41 +196,70 @@ pub fn translate_en(key: &str) -> &'static str {
         "assemblyai_key_hint" => "Enter AssemblyAI API key...",
         "pexels_key_hint" => "Enter Pexels API key...",
         "pexels_status_checking" => "⏳ Checking...",
-        "pexels_service_note" => "Keywords are generated automatically. You pick media manually in the picker.",
+        "pexels_service_note" => {
+            "Keywords are generated automatically. You pick media manually in the picker."
+        }
         "pixabay_key_hint" => "Enter Pixabay API key...",
-        "pixabay_service_note" => "Keywords are generated automatically. You pick media manually in the picker.",
+        "pixabay_service_note" => {
+            "Keywords are generated automatically. You pick media manually in the picker."
+        }
         "googler_status_checking" => "⏳ Checking...",
-        "text_split_mode_label"   => "Text split mode",
-        "text_split_paragraphs"      => "Paragraphs",
-        "text_split_paragraphs_hint" => "Text is split into paragraphs. Each paragraph is inserted into the prompt in place of {{text}}.",
-        "text_split_sentences"       => "Sentences",
-        "text_split_sentences_hint"  => "Text is split into sentences by . ! ? — each sentence becomes a separate frame.",
-        "text_split_char_limit"      => "Char limit",
-        "text_split_char_limit_hint" => "Text is split into chunks up to the specified character count. Breaks occur at punctuation or spaces to avoid cutting words.",
-        "text_split_full"            => "Full text",
-        "text_split_full_hint"       => "The entire text is passed as one block. {{text}} is replaced with the full content.",
+        "text_split_mode_label" => "Text split mode",
+        "text_split_paragraphs" => "Paragraphs",
+        "text_split_paragraphs_hint" => {
+            "Text is split into paragraphs. Each paragraph is inserted into the prompt in place of {{text}}."
+        }
+        "text_split_sentences" => "Sentences",
+        "text_split_sentences_hint" => {
+            "Text is split into sentences by . ! ? — each sentence becomes a separate frame."
+        }
+        "text_split_char_limit" => "Char limit",
+        "text_split_char_limit_hint" => {
+            "Text is split into chunks up to the specified character count. Breaks occur at punctuation or spaces to avoid cutting words."
+        }
+        "text_split_full" => "Full text",
+        "text_split_full_hint" => {
+            "The entire text is passed as one block. {{text}} is replaced with the full content."
+        }
         "video_service_label" => "Video Service",
         "video_media_type_label" => "Media Type",
         "video_media_type_image" => "Images",
         "video_media_type_video" => "Video",
         "video_prompt_label" => "Video Prompt",
         "video_prompt_hint" => "Enter instructions for image generation...",
-        "video_agent_prompt_label" => "Agent instruction (timeline)",
+        "video_agent_mode_label" => "Agent submode",
+        "video_agent_mode_full" => "Full Agent",
+        "video_agent_mode_full_hint" => {
+            "The agent builds the whole segments.json, including timings and text."
+        }
+        "video_agent_mode_prompt_only" => "Prompt Only",
+        "video_agent_mode_prompt_only_hint" => {
+            "The app builds segments.json from split settings first, then the agent edits only the text field."
+        }
+        "video_agent_prompt_label" => "Agent instruction (segments.json)",
         "video_style_label" => "Specify style",
         "video_style_prompt_label" => "Style prompt for media generation",
-        "video_style_prompt_hint" => "{{text}} — text from the 'text' field in segments.json will be inserted here",
+        "video_style_prompt_hint" => {
+            "{{text}} — text from the 'text' field in segments.json will be inserted here"
+        }
         "video_style_insert_placeholder" => "{{text}}",
         "video_insert_placeholder" => "{{text}}",
         "video_insert_context_placeholder" => "{{context}}",
         "video_placeholder_hint_basic" => "{{text}} - segment text.",
-        "video_placeholder_hint" => "{{text}} - segment text, {{context}} - extra context for API mode.",
+        "video_placeholder_hint" => {
+            "{{text}} - segment text, {{context}} - extra context for API mode."
+        }
         "video_context_label" => "Context for API prompt",
         "video_context_around" => "Around segment",
-        "video_context_around_hint" => "{{context}} receives the segment plus nearby text before and after it. The character count is a target; boundaries snap to sentence endings.",
+        "video_context_around_hint" => {
+            "{{context}} receives the segment plus nearby text before and after it. The character count is a target; boundaries snap to sentence endings."
+        }
         "video_context_full" => "Full text",
         "video_context_full_hint" => "{{context}} receives the full story text.",
         "video_context_chars_label" => "Target chars around:",
-        "video_context_hint" => "If {{context}} is missing in the prompt, context will be appended automatically.",
+        "video_context_hint" => {
+            "If {{context}} is missing in the prompt, context will be appended automatically."
+        }
         "balance_window_title" => "Balances",
         "threads_window_title" => "Threads",
         "balance_refresh" => "Refresh",
@@ -264,20 +297,26 @@ pub fn translate_en(key: &str) -> &'static str {
         "stock_trim_end" => "To:",
         "stock_trim_confirm" => "Confirm",
         "stock_trim_cancel" => "Cancel",
-        "stock_key_missing_warning" => "⚠️ Missing API key for the selected stock service. Add it in the API settings.",
+        "stock_key_missing_warning" => {
+            "⚠️ Missing API key for the selected stock service. Add it in the API settings."
+        }
         "stock_services_btn" => "🌐 Services",
         "stock_search_in" => "Search in:",
         "queue_status_done" => "Done",
         "queue_status_failed" => "Failed",
         "control_window_title" => "Translation Control",
-        "control_window_text" => "Review and edit the translated text before continuing the pipeline:",
+        "control_window_text" => {
+            "Review and edit the translated text before continuing the pipeline:"
+        }
         "control_window_continue_btn" => "Confirm & Continue",
         "control_window_cost" => "Cost:",
         "control_regen_btn" => "🔄 Regenerate",
         "control_regen_extended_btn" => "⚙ Extended",
         "control_regen_extended_title" => "Extended Regeneration",
         "control_regen_loading" => "Regenerating...",
-        "control_regen_settings_note" => "These settings are one-time and do not modify pipeline settings.",
+        "control_regen_settings_note" => {
+            "These settings are one-time and do not modify pipeline settings."
+        }
         "control_regen_run_btn" => "🔄 Regenerate with these settings",
         "control_regen_error" => "❌ Regeneration error:",
         "queue_error_no_text" => "⚠ Script text is empty",
@@ -301,7 +340,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_title" => "Welcome!",
         "welcome_desc" => "Let's check whether the required CLI tools are installed.",
 
-        "welcome_gemini_desc" => "Google Gemini CLI — use your Gemini subscription for prompt generation",
+        "welcome_gemini_desc" => {
+            "Google Gemini CLI — use your Gemini subscription for prompt generation"
+        }
         "welcome_claude_desc" => "Claude Code CLI — use your Claude subscription for text tasks",
         "welcome_codex_desc" => "Codex CLI — use local models and agents for workflow automation",
         "welcome_dont_show" => "Don't show on next launch",
@@ -311,11 +352,17 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_recheck_btn" => "↺ Recheck",
         "welcome_ffmpeg_desc" => "FFmpeg — audio/video processing, WAV format conversion",
         "welcome_whisper_desc" => "Whisper — speech recognition for subtitle generation",
-        "welcome_whisperx_desc" => "WhisperX — enhanced subtitle engine with more precise synchronization",
-        "welcome_whisper_amd_desc" => "Whisper AMD — Whisper with AMD GPU support (ROCm). Optional replacement for AMD GPU owners.",
+        "welcome_whisperx_desc" => {
+            "WhisperX — enhanced subtitle engine with more precise synchronization"
+        }
+        "welcome_whisper_amd_desc" => {
+            "Whisper AMD — Whisper with AMD GPU support (ROCm). Optional replacement for AMD GPU owners."
+        }
         "welcome_whisper_amd_optional" => "optional",
         "welcome_whisper_amd_install_btn" => "Install",
-        "subtitles_whisper_amd_not_installed" => "⚠ Whisper AMD is not installed. Click 'Install' in the Welcome window.",
+        "subtitles_whisper_amd_not_installed" => {
+            "⚠ Whisper AMD is not installed. Click 'Install' in the Welcome window."
+        }
         "balance_edge_tts_status" => "Free (No limits)",
         "balance_voicebot_limit" => "Threads limit: 5 (fixed)",
         "balance_assemblyai_limit" => "Threads limit: 5 (fixed)",
@@ -333,8 +380,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "stats_paragraphs" => "Paragraphs:",
         "stats_tokens" => "Tokens:",
         "stats_fragments_paragraphs" => "Par.:",
-        "stats_fragments_sentences"  => "Sen.:",
-        "stats_fragments_chars"      => "Limit:",
+        "stats_fragments_sentences" => "Sen.:",
+        "stats_fragments_chars" => "Limit:",
         "stats_chars_short" => "chars",
         "stats_tokens_short" => "tokens",
         "voiceover_convert_to_wav" => "Convert to WAV",
@@ -351,7 +398,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "subtitles_whisper_model_label" => "Whisper Model",
         "subtitles_whisper_lang_label" => "Recognition Language",
         "subtitles_whisper_lang_auto" => "Auto (detect)",
-        "subtitles_no_audio" => "⚠ Audio file not found. Enable the voiceover stage or ensure voice.mp3/voice.wav exists.",
+        "subtitles_no_audio" => {
+            "⚠ Audio file not found. Enable the voiceover stage or ensure voice.mp3/voice.wav exists."
+        }
         "subtitles_stage_log_start" => "Starting subtitle generation via Whisper...",
         "subtitles_stage_log_done" => "Subtitles saved: subtitle.srt",
         "subtitles_model_downloaded" => "✓ Model downloaded",
@@ -428,30 +477,30 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_prompt_empty" => "Prompt not found",
         "gallery_prompt_copy_btn" => "Copy",
         "resume_depends_on_voice" => "(depends on voiceover)",
-        "resume_dialog_title"   => "Existing Files Found",
-        "resume_dialog_folder"  => "Folder:",
-        "resume_resume_from"    => "Resume from:",
-        "resume_all_done"       => "✓ All stages already completed",
-        "resume_continue_btn"   => "Continue",
-        "resume_fresh_btn"      => "Start Fresh",
-        "resume_images"         => "images",
-        "resume_videos"         => "videos",
-        "resume_output_video"   => "Final Video",
-        "resume_timeline"       => "Timeline",
+        "resume_dialog_title" => "Existing Files Found",
+        "resume_dialog_folder" => "Folder:",
+        "resume_resume_from" => "Resume from:",
+        "resume_all_done" => "✓ All stages already completed",
+        "resume_continue_btn" => "Continue",
+        "resume_fresh_btn" => "Start Fresh",
+        "resume_images" => "images",
+        "resume_videos" => "videos",
+        "resume_output_video" => "Final Video",
+        "resume_timeline" => "Timeline",
         "resume_fill_missing_btn" => "Generate Missing",
-        "task_history_title"          => "Tasks",
-        "task_history_empty"          => "No tasks yet",
+        "task_history_title" => "Tasks",
+        "task_history_empty" => "No tasks yet",
         "task_history_delete_tooltip" => "Remove from history",
-        "task_history_stage_t"        => "Tr",
-        "task_history_stage_v"        => "Vo",
-        "task_history_stage_vid"      => "Vid",
-        "task_history_stage_s"        => "Sub",
-        "task_history_stage_m"        => "Mon",
-        "update_title"         => "Update Available",
-        "update_new_version"   => "New version:",
-        "update_changelog"     => "Changelog:",
-        "update_download_btn"  => "Download",
-        "update_later_btn"     => "Later",
+        "task_history_stage_t" => "Tr",
+        "task_history_stage_v" => "Vo",
+        "task_history_stage_vid" => "Vid",
+        "task_history_stage_s" => "Sub",
+        "task_history_stage_m" => "Mon",
+        "update_title" => "Update Available",
+        "update_new_version" => "New version:",
+        "update_changelog" => "Changelog:",
+        "update_download_btn" => "Download",
+        "update_later_btn" => "Later",
         _ => "",
     }
 }

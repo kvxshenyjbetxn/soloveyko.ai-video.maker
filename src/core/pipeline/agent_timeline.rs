@@ -26,9 +26,22 @@ pub(super) fn run_agent_timeline(
     }
 
     let segments_path = save_dir.join("segments.json");
-    let system_instruction = agent_prompts::VIDEO_AGENT_SYSTEM_PROMPT
-        .replace("{{srt}}", &srt_path.to_string_lossy())
-        .replace("{{path}}", &segments_path.to_string_lossy());
+    let is_prompt_only = settings.is_prompt_only_agent_mode();
+    let system_instruction = if is_prompt_only {
+        agent_prompts::VIDEO_AGENT_SYSTEM_PROMPT_PROMPT_ONLY
+    } else {
+        agent_prompts::VIDEO_AGENT_SYSTEM_PROMPT_FULL
+    }
+    .replace("{{srt}}", &srt_path.to_string_lossy())
+    .replace("{{path}}", &segments_path.to_string_lossy());
+    let original_timeline = if is_prompt_only {
+        Some(
+            read_timeline_file(&segments_path)
+                .map_err(|e| format!("Prompt Only: базовий segments.json не готовий: {}", e))?,
+        )
+    } else {
+        None
+    };
     let user_part = settings
         .video_agent_prompt
         .replace("{{srt}}", &srt_path.to_string_lossy())
@@ -43,8 +56,14 @@ pub(super) fn run_agent_timeline(
         job_id,
         job_name,
         &format!(
-            "Agent ({}): generating segments.json...",
-            settings.video_llm_service
+            "Agent ({}, mode={}): {} segments.json...",
+            settings.video_llm_service,
+            settings.video_agent_mode,
+            if is_prompt_only {
+                "updating"
+            } else {
+                "generating"
+            }
         ),
     );
 
@@ -153,7 +172,26 @@ pub(super) fn run_agent_timeline(
                         &content,
                     ) {
                         Err(e) => Some(format!("segments.json невалідний: {}", e)),
-                        Ok(_) => None,
+                        Ok(current) => {
+                            if let Some(original) = &original_timeline {
+                                match merge_prompt_only_texts(original, &current) {
+                                    Ok(merged) => {
+                                        if let Err(e) = write_timeline_file(&segments_path, &merged)
+                                        {
+                                            Some(format!(
+                                                "Не вдалося зберегти merged segments.json: {}",
+                                                e
+                                            ))
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    Err(e) => Some(e),
+                                }
+                            } else {
+                                None
+                            }
+                        }
                     }
                 }
             }
@@ -195,6 +233,51 @@ pub(super) fn run_agent_timeline(
     );
     ctx.request_repaint();
     Ok(())
+}
+
+/// Читає та валідує timeline-файл segments.json.
+fn read_timeline_file(
+    path: &std::path::Path,
+) -> Result<crate::core::pipeline::timeline::sync::Timeline, String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Не вдалося прочитати {}: {}", path.display(), e))?;
+    serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
+        .map_err(|e| format!("Невалідний JSON у {}: {}", path.display(), e))
+}
+
+/// Зберігає timeline назад у segments.json.
+fn write_timeline_file(
+    path: &std::path::Path,
+    timeline: &crate::core::pipeline::timeline::sync::Timeline,
+) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(timeline).map_err(|e| format!("JSON error: {}", e))?;
+    std::fs::write(path, json).map_err(|e| format!("Write error: {}", e))
+}
+
+/// У режимі Prompt Only зберігаємо оригінальну структуру та копіюємо назад лише text.
+fn merge_prompt_only_texts(
+    original: &crate::core::pipeline::timeline::sync::Timeline,
+    edited: &crate::core::pipeline::timeline::sync::Timeline,
+) -> Result<crate::core::pipeline::timeline::sync::Timeline, String> {
+    if original.segments.len() != edited.segments.len() {
+        return Err(format!(
+            "Prompt Only: кількість сегментів змінилась (було {}, стало {})",
+            original.segments.len(),
+            edited.segments.len()
+        ));
+    }
+
+    let mut merged = crate::core::pipeline::timeline::sync::Timeline {
+        total_duration_secs: original.total_duration_secs,
+        audio_start_secs: original.audio_start_secs,
+        segments: original.segments.clone(),
+    };
+
+    for (dst, src) in merged.segments.iter_mut().zip(edited.segments.iter()) {
+        dst.text = src.text.clone();
+    }
+
+    Ok(merged)
 }
 
 /// Генерує простий UUID v4.

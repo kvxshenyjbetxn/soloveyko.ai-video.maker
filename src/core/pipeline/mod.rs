@@ -38,6 +38,55 @@ pub fn call_agent_resume(
     agent_timeline::call_agent_resume(service, model, message, session_id, job_info, working_dir)
 }
 
+/// Повертає текст, який слід використати для побудови segments.json.
+pub(super) fn source_text_for_segments(
+    settings: &crate::queue::JobSettings,
+    translated_text: &Arc<Mutex<Option<String>>>,
+) -> String {
+    if settings.translation_enabled {
+        translated_text
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| settings.text.clone())
+    } else {
+        settings.text.clone()
+    }
+}
+
+/// У режимі Prompt Only програма спочатку сама будує базовий segments.json.
+pub(super) fn prepare_prompt_only_segments(
+    job_id: u64,
+    job_name: &str,
+    settings: &crate::queue::JobSettings,
+    source_text: &str,
+    audio_duration_secs: Option<f64>,
+) -> Result<(), String> {
+    let save_dir = std::path::Path::new(&settings.save_path);
+    let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+        source_text,
+        &settings.text_split_mode,
+        settings.text_split_char_limit,
+    );
+
+    crate::logger::log_job(
+        job_id,
+        job_name,
+        &format!(
+            "Prompt Only: building base segments.json (mode={}, segments={})...",
+            settings.text_split_mode,
+            segments.len()
+        ),
+    );
+
+    crate::core::pipeline::timeline::sync::build_timeline(
+        save_dir,
+        &segments,
+        audio_duration_secs,
+        job_name,
+    )
+}
+
 /// Виконує весь пайплайн у фоновому потоці.
 /// Послідовно: Переклад → [Озвучка+Субтитри || Відеоряд] → Timeline → Монтаж.
 /// Озвучка+Субтитри та Відеоряд виконуються паралельно між собою.
@@ -156,12 +205,7 @@ pub fn run_pipeline(
         let run_video = settings.video_enabled;
         let is_pexels = (settings.video_service == "Pexels" || settings.video_service == "Pixabay")
             && settings.video_enabled;
-        let is_agent_mode = run_video
-            && (settings.video_llm_service == "Claude Code"
-                || settings.video_llm_service == "Gemini CLI"
-                || settings.video_llm_service == "Codex CLI"
-                || settings.video_llm_service == "AGY CLI"
-                || settings.video_llm_service == "Pi CLI");
+        let is_agent_mode = run_video && settings.is_agent_service();
 
         if is_agent_mode {
             // === Агентний режим: послідовно ===
@@ -187,8 +231,30 @@ pub fn run_pipeline(
                 }
             }
 
-            // Агент створює segments.json на основі subtitle.srt
-            crate::logger::log_job(job_id, &job_name, "Agent mode: creating segments.json...");
+            // У Prompt Only спочатку сама програма будує базовий segments.json.
+            if settings.is_prompt_only_agent_mode() {
+                let source_text = source_text_for_segments(&settings, &translated_text);
+                let audio_dur = *audio_duration.lock().unwrap();
+                if let Err(e) = prepare_prompt_only_segments(
+                    job_id,
+                    &job_name,
+                    &settings,
+                    &source_text,
+                    audio_dur,
+                ) {
+                    crate::logger::log_job(
+                        job_id,
+                        &job_name,
+                        &format!("Prompt Only base timeline error: {}", e),
+                    );
+                    *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+            }
+
+            crate::logger::log_job(job_id, &job_name, "Agent mode: processing segments.json...");
             *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
 
