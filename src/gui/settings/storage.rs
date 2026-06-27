@@ -14,9 +14,8 @@ fn default_upscale_resolution() -> String {
 
 fn default_image_priority() -> Vec<String> {
     vec![
-        "flow_IMAGEN_3_5".to_string(),
-        "flow_GEM_PIX_2".to_string(),
-        "flow_NARWHAL".to_string(),
+        "flow_nano_banana_pro".to_string(),
+        "flow_nano_banana_2".to_string(),
         "flower".to_string(),
         "grok".to_string(),
         "openai".to_string(),
@@ -24,14 +23,88 @@ fn default_image_priority() -> Vec<String> {
 }
 fn default_video_priority() -> Vec<String> {
     vec![
-        "flow".to_string(),
+        "flow_fast".to_string(),
         "flower".to_string(),
         "grok".to_string(),
         "flow_omni_flash".to_string(),
-        "flow_fast".to_string(),
         "flow_light".to_string(),
+        "flow_ultra_light".to_string(),
         "flow_quality".to_string(),
     ]
+}
+
+/// Мапить старі та нові ключі провайдерів зображень до канонічних v6 назв.
+fn canonical_image_provider_key(key: &str) -> Option<&'static str> {
+    match key {
+        // Старі v4/v5 ключі Flow більше не існують у v6,
+        // тому мігруємо їх на найближчі підтримувані моделі.
+        "flow_IMAGEN_3_5" | "flow_GEM_PIX_2" | "flow_nano_banana_pro" => {
+            Some("flow_nano_banana_pro")
+        }
+        "flow_NARWHAL" | "flow_nano_banana_2" => Some("flow_nano_banana_2"),
+        "flower" => Some("flower"),
+        "grok" => Some("grok"),
+        "openai" => Some("openai"),
+        _ => None,
+    }
+}
+
+/// Мапить старі та нові ключі провайдерів відео до канонічних v6 назв.
+fn canonical_video_provider_key(key: &str) -> Option<&'static str> {
+    match key {
+        "flow" | "flow_fast" => Some("flow_fast"),
+        "flower" => Some("flower"),
+        "grok" => Some("grok"),
+        "flow_omni_flash" => Some("flow_omni_flash"),
+        "flow_light" => Some("flow_light"),
+        "flow_ultra_light" => Some("flow_ultra_light"),
+        "flow_quality" => Some("flow_quality"),
+        _ => None,
+    }
+}
+
+/// Додає ключ у список лише один раз, зберігаючи початковий порядок.
+fn push_unique(list: &mut Vec<String>, key: &str) {
+    if !list.iter().any(|item| item == key) {
+        list.push(key.to_string());
+    }
+}
+
+/// Мігрує збережені пріоритети провайдерів Googler на канонічні v6 ключі.
+fn migrate_googler_provider_settings(
+    image_priority: &mut Vec<String>,
+    video_priority: &mut Vec<String>,
+    video_disabled: &mut Vec<String>,
+) {
+    let mut migrated_image_priority = Vec::new();
+    for key in image_priority.iter() {
+        if let Some(canonical) = canonical_image_provider_key(key) {
+            push_unique(&mut migrated_image_priority, canonical);
+        }
+    }
+    for key in default_image_priority() {
+        push_unique(&mut migrated_image_priority, &key);
+    }
+    *image_priority = migrated_image_priority;
+
+    let mut migrated_video_priority = Vec::new();
+    for key in video_priority.iter() {
+        if let Some(canonical) = canonical_video_provider_key(key) {
+            push_unique(&mut migrated_video_priority, canonical);
+        }
+    }
+    for key in default_video_priority() {
+        push_unique(&mut migrated_video_priority, &key);
+    }
+    *video_priority = migrated_video_priority;
+
+    let mut migrated_video_disabled = Vec::new();
+    for key in video_disabled.iter() {
+        if let Some(canonical) = canonical_video_provider_key(key) {
+            push_unique(&mut migrated_video_disabled, canonical);
+        }
+    }
+    *video_disabled = migrated_video_disabled;
 }
 fn default_video_service() -> String {
     "Googler".to_string()
@@ -714,6 +787,13 @@ pub fn load_settings() -> AppSettings {
                             settings.save_path_windows = settings.save_path.clone();
                         }
                     }
+
+                    migrate_googler_provider_settings(
+                        &mut settings.googler_image_priority,
+                        &mut settings.googler_video_priority,
+                        &mut settings.googler_video_disabled,
+                    );
+
                     return settings;
                 }
             }
@@ -1252,6 +1332,11 @@ pub fn load_template(name: &str) -> Option<PipelineTemplate> {
                     template.edge_tts_rate = clean_numeric_param(&template.edge_tts_rate);
                     template.edge_tts_pitch = clean_numeric_param(&template.edge_tts_pitch);
                     template.edge_tts_volume = clean_numeric_param(&template.edge_tts_volume);
+                    migrate_googler_provider_settings(
+                        &mut template.googler_image_priority,
+                        &mut template.googler_video_priority,
+                        &mut template.googler_video_disabled,
+                    );
                     return Some(template);
                 }
             }

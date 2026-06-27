@@ -68,20 +68,19 @@ impl Default for VideoMakerApp {
             media_regen_base_settings: None,
             media_regen_media_type: "image".to_string(),
             media_regen_image_priority: vec![
-                "flow_IMAGEN_3_5".to_string(),
-                "flow_GEM_PIX_2".to_string(),
-                "flow_NARWHAL".to_string(),
+                "flow_nano_banana_pro".to_string(),
+                "flow_nano_banana_2".to_string(),
                 "flower".to_string(),
                 "grok".to_string(),
                 "openai".to_string(),
             ],
             media_regen_video_priority: vec![
-                "flow".to_string(),
+                "flow_fast".to_string(),
                 "flower".to_string(),
                 "grok".to_string(),
                 "flow_omni_flash".to_string(),
-                "flow_fast".to_string(),
                 "flow_light".to_string(),
+                "flow_ultra_light".to_string(),
                 "flow_quality".to_string(),
             ],
             media_regen_prompt: String::new(),
@@ -136,20 +135,19 @@ impl Default for VideoMakerApp {
             video_llm_temperature: 0.7,
             video_llm_model_search: String::new(),
             googler_image_priority: vec![
-                "flow_IMAGEN_3_5".to_string(),
-                "flow_GEM_PIX_2".to_string(),
-                "flow_NARWHAL".to_string(),
+                "flow_nano_banana_pro".to_string(),
+                "flow_nano_banana_2".to_string(),
                 "flower".to_string(),
                 "grok".to_string(),
                 "openai".to_string(),
             ],
             googler_video_priority: vec![
-                "flow".to_string(),
+                "flow_fast".to_string(),
                 "flower".to_string(),
                 "grok".to_string(),
                 "flow_omni_flash".to_string(),
-                "flow_fast".to_string(),
                 "flow_light".to_string(),
+                "flow_ultra_light".to_string(),
                 "flow_quality".to_string(),
             ],
             googler_video_disabled: vec![],
@@ -397,7 +395,15 @@ impl VideoMakerApp {
         };
         let googler_image_priority = saved.googler_image_priority.clone();
         let mut googler_video_priority = saved.googler_video_priority.clone();
-        for p in &["flow_omni_flash", "flow_fast", "flow_light", "flow_quality"] {
+        for p in &[
+            "flow_fast",
+            "flower",
+            "grok",
+            "flow_omni_flash",
+            "flow_light",
+            "flow_ultra_light",
+            "flow_quality",
+        ] {
             if !googler_video_priority.contains(&p.to_string()) {
                 googler_video_priority.push(p.to_string());
             }
@@ -530,20 +536,19 @@ impl VideoMakerApp {
             media_regen_base_settings: None,
             media_regen_media_type: "image".to_string(),
             media_regen_image_priority: vec![
-                "flow_IMAGEN_3_5".to_string(),
-                "flow_GEM_PIX_2".to_string(),
-                "flow_NARWHAL".to_string(),
+                "flow_nano_banana_pro".to_string(),
+                "flow_nano_banana_2".to_string(),
                 "flower".to_string(),
                 "grok".to_string(),
                 "openai".to_string(),
             ],
             media_regen_video_priority: vec![
-                "flow".to_string(),
+                "flow_fast".to_string(),
                 "flower".to_string(),
                 "grok".to_string(),
                 "flow_omni_flash".to_string(),
-                "flow_fast".to_string(),
                 "flow_light".to_string(),
+                "flow_ultra_light".to_string(),
                 "flow_quality".to_string(),
             ],
             media_regen_prompt: String::new(),

@@ -104,7 +104,7 @@ pub fn check_key(
             .timeout(std::time::Duration::from_secs(15))
             .build();
 
-        let url = format!("{}/v5/usage", BASE_URL);
+        let url = format!("{}/v6/usage", BASE_URL);
 
         let (status_text, balance_opt) = match agent.get(&url).set("X-API-Key", &key).call() {
             Ok(response) => match response.into_json::<UsageResponse>() {
@@ -137,84 +137,73 @@ pub fn check_key(
     });
 }
 
-/// Відповідь після запуску операції генерації.
-#[allow(dead_code)]
+/// Відповідь після запуску генерації v6.
 #[derive(serde::Deserialize)]
-struct OperationStarted {
-    operation_id: String,
-}
-
-/// Статус асинхронної операції при опитуванні.
-#[allow(dead_code)]
-#[derive(serde::Deserialize)]
-struct OperationPollStatus {
-    status: String,
-    result: Option<Vec<String>>,
-    error: Option<String>,
-}
-
-/// Опитує операцію до завершення (макс. ~5 хвилин). Повертає перший результат або помилку.
-#[allow(dead_code)]
-fn poll_operation(key: &str, operation_id: &str, agent: &ureq::Agent) -> Result<String, String> {
-    let url = format!("{}/v4/operations/{}", BASE_URL, operation_id);
-    let poll_interval = std::time::Duration::from_secs(3);
-
-    for _ in 0..100 {
-        std::thread::sleep(poll_interval);
-
-        let response = agent
-            .get(&url)
-            .set("X-API-Key", key)
-            .call()
-            .map_err(|e| format!("Помилка опитування: {}", e))?;
-
-        let status: OperationPollStatus = response
-            .into_json()
-            .map_err(|e| format!("Помилка парсингу статусу: {}", e))?;
-
-        match status.status.as_str() {
-            "success" => {
-                return status
-                    .result
-                    .and_then(|r| r.into_iter().next())
-                    .ok_or_else(|| "Порожній результат операції".to_string());
-            }
-            "error" => {
-                return Err(status.error.unwrap_or_else(|| "Невідома помилка провайдера".to_string()));
-            }
-            _ => {} // pending / processing — продовжуємо опитування
-        }
-    }
-
-    Err("Перевищено час очікування операції (5 хвилин)".to_string())
-}
-
-// ─── V5 API ──────────────────────────────────────────────────────────────────
-
-#[derive(serde::Deserialize)]
-struct V5GenerationStarted {
+struct V6GenerationStarted {
     id: String,
 }
 
+/// Окремий результат генерації v6.
 #[derive(serde::Deserialize)]
-struct V5GenerationResult {
-    download_path: Option<String>,
+struct V6GenerationResult {
+    #[serde(default, alias = "download_path")]
+    download_url: Option<String>,
+    #[serde(default)]
     data: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
 }
 
+/// Статус генерації v6 при опитуванні.
 #[derive(serde::Deserialize)]
-struct V5GenerationStatus {
+struct V6GenerationStatus {
     status: String,
-    results: Option<Vec<V5GenerationResult>>,
+    #[serde(default)]
+    results: Option<Vec<V6GenerationResult>>,
+    #[serde(default)]
     error: Option<String>,
 }
 
-/// Опитує v5 generation до завершення. Повертає data URI або завантажує з storage.
-fn poll_v5_generation(key: &str, gen_id: &str, agent: &ureq::Agent) -> Result<String, String> {
-    use std::io::Read;
-    use base64::Engine;
+/// Повертає повний URL завантаження для нового v6 `download_url`
+/// і для старого сумісного `download_path`.
+fn resolve_download_url(download_url: &str) -> String {
+    if download_url.starts_with("http://") || download_url.starts_with("https://") {
+        download_url.to_string()
+    } else {
+        format!("{}{}", STORAGE_URL, download_url)
+    }
+}
 
-    let url = format!("{}/v5/generations/{}", BASE_URL, gen_id);
+/// Завантажує файл результату та повертає його як data URI.
+fn fetch_result_data_uri(download_url: &str, agent: &ureq::Agent) -> Result<String, String> {
+    use base64::Engine;
+    use std::io::Read;
+
+    let response = agent
+        .get(&resolve_download_url(download_url))
+        .call()
+        .map_err(|e| format!("Помилка завантаження медіа: {}", e))?;
+
+    let mime = response.content_type().to_string();
+    let mime = if mime.is_empty() {
+        "application/octet-stream".to_string()
+    } else {
+        mime
+    };
+
+    let mut bytes = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("Помилка читання медіа: {}", e))?;
+
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
+/// Опитує generation v6 до завершення. Повертає data URI, текст або помилку.
+fn poll_v6_generation(key: &str, generation_id: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let url = format!("{}/v6/generations/{}", BASE_URL, generation_id);
     let poll_interval = std::time::Duration::from_secs(3);
 
     for _ in 0..100 {
@@ -224,50 +213,69 @@ fn poll_v5_generation(key: &str, gen_id: &str, agent: &ureq::Agent) -> Result<St
             .get(&url)
             .set("X-API-Key", key)
             .call()
-            .map_err(|e| format!("Помилка опитування v5: {}", e))?;
+            .map_err(|e| format!("Помилка опитування v6: {}", e))?;
 
-        let status: V5GenerationStatus = response
+        let status: V6GenerationStatus = response
             .into_json()
-            .map_err(|e| format!("Помилка парсингу статусу v5: {}", e))?;
+            .map_err(|e| format!("Помилка парсингу статусу v6: {}", e))?;
 
         match status.status.as_str() {
             "succeeded" => {
-                let result = status.results
-                    .and_then(|r| r.into_iter().next())
-                    .ok_or_else(|| "Порожній результат v5".to_string())?;
+                let result = status
+                    .results
+                    .and_then(|results| results.into_iter().next())
+                    .ok_or_else(|| "Порожній результат v6".to_string())?;
 
                 if let Some(data) = result.data {
                     return Ok(data);
                 }
-
-                if let Some(path) = result.download_path {
-                    let storage_url = format!("{}{}", STORAGE_URL, path);
-                    let resp = agent
-                        .get(&storage_url)
-                        .call()
-                        .map_err(|e| format!("Помилка завантаження медіа: {}", e))?;
-                    let mime = resp.content_type().to_string();
-                    let mut bytes = Vec::new();
-                    resp.into_reader()
-                        .read_to_end(&mut bytes)
-                        .map_err(|e| format!("Помилка читання медіа: {}", e))?;
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                    return Ok(format!("data:{};base64,{}", mime, b64));
+                if let Some(text) = result.text {
+                    return Ok(text);
+                }
+                if let Some(download_url) = result.download_url {
+                    return fetch_result_data_uri(&download_url, agent);
                 }
 
-                return Err("Результат v5 не містить даних".to_string());
+                return Err("Результат v6 не містить даних".to_string());
             }
             "failed" => {
-                return Err(status.error.unwrap_or_else(|| "Невідома помилка v5".to_string()));
+                return Err(status.error.unwrap_or_else(|| "Невідома помилка v6".to_string()));
             }
-            _ => {} // queued / running — продовжуємо
+            _ => {}
         }
     }
 
-    Err("Перевищено час очікування v5 (5 хвилин)".to_string())
+    Err("Перевищено час очікування v6 (5 хвилин)".to_string())
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+/// Запускає generation v6 та чекає фінальний результат.
+fn start_v6_generation(
+    key: &str,
+    body: serde_json::Value,
+    agent: &ureq::Agent,
+) -> Result<String, String> {
+    let url = format!("{}/v6/generations", BASE_URL);
+
+    let response = match agent
+        .post(&url)
+        .set("X-API-Key", key)
+        .set("Content-Type", "application/json")
+        .send_json(body)
+    {
+        Ok(response) => response,
+        Err(ureq::Error::Status(code, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            return Err(format!("HTTP {}: {}", code, body));
+        }
+        Err(error) => return Err(format!("Помилка запиту: {}", error)),
+    };
+
+    let started: V6GenerationStarted = response
+        .into_json()
+        .map_err(|e| format!("Помилка парсингу відповіді v6: {}", e))?;
+
+    poll_v6_generation(key, &started.id, agent)
+}
 
 /// Перевіряє, чи помилка є перевищенням ліміту одночасних запитів.
 fn is_concurrency_exceeded(err: &str) -> bool {
@@ -279,120 +287,164 @@ fn is_hourly_limit_exceeded(err: &str) -> bool {
     err.contains("rate_limit.hourly_exceeded")
 }
 
-/// Спроба генерації зображення через конкретного провайдера.
-fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
-    let _permit = GooglerImageLimiter::get().acquire();
-    let (url, body) = match provider {
-        "flow_IMAGEN_3_5" => (
-            format!("{}/v4/flow/image/generate", BASE_URL),
-            serde_json::json!({"prompt": prompt, "model": "IMAGEN_3_5", "aspect_ratio": aspect_ratio}),
-        ),
-        "flow_GEM_PIX_2" => (
-            format!("{}/v4/flow/image/generate", BASE_URL),
-            serde_json::json!({"prompt": prompt, "model": "GEM_PIX_2", "aspect_ratio": aspect_ratio}),
-        ),
-        "flow_NARWHAL" => (
-            format!("{}/v4/flow/image/generate", BASE_URL),
-            serde_json::json!({"prompt": prompt, "model": "NARWHAL", "aspect_ratio": aspect_ratio}),
-        ),
-        "flower" => (
-            format!("{}/v4/flower/image/generate", BASE_URL),
-            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
-        ),
-        "grok" => (
-            format!("{}/v4/grok/image/generate", BASE_URL),
-            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
-        ),
-        "openai" => (
-            format!("{}/v4/openai/image/generate", BASE_URL),
-            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
-        ),
+/// Формує запит генерації зображення для канонічних операцій v6.
+fn image_generation_body(provider: &str, prompt: &str, aspect_ratio: &str) -> Result<serde_json::Value, String> {
+    let body = match provider {
+        // Старі Flow-ключі мігруємо на підтримувані v6 моделі.
+        "flow_IMAGEN_3_5" | "flow_GEM_PIX_2" | "flow_nano_banana_pro" => {
+            serde_json::json!({
+                "operation": "nano_banana_pro_image_generate",
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratio,
+            })
+        }
+        "flow_NARWHAL" | "flow_nano_banana_2" => serde_json::json!({
+            "operation": "nano_banana_2_image_generate",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "flower" => serde_json::json!({
+            "operation": "flower_image_generate",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "grok" => serde_json::json!({
+            "operation": "grok_image_generate",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "quality": "speed",
+        }),
+        "openai" => serde_json::json!({
+            "operation": "openai_image_generate",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
         _ => return Err(format!("Невідомий провайдер зображень: {}", provider)),
     };
 
-    let response = match agent
-        .post(&url)
-        .set("X-API-Key", key)
-        .set("Content-Type", "application/json")
-        .send_json(body)
-    {
-        Ok(r) => r,
-        Err(ureq::Error::Status(code, r)) => {
-            let body = r.into_string().unwrap_or_default();
-            return Err(format!("HTTP {}: {}", code, body));
-        }
-        Err(e) => return Err(format!("Помилка запиту: {}", e)),
-    };
-
-    let op: OperationStarted = response
-        .into_json()
-        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
-
-    poll_operation(key, &op.operation_id, agent)
+    Ok(body)
 }
 
-/// Спроба генерації відео через конкретного провайдера.
-fn try_generate_video(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
-    let _permit = GooglerVideoLimiter::get().acquire();
-
-    // v5 провайдери
-    let v5_operation = match provider {
-        "flow_omni_flash" => Some("flow_video_omni_flash_from_text_10s"),
-        "flow_fast"        => Some("flow_video_from_text"),
-        "flow_light"       => Some("flow_video_light_from_text"),
-        "flow_quality"     => Some("flow_video_quality_from_text"),
-        _ => None,
-    };
-    if let Some(operation) = v5_operation {
-        let url = format!("{}/v5/generations", BASE_URL);
-        let body = serde_json::json!({"operation": operation, "prompt": prompt, "aspect_ratio": aspect_ratio});
-        let response = match agent.post(&url).set("X-API-Key", key).set("Content-Type", "application/json").send_json(body) {
-            Ok(r) => r,
-            Err(ureq::Error::Status(code, r)) => {
-                let body = r.into_string().unwrap_or_default();
-                return Err(format!("HTTP {}: {}", code, body));
-            }
-            Err(e) => return Err(format!("Помилка запиту: {}", e)),
-        };
-        let started: V5GenerationStarted = response.into_json().map_err(|e| format!("Помилка парсингу v5: {}", e))?;
-        return poll_v5_generation(key, &started.id, agent);
-    }
-
-    let (url, body) = match provider {
-        "flow" => (
-            format!("{}/v4/flow/video/from-text", BASE_URL),
-            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
-        ),
-        "flower" => (
-            format!("{}/v4/flower/video/from-text", BASE_URL),
-            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
-        ),
-        "grok" => (
-            format!("{}/v4/grok/video/from-text", BASE_URL),
-            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
-        ),
+/// Формує запит text-to-video для канонічних операцій v6.
+fn video_generation_body(provider: &str, prompt: &str, aspect_ratio: &str) -> Result<serde_json::Value, String> {
+    let body = match provider {
+        "flow" | "flow_fast" => serde_json::json!({
+            "operation": "flow_video_from_text",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "flower" => serde_json::json!({
+            "operation": "flower_video_from_text",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "grok" => serde_json::json!({
+            "operation": "grok_video_from_text",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "resolution": "480p",
+        }),
+        "flow_omni_flash" => serde_json::json!({
+            "operation": "flow_video_omni_flash_from_text_10s",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "flow_light" => serde_json::json!({
+            "operation": "flow_video_light_from_text",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "flow_ultra_light" => serde_json::json!({
+            "operation": "flow_video_ultra_light_from_text",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
+        "flow_quality" => serde_json::json!({
+            "operation": "flow_video_quality_from_text",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+        }),
         _ => return Err(format!("Невідомий провайдер відео: {}", provider)),
     };
 
-    let response = match agent
-        .post(&url)
-        .set("X-API-Key", key)
-        .set("Content-Type", "application/json")
-        .send_json(body)
-    {
-        Ok(r) => r,
-        Err(ureq::Error::Status(code, r)) => {
-            let body = r.into_string().unwrap_or_default();
-            return Err(format!("HTTP {}: {}", code, body));
+    Ok(body)
+}
+
+/// Формує запит image-to-video для канонічних операцій v6.
+fn animation_generation_body(provider: &str, image_data_uri: &str, prompt: &str) -> Result<serde_json::Value, String> {
+    let body = match provider {
+        "flow" | "flow_fast" => serde_json::json!({
+            "operation": "flow_video_from_ingredients",
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "inputs": [image_data_uri],
+        }),
+        "flower" => serde_json::json!({
+            "operation": "flower_video_from_image",
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "inputs": [image_data_uri],
+        }),
+        "grok" => serde_json::json!({
+            "operation": "grok_video_from_image",
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "resolution": "480p",
+            "inputs": [image_data_uri],
+        }),
+        "flow_omni_flash" => serde_json::json!({
+            "operation": "flow_video_omni_flash_from_ingredients_10s",
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "inputs": [image_data_uri],
+        }),
+        "flow_light" => serde_json::json!({
+            "operation": "flow_video_light_from_ingredients",
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "inputs": [image_data_uri],
+        }),
+        "flow_ultra_light" => serde_json::json!({
+            "operation": "flow_video_ultra_light_from_ingredients",
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "inputs": [image_data_uri],
+        }),
+        _ => {
+            return Err(format!(
+                "Провайдер {} не підтримує анімацію зображень",
+                provider
+            ));
         }
-        Err(e) => return Err(format!("Помилка запиту: {}", e)),
     };
 
-    let op: OperationStarted = response
-        .into_json()
-        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
+    Ok(body)
+}
 
-    poll_operation(key, &op.operation_id, agent)
+/// Спроба генерації зображення через конкретного провайдера.
+fn try_generate_image(
+    key: &str,
+    prompt: &str,
+    aspect_ratio: &str,
+    provider: &str,
+    agent: &ureq::Agent,
+) -> Result<String, String> {
+    let _permit = GooglerImageLimiter::get().acquire();
+    let body = image_generation_body(provider, prompt, aspect_ratio)?;
+    start_v6_generation(key, body, agent)
+}
+
+/// Спроба генерації відео через конкретного провайдера.
+fn try_generate_video(
+    key: &str,
+    prompt: &str,
+    aspect_ratio: &str,
+    provider: &str,
+    agent: &ureq::Agent,
+) -> Result<String, String> {
+    let _permit = GooglerVideoLimiter::get().acquire();
+    let body = video_generation_body(provider, prompt, aspect_ratio)?;
+    start_v6_generation(key, body, agent)
 }
 
 /// Генерує зображення з перебором провайдерів за пріоритетом.
@@ -450,72 +502,16 @@ pub fn generate_image_with_priority(
 }
 
 /// Спроба анімації зображення (image-to-video) через конкретного провайдера.
-fn try_animate_image(key: &str, image_data_uri: &str, prompt: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+fn try_animate_image(
+    key: &str,
+    image_data_uri: &str,
+    prompt: &str,
+    provider: &str,
+    agent: &ureq::Agent,
+) -> Result<String, String> {
     let _permit = GooglerVideoLimiter::get().acquire();
-
-    // v5 провайдери — POST /api/v5/generations з inputs (підтверджено для omni_flash,
-    // решта виводиться з паттерну _from_text → _from_ingredients)
-    let v5_operation = match provider {
-        "flow_omni_flash" => Some("flow_video_omni_flash_from_ingredients_10s"),
-        "flow_fast"       => Some("flow_video_from_ingredients"),
-        "flow_light"      => Some("flow_video_light_from_ingredients"),
-        _ => None,
-    };
-    if let Some(operation) = v5_operation {
-        let url = format!("{}/v5/generations", BASE_URL);
-        let body = serde_json::json!({
-            "operation": operation,
-            "prompt": prompt,
-            "aspect_ratio": "16:9",
-            "inputs": [image_data_uri]
-        });
-        let response = match agent.post(&url).set("X-API-Key", key).set("Content-Type", "application/json").send_json(body) {
-            Ok(r) => r,
-            Err(ureq::Error::Status(code, r)) => {
-                let body = r.into_string().unwrap_or_default();
-                return Err(format!("HTTP {}: {}", code, body));
-            }
-            Err(e) => return Err(format!("Помилка запиту: {}", e)),
-        };
-        let started: V5GenerationStarted = response.into_json().map_err(|e| format!("Помилка парсингу v5: {}", e))?;
-        return poll_v5_generation(key, &started.id, agent);
-    }
-
-    let (url, body) = match provider {
-        "flower" => (
-            format!("{}/v4/flower/video/from-image", BASE_URL),
-            serde_json::json!({"image": image_data_uri, "prompt": prompt, "aspect_ratio": "16:9"}),
-        ),
-        "flow" => (
-            format!("{}/v4/flow/video/from-ingredients", BASE_URL),
-            serde_json::json!({"prompt": prompt, "reference_images": [image_data_uri], "aspect_ratio": "16:9"}),
-        ),
-        "grok" => (
-            format!("{}/v4/grok/video/from-image", BASE_URL),
-            serde_json::json!({"image": image_data_uri, "prompt": prompt}),
-        ),
-        _ => return Err(format!("Провайдер {} не підтримує анімацію зображень", provider)),
-    };
-
-    let response = match agent
-        .post(&url)
-        .set("X-API-Key", key)
-        .set("Content-Type", "application/json")
-        .send_json(body)
-    {
-        Ok(r) => r,
-        Err(ureq::Error::Status(code, r)) => {
-            let body = r.into_string().unwrap_or_default();
-            return Err(format!("HTTP {}: {}", code, body));
-        }
-        Err(e) => return Err(format!("Помилка запиту: {}", e)),
-    };
-
-    let op: OperationStarted = response
-        .into_json()
-        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
-
-    poll_operation(key, &op.operation_id, agent)
+    let body = animation_generation_body(provider, image_data_uri, prompt)?;
+    start_v6_generation(key, body, agent)
 }
 
 /// Анімує зображення в відео з перебором провайдерів за пріоритетом (image-to-video).
@@ -575,14 +571,14 @@ pub fn animate_image_with_priority(
 /// Повертає читабельну назву відеомоделі Googler для логів.
 pub fn video_provider_model_name(key: &str) -> &'static str {
     match key {
-        "flow"            => "Flow (VEO)",
-        "flower"          => "Flower (Veo 3.1)",
-        "grok"            => "Grok",
-        "flow_omni_flash" => "Omni Flash (Flow)",
-        "flow_fast"       => "Veo 3.1 Fast (Flow)",
-        "flow_light"      => "Veo 3.1 Light (Flow)",
-        "flow_quality"    => "Veo 3.1 Quality (Flow)",
-        _                 => "Unknown",
+        "flow" | "flow_fast" => "Flow Video Fast",
+        "flower" => "Flower Video",
+        "grok" => "Grok Video",
+        "flow_omni_flash" => "Flow Video Omni Flash",
+        "flow_light" => "Flow Video Light",
+        "flow_ultra_light" => "Flow Video Ultra Light",
+        "flow_quality" => "Flow Video Quality",
+        _ => "Unknown",
     }
 }
 
@@ -768,7 +764,7 @@ pub fn fetch_balance(key: String, result: Arc<Mutex<Option<GooglerBalance>>>, ct
             .timeout(std::time::Duration::from_secs(15))
             .build();
 
-        let url = format!("{}/v5/usage", BASE_URL);
+        let url = format!("{}/v6/usage", BASE_URL);
 
         if let Ok(response) = agent.get(&url).set("X-API-Key", &key).call() {
             if let Ok(data) = response.into_json::<UsageResponse>() {

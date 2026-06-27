@@ -118,12 +118,13 @@ fn insert_at_cursor(ui: &mut egui::Ui, edit_id: egui::Id, text: &mut String, pla
 /// Повертає відображувану назву та вартість провайдера зображень.
 pub(crate) fn image_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
-        "flow_IMAGEN_3_5" => ("Imagen 4 (Flow)", "4 кр."),
-        "flow_GEM_PIX_2" => ("Nano Banana Pro (Flow)", "4 кр."),
-        "flow_NARWHAL" => ("Nano Banana 2 (Flow)", "4 кр."),
-        "flower" => ("Nano Banana 2 (Flower)", "1 кр."),
-        "grok" => ("Grok", "1 кр."),
-        "openai" => ("ChatGPT Images 2.0", "1 кр."),
+        "flow_IMAGEN_3_5" | "flow_GEM_PIX_2" | "flow_nano_banana_pro" => {
+            ("Nano Banana Pro (Flow)", "4-8 кр.")
+        }
+        "flow_NARWHAL" | "flow_nano_banana_2" => ("Nano Banana 2 (Flow)", "4-8 кр."),
+        "flower" => ("Flower Image", "1 кр."),
+        "grok" => ("Grok Image", "1-3 кр."),
+        "openai" => ("OpenAI Image", "2 кр."),
         _ => ("Unknown", ""),
     }
 }
@@ -131,13 +132,13 @@ pub(crate) fn image_provider_info(key: &str) -> (&'static str, &'static str) {
 /// Повертає відображувану назву та вартість провайдера відео.
 pub(crate) fn video_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
-        "flow" => ("Flow (VEO)", "1 кр."),
-        "flower" => ("Flower (Veo 3.1)", "1 кр."),
-        "grok" => ("Grok", "1 кр."),
-        "flow_omni_flash" => ("Omni Flash (Flow)", "1 кр."),
-        "flow_fast" => ("Veo 3.1 Fast (Flow)", "1 кр."),
-        "flow_light" => ("Veo 3.1 Light (Flow)", "1 кр."),
-        "flow_quality" => ("Veo 3.1 Quality (Flow)", "10 кр."),
+        "flow" | "flow_fast" => ("Flow Video Fast", "1 кр."),
+        "flower" => ("Flower Video", "1 кр."),
+        "grok" => ("Grok Video", "1-4 кр."),
+        "flow_omni_flash" => ("Flow Video Omni Flash", "1 кр."),
+        "flow_light" => ("Flow Video Light", "1 кр."),
+        "flow_ultra_light" => ("Flow Video Ultra Light", "1 кр."),
+        "flow_quality" => ("Flow Video Quality", "10 кр."),
         _ => ("Unknown", ""),
     }
 }

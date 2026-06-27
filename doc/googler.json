@@ -62,1717 +62,14 @@
         }
       }
     },
-    "/api/v4/flow/image/generate": {
-      "post": {
-        "tags": [
-          "v4-flow-image"
-        ],
-        "summary": "Generate Image",
-        "description": "Generate an image using Google Flow API.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_image_generate`: 4 credits; billing `operation`; media `image`; provider `flow`.",
-        "operationId": "flow_image_generate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FlowGenerateImageRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flow_image_generate"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flow_image_generate",
-            "x-provider": "flow",
-            "x-media-type": "image",
-            "x-credit-cost": 4,
-            "x-cost": {
-              "operation_type": "flow_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 4,
-              "rate_limit_count": 4,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 4,
-            "x-concurrency-bucket": "image",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "image",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 10,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {
-              "upscale_credit_multipliers": {
-                "2x": 2
-              }
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flow_image_generate",
-            "billing_unit": "operation",
-            "credit_cost": 4,
-            "rate_limit_count": 4,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 4,
-          "rate_limit_count": 4,
-          "cost_source": null,
-          "display": "4 credits",
-          "operations": [
-            {
-              "operation_type": "flow_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 4,
-              "rate_limit_count": 4,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 4,
-        "x-billing-unit": "operation",
-        "x-provider": "flow",
-        "x-media-type": "image",
-        "x-concurrency-bucket": "image",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/flow/video/from-ingredients": {
-      "post": {
-        "tags": [
-          "v4-flow-video"
-        ],
-        "summary": "Generate Video From Ingredients",
-        "description": "Generate a video from 1-3 reference images using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_video_from_ingredients`: 1 credit; billing `operation`; media `video`; provider `flow`.",
-        "operationId": "flow_video_from_ingredients",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateVideoFromIngredientsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flow_video_from_ingredients"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flow_video_from_ingredients",
-            "x-provider": "flow",
-            "x-media-type": "video",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flow_video_from_ingredients",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 3,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {}
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flow_video_from_ingredients",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "flow_video_from_ingredients",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "flow",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/flow/video/from-keyframes": {
-      "post": {
-        "tags": [
-          "v4-flow-video"
-        ],
-        "summary": "Generate Video From Keyframes",
-        "description": "Generate a video with start/end keyframes using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_video_from_keyframes`: 1 credit; billing `operation`; media `video`; provider `flow`.",
-        "operationId": "flow_video_from_keyframes",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateVideoFromKeyframesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flow_video_from_keyframes"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flow_video_from_keyframes",
-            "x-provider": "flow",
-            "x-media-type": "video",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flow_video_from_keyframes",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 2,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {}
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flow_video_from_keyframes",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "flow_video_from_keyframes",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "flow",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/flow/video/from-text": {
-      "post": {
-        "tags": [
-          "v4-flow-video"
-        ],
-        "summary": "Generate Video From Text",
-        "description": "Generate a video from a text prompt using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_video_from_text`: 1 credit; billing `operation`; media `video`; provider `flow`.",
-        "operationId": "flow_video_from_text",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FlowGenerateVideoFromTextRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flow_video_from_text"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flow_video_from_text",
-            "x-provider": "flow",
-            "x-media-type": "video",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flow_video_from_text",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": false,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 0,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {}
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flow_video_from_text",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "flow_video_from_text",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "flow",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/flower/image/generate": {
-      "post": {
-        "tags": [
-          "v4-flower-image"
-        ],
-        "summary": "Generate Image",
-        "description": "Generate an image using Nano Banana 2 via Flower.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flower_image_generate`: 1 credit; billing `operation`; media `image`; provider `flower`.\n- `flower_image_edit`: 1 credit; billing `operation`; media `image`; provider `flower`.",
-        "operationId": "flower_image_generate_or_edit",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FlowerGenerateImageRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flower_image_generate",
-          "flower_image_edit"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flower_image_generate",
-            "x-provider": "flower",
-            "x-media-type": "image",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flower_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "image",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "image",
-            "x-supports-references": false,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 0,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {
-              "upstream_credit_type": "image"
-            }
-          },
-          {
-            "x-operation-type": "flower_image_edit",
-            "x-provider": "flower",
-            "x-media-type": "image",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flower_image_edit",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "image",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "image",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 1,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {
-              "upstream_credit_type": "image"
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flower_image_generate",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          },
-          {
-            "operation_type": "flower_image_edit",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit per operation",
-          "operations": [
-            {
-              "operation_type": "flower_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            {
-              "operation_type": "flower_image_edit",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "flower",
-        "x-media-type": "image",
-        "x-concurrency-bucket": "image",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/flower/video/from-image": {
-      "post": {
-        "tags": [
-          "v4-flower-video"
-        ],
-        "summary": "Generate Video From Image",
-        "description": "Generate a video from an image using Veo 3.1 via Flower.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flower_video_from_image`: 1 credit; billing `operation`; media `video`; provider `flower`.",
-        "operationId": "flower_video_from_image",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FlowerVideoFromImageRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flower_video_from_image"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flower_video_from_image",
-            "x-provider": "flower",
-            "x-media-type": "video",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flower_video_from_image",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 1,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {
-              "upstream_credit_type": "video"
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flower_video_from_image",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "flower_video_from_image",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "flower",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/flower/video/from-text": {
-      "post": {
-        "tags": [
-          "v4-flower-video"
-        ],
-        "summary": "Generate Video From Text",
-        "description": "Generate a video from a text prompt using Veo 3.1 via Flower.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flower_video_from_text`: 1 credit; billing `operation`; media `video`; provider `flower`.",
-        "operationId": "flower_video_from_text",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FlowerGenerateVideoRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "flower_video_from_text"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "flower_video_from_text",
-            "x-provider": "flower",
-            "x-media-type": "video",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "flower_video_from_text",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": false,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 0,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {
-              "upstream_credit_type": "video"
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "flower_video_from_text",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "flower_video_from_text",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "flower",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/grok/image/edit": {
-      "post": {
-        "tags": [
-          "v4-grok-image"
-        ],
-        "summary": "Edit Image",
-        "description": "Edit an image using Grok. Returns 2 edited variations.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_image_edit`: 2 credits; billing `operation`; media `image`; provider `grok`.",
-        "operationId": "grok_image_edit",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditImageRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "grok_image_edit"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "grok_image_edit",
-            "x-provider": "grok",
-            "x-media-type": "image",
-            "x-credit-cost": 2,
-            "x-cost": {
-              "operation_type": "grok_image_edit",
-              "billing_unit": "operation",
-              "credit_cost": 2,
-              "rate_limit_count": 2,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 2,
-            "x-concurrency-bucket": "image",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "image",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 6,
-            "x-max-output-items": 2,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {}
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "grok_image_edit",
-            "billing_unit": "operation",
-            "credit_cost": 2,
-            "rate_limit_count": 2,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 2,
-          "rate_limit_count": 2,
-          "cost_source": null,
-          "display": "2 credits",
-          "operations": [
-            {
-              "operation_type": "grok_image_edit",
-              "billing_unit": "operation",
-              "credit_cost": 2,
-              "rate_limit_count": 2,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 2,
-        "x-billing-unit": "operation",
-        "x-provider": "grok",
-        "x-media-type": "image",
-        "x-concurrency-bucket": "image",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/grok/image/generate": {
-      "post": {
-        "tags": [
-          "v4-grok-image"
-        ],
-        "summary": "Generate Images",
-        "description": "Generate 4 images from a text prompt using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_image_generate`: 1 credit; billing `operation`; media `image`; provider `grok`.",
-        "operationId": "grok_image_generate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateImagesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "grok_image_generate"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "grok_image_generate",
-            "x-provider": "grok",
-            "x-media-type": "image",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "grok_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "image",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "image",
-            "x-supports-references": false,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 0,
-            "x-max-output-items": 6,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {
-              "quality_credit_costs": {
-                "speed": 1,
-                "quality": 3
-              }
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "grok_image_generate",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "grok_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "grok",
-        "x-media-type": "image",
-        "x-concurrency-bucket": "image",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/grok/video/from-image": {
-      "post": {
-        "tags": [
-          "v4-grok-video"
-        ],
-        "summary": "Generate Video From Image",
-        "description": "Generate a video from an image using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_video_from_image`: 2 credits; billing `operation`; media `video`; provider `grok`.",
-        "operationId": "grok_video_from_image",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VideoFromImageRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "grok_video_from_image"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "grok_video_from_image",
-            "x-provider": "grok",
-            "x-media-type": "video",
-            "x-credit-cost": 2,
-            "x-cost": {
-              "operation_type": "grok_video_from_image",
-              "billing_unit": "operation",
-              "credit_cost": 2,
-              "rate_limit_count": 2,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 2,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 7,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {
-              "default_resolution": "480p",
-              "available_resolutions": [
-                "480p",
-                "720p"
-              ],
-              "resolution_credit_costs": {
-                "480p": 2,
-                "720p": 4
-              }
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "grok_video_from_image",
-            "billing_unit": "operation",
-            "credit_cost": 2,
-            "rate_limit_count": 2,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 2,
-          "rate_limit_count": 2,
-          "cost_source": null,
-          "display": "2 credits",
-          "operations": [
-            {
-              "operation_type": "grok_video_from_image",
-              "billing_unit": "operation",
-              "credit_cost": 2,
-              "rate_limit_count": 2,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 2,
-        "x-billing-unit": "operation",
-        "x-provider": "grok",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/grok/video/from-text": {
-      "post": {
-        "tags": [
-          "v4-grok-video"
-        ],
-        "summary": "Generate Video From Text",
-        "description": "Generate a video from a text prompt using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_video_from_text`: 1 credit; billing `operation`; media `video`; provider `grok`.",
-        "operationId": "grok_video_from_text",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateVideoRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "grok_video_from_text"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "grok_video_from_text",
-            "x-provider": "grok",
-            "x-media-type": "video",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "grok_video_from_text",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "video",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "video",
-            "x-supports-references": false,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 0,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": 900,
-            "x-provider-options": {
-              "default_resolution": "480p",
-              "available_resolutions": [
-                "480p",
-                "720p"
-              ],
-              "resolution_credit_costs": {
-                "480p": 1,
-                "720p": 3
-              }
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "grok_video_from_text",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "grok_video_from_text",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "grok",
-        "x-media-type": "video",
-        "x-concurrency-bucket": "video",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/openai/image/generate": {
-      "post": {
-        "tags": [
-          "v4-openai-image"
-        ],
-        "summary": "Generate Image",
-        "description": "Generate an image using the OpenAI ChatGPT web image flow.\n\n**Operation metadata:**\n- `openai_image_generate`: 1 credit; billing `operation`; media `image`; provider `openai`.",
-        "operationId": "openai_image_generate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OpenAIImageGenerateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "openai_image_generate"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "openai_image_generate",
-            "x-provider": "openai",
-            "x-media-type": "image",
-            "x-credit-cost": 1,
-            "x-cost": {
-              "operation_type": "openai_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            },
-            "x-billing-unit": "operation",
-            "x-rate-limit-count": 1,
-            "x-concurrency-bucket": "image",
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "image",
-            "x-supports-references": true,
-            "x-supports-data-uri": true,
-            "x-max-input-images": 10,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {}
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "openai_image_generate",
-            "billing_unit": "operation",
-            "credit_cost": 1,
-            "rate_limit_count": 1,
-            "cost_source": null
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "operation",
-          "credit_cost": 1,
-          "rate_limit_count": 1,
-          "cost_source": null,
-          "display": "1 credit",
-          "operations": [
-            {
-              "operation_type": "openai_image_generate",
-              "billing_unit": "operation",
-              "credit_cost": 1,
-              "rate_limit_count": 1,
-              "cost_source": null
-            }
-          ]
-        },
-        "x-credit-cost": 1,
-        "x-billing-unit": "operation",
-        "x-provider": "openai",
-        "x-media-type": "image",
-        "x-concurrency-bucket": "image",
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v4/operations/cancel": {
-      "post": {
-        "tags": [
-          "v4-operations"
-        ],
-        "summary": "Bulk Cancel Operations",
-        "description": "Cancel one or more operations in bulk.\n\nThis endpoint allows cancelling multiple operations in a single request.\nEach operation is processed independently - if one fails, others will still be processed.\n\n**Refund Policy (per operation):**\n- If the operation is still \"pending\" (generation hasn't started), the rate limit\n  charge is refunded and the operation is cancelled.\n- If the operation is already \"processing\" (generation in progress), the operation\n  is marked for cancellation but NO refund is issued since resources have already\n  been consumed.\n- If the operation is already completed (\"success\" or \"error\"), no action is taken.\n\n**Important Notes:**\n- Cancellation is best-effort. The background task checks the cancelled flag\n  periodically, but if it's in the middle of a provider API call, it may still\n  complete before seeing the cancellation.\n- For video operations that take several minutes, cancellation during \"processing\"\n  will stop polling for results but the provider may still complete the generation.\n- Operations not found or not owned by the API key will be reported in results\n  with cancelled=False.\n\nReturns:\n    - results: List of cancellation results for each operation\n    - total_requested: Number of operations in the request\n    - total_cancelled: Number of operations successfully cancelled\n    - total_refunded: Number of operations that received a refund",
-        "operationId": "cancel_operations",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkCancelRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkCancelResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v4/operations/cancel-all": {
+    "/api/v6/capabilities": {
       "get": {
         "tags": [
-          "v4-operations"
-        ],
-        "summary": "Cancel All Operations",
-        "description": "Cancel all active operations for the current API key.\n\nThis endpoint is useful when you've started operations but lost track of their IDs.\nIt finds all pending and processing operations for your API key and cancels them.\n\n**Refund Policy (per operation):**\n- If the operation is still \"pending\" (generation hasn't started), the rate limit\n  charge is refunded and the operation is cancelled.\n- If the operation is already \"processing\" (generation in progress), the operation\n  is marked for cancellation but NO refund is issued since resources have already\n  been consumed.\n\n**Important Notes:**\n- Only affects operations in \"pending\" or \"processing\" state.\n- Completed operations (\"success\" or \"error\") are not affected.\n- Cancellation is best-effort. Background tasks check the cancelled flag\n  periodically, but may complete before seeing the cancellation.\n\nReturns:\n    - results: List of cancellation results for each active operation found\n    - total_found: Number of active operations found for this API key\n    - total_cancelled: Number of operations successfully cancelled\n    - total_refunded: Number of operations that received a refund",
-        "operationId": "cancel_all_operations",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelAllResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v4/operations/{operation_id}": {
-      "get": {
-        "tags": [
-          "v4-operations"
-        ],
-        "summary": "Get Operation Status",
-        "description": "Get the status of any async operation (image or video).\n\nThis is the unified status endpoint for all V4 operations.\nPoll this endpoint to check if your operation has completed.\n\nReturns:\n    - status: \"pending\" (queued), \"processing\" (in progress), \"success\", or \"error\"\n    - result: The generated content when status is \"success\"\n    - error: Error message when status is \"error\"",
-        "operationId": "get_operation_status",
-        "parameters": [
-          {
-            "name": "operation_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Operation Id"
-            }
-          },
-          {
-            "name": "result_format",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "data_uri",
-                "ref"
-              ],
-              "type": "string",
-              "description": "Return success results as resolved data URIs or file: references.",
-              "default": "data_uri",
-              "title": "Result Format"
-            },
-            "description": "Return success results as resolved data URIs or file: references."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationStatusResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v4/prompt/generate": {
-      "post": {
-        "tags": [
-          "v4-prompt"
-        ],
-        "summary": "Generate a prompt using server-side LLM",
-        "description": "Generate text using the server's OpenAI API key.\n\nToken usage (input + output) is tracked per API key and counted against the hourly token limit.\nThe model and parameters are configured server-side.\n\n**Rate Limiting:**\n- Total tokens consumed (prompt + completion) count against `prompt_tokens_per_hour_limit`\n- Pre-check rejects requests if the token budget is already exhausted\n- Actual token count is recorded after each successful generation\n\n**Operation metadata:**\n- `prompt_generation`: token-based; billing `token`; media `text`; provider `openai`.",
-        "operationId": "prompt_generation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GeneratePromptRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GeneratePromptResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-operation-types": [
-          "prompt_generation"
-        ],
-        "x-operation-catalog": [
-          {
-            "x-operation-type": "prompt_generation",
-            "x-provider": "openai",
-            "x-media-type": "text",
-            "x-credit-cost": null,
-            "x-cost": {
-              "operation_type": "prompt_generation",
-              "billing_unit": "token",
-              "credit_cost": null,
-              "rate_limit_count": 0,
-              "cost_source": "usage.total_tokens"
-            },
-            "x-billing-unit": "token",
-            "x-rate-limit-count": 0,
-            "x-concurrency-bucket": null,
-            "x-enabled": true,
-            "x-docs-enabled": true,
-            "x-execution-enabled": true,
-            "x-public": true,
-            "x-deprecated": false,
-            "x-experimental": false,
-            "x-internal": false,
-            "x-result-type": "text",
-            "x-supports-references": false,
-            "x-supports-data-uri": false,
-            "x-max-input-images": 0,
-            "x-max-output-items": 1,
-            "x-timeout-seconds": null,
-            "x-operation-ttl-seconds": null,
-            "x-provider-options": {
-              "cost_source": "usage.total_tokens"
-            }
-          }
-        ],
-        "x-operation-costs": [
-          {
-            "operation_type": "prompt_generation",
-            "billing_unit": "token",
-            "credit_cost": null,
-            "rate_limit_count": 0,
-            "cost_source": "usage.total_tokens"
-          }
-        ],
-        "x-cost": {
-          "billing_unit": "token",
-          "credit_cost": null,
-          "rate_limit_count": 0,
-          "cost_source": "usage.total_tokens",
-          "display": "token-based",
-          "operations": [
-            {
-              "operation_type": "prompt_generation",
-              "billing_unit": "token",
-              "credit_cost": null,
-              "rate_limit_count": 0,
-              "cost_source": "usage.total_tokens"
-            }
-          ]
-        },
-        "x-credit-cost": null,
-        "x-billing-unit": "token",
-        "x-provider": "openai",
-        "x-media-type": "text",
-        "x-concurrency-bucket": null,
-        "x-enabled": true,
-        "x-docs-enabled": true,
-        "x-execution-enabled": true,
-        "x-public": true,
-        "x-internal": false,
-        "x-experimental": false,
-        "x-deprecated": false
-      }
-    },
-    "/api/v5/capabilities": {
-      "get": {
-        "tags": [
-          "v5-docs"
+          "v6-docs"
         ],
         "summary": "Get Capabilities",
-        "description": "List canonical V5 generation capabilities with exact billing, inputs, options, and provider model mapping.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_list_capabilities",
+        "description": "List canonical V6 generation capabilities with exact billing, inputs, options, and provider model mapping.",
+        "operationId": "v6_list_capabilities",
         "parameters": [
           {
             "name": "provider",
@@ -1828,10 +125,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by v5 model id.",
+              "description": "Filter by v6 model id.",
               "title": "Model"
             },
-            "description": "Filter by v5 model id."
+            "description": "Filter by v6 model id."
           }
         ],
         "responses": {
@@ -1844,7 +141,7 @@
                   "items": {
                     "$ref": "#/components/schemas/OperationInfo"
                   },
-                  "title": "Response V5 List Capabilities"
+                  "title": "Response V6 List Capabilities"
                 }
               }
             }
@@ -1859,18 +156,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/capabilities/{operation_id}": {
+    "/api/v6/capabilities/{operation_id}": {
       "get": {
         "tags": [
-          "v5-docs"
+          "v6-docs"
         ],
         "summary": "Get Capability",
-        "description": "Get one canonical V5 generation capability's billing, input contract, options, and provider mapping.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_get_capability",
+        "description": "Get one canonical V6 generation capability's billing, input contract, options, and provider mapping.",
+        "operationId": "v6_get_capability",
         "parameters": [
           {
             "name": "operation_id",
@@ -1903,18 +199,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/generations": {
+    "/api/v6/generations": {
       "post": {
         "tags": [
-          "v5-generations"
+          "v6-generations"
         ],
         "summary": "Create Generation",
-        "description": "Create an image or video generation. Prefer operation for an exact, billable contract; model remains a shorthand.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_create_generation",
+        "description": "Create an image or video generation. Prefer operation for an exact, billable contract; model remains a shorthand.\n\n**Supported operations (38):**\n\n- `flow_ultra_video_from_ingredients` — flow/flow-video-fast: 1 credit\n- `flow_ultra_video_from_keyframes` — flow/flow-video-fast: 1 credit\n- `flow_ultra_video_from_text` — flow/flow-video-fast: 1 credit\n- `flow_video_from_ingredients` — flow/flow-video-fast: 1 credit\n- `flow_video_from_keyframes` — flow/flow-video-fast: 1 credit\n- `flow_video_from_text` — flow/flow-video-fast: 1 credit\n- `flow_video_light_from_ingredients` — flow/flow-video-light: 1 credit\n- `flow_video_light_from_keyframes` — flow/flow-video-light: 1 credit\n- `flow_video_light_from_text` — flow/flow-video-light: 1 credit\n- `flow_video_omni_flash_edit` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_ingredients_10s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_ingredients_4s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_ingredients_6s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_ingredients_8s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_keyframes_10s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_keyframes_4s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_keyframes_6s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_keyframes_8s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_text_10s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_text_4s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_text_6s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_omni_flash_from_text_8s` — flow/flow-video-omni-flash: 1 credit _(experimental)_\n- `flow_video_quality_from_keyframes` — flow/flow-video-quality: 10 credits\n- `flow_video_quality_from_text` — flow/flow-video-quality: 10 credits\n- `flow_video_ultra_light_from_ingredients` — flow/flow-video-ultra-light: 1 credit\n- `flow_video_ultra_light_from_keyframes` — flow/flow-video-ultra-light: 1 credit\n- `flow_video_ultra_light_from_text` — flow/flow-video-ultra-light: 1 credit\n- `flower_image_edit` — flower/flower-image: 1 credit\n- `flower_image_generate` — flower/flower-image: 1 credit\n- `flower_video_from_image` — flower/flower-video: 1 credit\n- `flower_video_from_text` — flower/flower-video: 1 credit\n- `grok_image_edit` — grok/grok-image: 2 credits\n- `grok_image_generate` — grok/grok-image: 1 credit (speed), 3 credits (quality)\n- `grok_video_from_image` — grok/grok-video: 2 credits (480p), 4 credits (720p)\n- `grok_video_from_text` — grok/grok-video: 1 credit (480p), 3 credits (720p)\n- `nano_banana_2_image_generate` — flow/nano-banana-2: 4 credits (base), 8 credits (2x)\n- `nano_banana_pro_image_generate` — flow/nano-banana-pro: 4 credits (base), 8 credits (2x)\n- `openai_image_generate` — openai/openai-image: 2 credits\n\nSee `GET /api/v6/capabilities` for full per-operation billing, inputs, options, and provider mapping.",
+        "operationId": "v6_create_generation",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1947,17 +242,484 @@
             }
           }
         },
-        "x-experimental": true
+        "x-operation-ids": [
+          "nano_banana_pro_image_generate",
+          "nano_banana_2_image_generate",
+          "flower_image_generate",
+          "flower_image_edit",
+          "grok_image_generate",
+          "grok_image_edit",
+          "openai_image_generate",
+          "flow_video_from_text",
+          "flow_video_from_ingredients",
+          "flow_video_from_keyframes",
+          "flow_ultra_video_from_text",
+          "flow_ultra_video_from_ingredients",
+          "flow_ultra_video_from_keyframes",
+          "flow_video_light_from_text",
+          "flow_video_light_from_ingredients",
+          "flow_video_light_from_keyframes",
+          "flow_video_quality_from_text",
+          "flow_video_quality_from_keyframes",
+          "flow_video_ultra_light_from_text",
+          "flow_video_ultra_light_from_ingredients",
+          "flow_video_ultra_light_from_keyframes",
+          "flow_video_omni_flash_from_text_4s",
+          "flow_video_omni_flash_from_text_6s",
+          "flow_video_omni_flash_from_text_8s",
+          "flow_video_omni_flash_from_text_10s",
+          "flow_video_omni_flash_from_ingredients_4s",
+          "flow_video_omni_flash_from_ingredients_6s",
+          "flow_video_omni_flash_from_ingredients_8s",
+          "flow_video_omni_flash_from_ingredients_10s",
+          "flow_video_omni_flash_from_keyframes_4s",
+          "flow_video_omni_flash_from_keyframes_6s",
+          "flow_video_omni_flash_from_keyframes_8s",
+          "flow_video_omni_flash_from_keyframes_10s",
+          "flow_video_omni_flash_edit",
+          "flower_video_from_text",
+          "flower_video_from_image",
+          "grok_video_from_text",
+          "grok_video_from_image"
+        ],
+        "x-operation-types": [
+          "flow_image_generate",
+          "flow_omni_flash_video_edit",
+          "flow_omni_flash_video_from_ingredients_10s",
+          "flow_omni_flash_video_from_ingredients_4s",
+          "flow_omni_flash_video_from_ingredients_6s",
+          "flow_omni_flash_video_from_ingredients_8s",
+          "flow_omni_flash_video_from_keyframes_10s",
+          "flow_omni_flash_video_from_keyframes_4s",
+          "flow_omni_flash_video_from_keyframes_6s",
+          "flow_omni_flash_video_from_keyframes_8s",
+          "flow_omni_flash_video_from_text_10s",
+          "flow_omni_flash_video_from_text_4s",
+          "flow_omni_flash_video_from_text_6s",
+          "flow_omni_flash_video_from_text_8s",
+          "flow_ultra_video_from_ingredients",
+          "flow_ultra_video_from_keyframes",
+          "flow_ultra_video_from_text",
+          "flow_video_from_ingredients",
+          "flow_video_from_keyframes",
+          "flow_video_from_text",
+          "flow_video_quality_from_keyframes",
+          "flow_video_quality_from_text",
+          "flower_image_edit",
+          "flower_image_generate",
+          "flower_video_from_image",
+          "flower_video_from_text",
+          "grok_image_edit",
+          "grok_image_generate",
+          "grok_video_from_image",
+          "grok_video_from_text",
+          "openai_image_generate"
+        ],
+        "x-operation-costs": [
+          {
+            "id": "nano_banana_pro_image_generate",
+            "operation_type": "flow_image_generate",
+            "provider": "flow",
+            "model": "nano-banana-pro",
+            "billing_unit": "operation",
+            "credits": null,
+            "rate_limit_count": null,
+            "display": "4 credits (base), 8 credits (2x)"
+          },
+          {
+            "id": "nano_banana_2_image_generate",
+            "operation_type": "flow_image_generate",
+            "provider": "flow",
+            "model": "nano-banana-2",
+            "billing_unit": "operation",
+            "credits": null,
+            "rate_limit_count": null,
+            "display": "4 credits (base), 8 credits (2x)"
+          },
+          {
+            "id": "flower_image_generate",
+            "operation_type": "flower_image_generate",
+            "provider": "flower",
+            "model": "flower-image",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flower_image_edit",
+            "operation_type": "flower_image_edit",
+            "provider": "flower",
+            "model": "flower-image",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "grok_image_generate",
+            "operation_type": "grok_image_generate",
+            "provider": "grok",
+            "model": "grok-image",
+            "billing_unit": "operation",
+            "credits": null,
+            "rate_limit_count": null,
+            "display": "1 credit (speed), 3 credits (quality)"
+          },
+          {
+            "id": "grok_image_edit",
+            "operation_type": "grok_image_edit",
+            "provider": "grok",
+            "model": "grok-image",
+            "billing_unit": "operation",
+            "credits": 2,
+            "rate_limit_count": 2,
+            "display": "2 credits"
+          },
+          {
+            "id": "openai_image_generate",
+            "operation_type": "openai_image_generate",
+            "provider": "openai",
+            "model": "openai-image",
+            "billing_unit": "operation",
+            "credits": 2,
+            "rate_limit_count": 2,
+            "display": "2 credits"
+          },
+          {
+            "id": "flow_video_from_text",
+            "operation_type": "flow_video_from_text",
+            "provider": "flow",
+            "model": "flow-video-fast",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_from_ingredients",
+            "operation_type": "flow_video_from_ingredients",
+            "provider": "flow",
+            "model": "flow-video-fast",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_from_keyframes",
+            "operation_type": "flow_video_from_keyframes",
+            "provider": "flow",
+            "model": "flow-video-fast",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_ultra_video_from_text",
+            "operation_type": "flow_ultra_video_from_text",
+            "provider": "flow",
+            "model": "flow-video-fast",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_ultra_video_from_ingredients",
+            "operation_type": "flow_ultra_video_from_ingredients",
+            "provider": "flow",
+            "model": "flow-video-fast",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_ultra_video_from_keyframes",
+            "operation_type": "flow_ultra_video_from_keyframes",
+            "provider": "flow",
+            "model": "flow-video-fast",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_light_from_text",
+            "operation_type": "flow_video_from_text",
+            "provider": "flow",
+            "model": "flow-video-light",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_light_from_ingredients",
+            "operation_type": "flow_video_from_ingredients",
+            "provider": "flow",
+            "model": "flow-video-light",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_light_from_keyframes",
+            "operation_type": "flow_video_from_keyframes",
+            "provider": "flow",
+            "model": "flow-video-light",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_quality_from_text",
+            "operation_type": "flow_video_quality_from_text",
+            "provider": "flow",
+            "model": "flow-video-quality",
+            "billing_unit": "operation",
+            "credits": 10,
+            "rate_limit_count": 10,
+            "display": "10 credits"
+          },
+          {
+            "id": "flow_video_quality_from_keyframes",
+            "operation_type": "flow_video_quality_from_keyframes",
+            "provider": "flow",
+            "model": "flow-video-quality",
+            "billing_unit": "operation",
+            "credits": 10,
+            "rate_limit_count": 10,
+            "display": "10 credits"
+          },
+          {
+            "id": "flow_video_ultra_light_from_text",
+            "operation_type": "flow_ultra_video_from_text",
+            "provider": "flow",
+            "model": "flow-video-ultra-light",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_ultra_light_from_ingredients",
+            "operation_type": "flow_ultra_video_from_ingredients",
+            "provider": "flow",
+            "model": "flow-video-ultra-light",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_ultra_light_from_keyframes",
+            "operation_type": "flow_ultra_video_from_keyframes",
+            "provider": "flow",
+            "model": "flow-video-ultra-light",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_text_4s",
+            "operation_type": "flow_omni_flash_video_from_text_4s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_text_6s",
+            "operation_type": "flow_omni_flash_video_from_text_6s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_text_8s",
+            "operation_type": "flow_omni_flash_video_from_text_8s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_text_10s",
+            "operation_type": "flow_omni_flash_video_from_text_10s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_ingredients_4s",
+            "operation_type": "flow_omni_flash_video_from_ingredients_4s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_ingredients_6s",
+            "operation_type": "flow_omni_flash_video_from_ingredients_6s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_ingredients_8s",
+            "operation_type": "flow_omni_flash_video_from_ingredients_8s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_ingredients_10s",
+            "operation_type": "flow_omni_flash_video_from_ingredients_10s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_keyframes_4s",
+            "operation_type": "flow_omni_flash_video_from_keyframes_4s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_keyframes_6s",
+            "operation_type": "flow_omni_flash_video_from_keyframes_6s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_keyframes_8s",
+            "operation_type": "flow_omni_flash_video_from_keyframes_8s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_from_keyframes_10s",
+            "operation_type": "flow_omni_flash_video_from_keyframes_10s",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flow_video_omni_flash_edit",
+            "operation_type": "flow_omni_flash_video_edit",
+            "provider": "flow",
+            "model": "flow-video-omni-flash",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flower_video_from_text",
+            "operation_type": "flower_video_from_text",
+            "provider": "flower",
+            "model": "flower-video",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "flower_video_from_image",
+            "operation_type": "flower_video_from_image",
+            "provider": "flower",
+            "model": "flower-video",
+            "billing_unit": "operation",
+            "credits": 1,
+            "rate_limit_count": 1,
+            "display": "1 credit"
+          },
+          {
+            "id": "grok_video_from_text",
+            "operation_type": "grok_video_from_text",
+            "provider": "grok",
+            "model": "grok-video",
+            "billing_unit": "operation",
+            "credits": null,
+            "rate_limit_count": null,
+            "display": "1 credit (480p), 3 credits (720p)"
+          },
+          {
+            "id": "grok_video_from_image",
+            "operation_type": "grok_video_from_image",
+            "provider": "grok",
+            "model": "grok-video",
+            "billing_unit": "operation",
+            "credits": null,
+            "rate_limit_count": null,
+            "display": "2 credits (480p), 4 credits (720p)"
+          }
+        ],
+        "x-provider": [
+          "flow",
+          "flower",
+          "grok",
+          "openai"
+        ],
+        "x-media-type": [
+          "image",
+          "video"
+        ],
+        "x-deprecated": false,
+        "x-experimental": true,
+        "x-capabilities-endpoint": "/api/v6/capabilities"
       }
     },
-    "/api/v5/generations/{generation_id}": {
+    "/api/v6/generations/{generation_id}": {
       "get": {
         "tags": [
-          "v5-generations"
+          "v6-generations"
         ],
         "summary": "Get Generation",
-        "description": "Get a generation status. Successful media responses return file refs plus download URLs.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_get_generation",
+        "description": "Get a generation status. Successful media responses return file refs plus download URLs.",
+        "operationId": "v6_get_generation",
         "parameters": [
           {
             "name": "generation_id",
@@ -1990,16 +752,15 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       },
       "delete": {
         "tags": [
-          "v5-generations"
+          "v6-generations"
         ],
         "summary": "Cancel Generation",
-        "description": "Cancel a queued or running generation.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_cancel_generation",
+        "description": "Cancel a queued or running generation.",
+        "operationId": "v6_cancel_generation",
         "parameters": [
           {
             "name": "generation_id",
@@ -2032,18 +793,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/models": {
+    "/api/v6/models": {
       "get": {
         "tags": [
-          "v5-docs"
+          "v6-docs"
         ],
         "summary": "Get Models",
-        "description": "List self-documenting V5 model capability records.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_list_models",
+        "description": "List self-documenting V6 model capability records.",
+        "operationId": "v6_list_models",
         "parameters": [
           {
             "name": "provider",
@@ -2095,9 +855,9 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/src__api__v5__models__ModelInfo"
+                    "$ref": "#/components/schemas/src__api__v6__models__ModelInfo"
                   },
-                  "title": "Response V5 List Models"
+                  "title": "Response V6 List Models"
                 }
               }
             }
@@ -2112,18 +872,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/models/{model_id}": {
+    "/api/v6/models/{model_id}": {
       "get": {
         "tags": [
-          "v5-docs"
+          "v6-docs"
         ],
         "summary": "Get Model",
-        "description": "Get one model's request options, input semantics, output shape, and quirks.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_get_model",
+        "description": "Get one model's request options, input semantics, output shape, and quirks.",
+        "operationId": "v6_get_model",
         "parameters": [
           {
             "name": "model_id",
@@ -2141,7 +900,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__api__v5__models__ModelInfo"
+                  "$ref": "#/components/schemas/src__api__v6__models__ModelInfo"
                 }
               }
             }
@@ -2156,18 +915,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/operations/cancel": {
+    "/api/v6/operations/cancel": {
       "post": {
         "tags": [
-          "v5-operations"
+          "v6-operations"
         ],
         "summary": "Bulk Cancel Operations",
-        "description": "Cancel one or more V5 async operations.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_cancel_operations",
+        "description": "Cancel one or more V6 async operations.",
+        "operationId": "v6_cancel_operations",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2199,18 +957,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/operations/cancel-all": {
+    "/api/v6/operations/cancel-all": {
       "get": {
         "tags": [
-          "v5-operations"
+          "v6-operations"
         ],
         "summary": "Cancel All Operations",
-        "description": "Cancel all active V5 async operations for the authenticated API key.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_cancel_all_operations",
+        "description": "Cancel all active V6 async operations for the authenticated API key.",
+        "operationId": "v6_cancel_all_operations",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2222,18 +979,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/operations/{operation_id}": {
+    "/api/v6/operations/{operation_id}": {
       "get": {
         "tags": [
-          "v5-operations"
+          "v6-operations"
         ],
         "summary": "Get Operation Status",
-        "description": "Get a V5 async operation status.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_get_operation",
+        "description": "Get a V6 async operation status.",
+        "operationId": "v6_get_operation",
         "parameters": [
           {
             "name": "operation_id",
@@ -2266,18 +1022,17 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/prompts/generate": {
+    "/api/v6/prompts/generate": {
       "post": {
         "tags": [
-          "v5-prompts"
+          "v6-prompts"
         ],
         "summary": "Generate Prompt",
-        "description": "Generate text using the server-side LLM.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_prompt_generation",
+        "description": "Generate text using the server-side LLM.\n\n**Supported operations (1):**\n\n- `prompt_generation` — openai/prompt-generator: token-based\n\nSee `GET /api/v6/capabilities` for full per-operation billing, inputs, options, and provider mapping.",
+        "operationId": "v6_prompt_generation",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2310,17 +1065,39 @@
             }
           }
         },
-        "x-experimental": true
+        "x-operation-ids": [
+          "prompt_generation"
+        ],
+        "x-operation-types": [
+          "prompt_generation"
+        ],
+        "x-operation-costs": [
+          {
+            "id": "prompt_generation",
+            "operation_type": "prompt_generation",
+            "provider": "openai",
+            "model": "prompt-generator",
+            "billing_unit": "token",
+            "credits": null,
+            "rate_limit_count": 0,
+            "display": "token-based"
+          }
+        ],
+        "x-provider": "openai",
+        "x-media-type": "text",
+        "x-deprecated": false,
+        "x-experimental": false,
+        "x-capabilities-endpoint": "/api/v6/capabilities"
       }
     },
-    "/api/v5/providers": {
+    "/api/v6/providers": {
       "get": {
         "tags": [
-          "v5-docs"
+          "v6-docs"
         ],
         "summary": "Get Providers",
-        "description": "List V5 providers and their supported models.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_list_providers",
+        "description": "List V6 providers and their supported models.",
+        "operationId": "v6_list_providers",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2331,23 +1108,22 @@
                     "$ref": "#/components/schemas/ProviderInfo"
                   },
                   "type": "array",
-                  "title": "Response V5 List Providers"
+                  "title": "Response V6 List Providers"
                 }
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
-    "/api/v5/usage": {
+    "/api/v6/usage": {
       "get": {
         "tags": [
-          "v5-account"
+          "v6-account"
         ],
         "summary": "Get Usage",
-        "description": "Get current usage statistics for the authenticated API key.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
-        "operationId": "v5_get_usage",
+        "description": "Get current usage statistics for the authenticated API key.",
+        "operationId": "v6_get_usage",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2359,8 +1135,7 @@
               }
             }
           }
-        },
-        "x-experimental": true
+        }
       }
     },
     "/v1/chat/completions": {
@@ -3125,375 +1900,6 @@
         "title": "CurrentUsage",
         "description": "Current usage statistics."
       },
-      "EditImageRequest": {
-        "anyOf": [
-          {
-            "properties": {
-              "image": {
-                "$ref": "#/components/schemas/ImageInput"
-              }
-            },
-            "required": [
-              "image"
-            ]
-          },
-          {
-            "properties": {
-              "images": {
-                "items": {
-                  "$ref": "#/components/schemas/ImageInput"
-                },
-                "type": "array",
-                "minItems": 1
-              }
-            },
-            "required": [
-              "images"
-            ]
-          }
-        ],
-        "properties": {
-          "image": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ImageInput"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Single image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Supported formats: JPEG, PNG, WebP. Maximum size: 5MB."
-          },
-          "images": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ImageInput"
-                },
-                "type": "array",
-                "maxItems": 5,
-                "minItems": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Images",
-            "description": "List of images as data URIs or file references. Maximum 5 images. At least one of 'image' or 'images' must be provided."
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the edit/transformation (e.g., 'make it HDR', 'cartoon style', 'add sunset lighting')"
-          },
-          "aspect_ratio": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "1:1",
-                  "2:3",
-                  "3:2",
-                  "9:16",
-                  "16:9"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Aspect Ratio",
-            "description": "Optional output aspect ratio for single-image edits. Ignored for multi-image edits."
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "EditImageRequest"
-      },
-      "FlowGenerateImageRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the image to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "4:3",
-              "1:1",
-              "3:4",
-              "9:16"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Image aspect ratio in n:n format.",
-            "default": "16:9"
-          },
-          "model": {
-            "type": "string",
-            "enum": [
-              "GEM_PIX_2",
-              "IMAGEN_3_5",
-              "NARWHAL"
-            ],
-            "title": "Model",
-            "description": "Model to use: GEM_PIX_2 (Nano Pro), IMAGEN_3_5 (Imagen 4), or NARWHAL (Nano Banana 2)",
-            "default": "GEM_PIX_2"
-          },
-          "reference_images": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ImageInput"
-                },
-                "type": "array",
-                "maxItems": 10
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Images",
-            "description": "Optional reference images (up to 10) for style/content guidance"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647,
-                "minimum": 0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Random seed for reproducibility"
-          },
-          "generation_config": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/FlowImageGenerationConfig"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional generation configuration. Set upscale.type='2x' to return a 2x upscaled image. 2x upscale doubles the base Flow image credit cost and rate-limit count."
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "FlowGenerateImageRequest"
-      },
-      "FlowGenerateVideoFromTextRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the video to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio in n:n format.",
-            "default": "16:9"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647,
-                "minimum": 0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Random seed for reproducibility"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "FlowGenerateVideoFromTextRequest"
-      },
-      "FlowImageGenerationConfig": {
-        "properties": {
-          "upscale": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/FlowImageUpscaleConfig"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional image upscale configuration. 2x upscale doubles the base Flow image credit cost and rate-limit count."
-          }
-        },
-        "type": "object",
-        "title": "FlowImageGenerationConfig"
-      },
-      "FlowImageUpscaleConfig": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "2x",
-            "title": "Type",
-            "description": "Upscale type. Currently only '2x' is supported. 2x upscale doubles the base Flow image credit cost and rate-limit count."
-          }
-        },
-        "type": "object",
-        "required": [
-          "type"
-        ],
-        "title": "FlowImageUpscaleConfig"
-      },
-      "FlowerGenerateImageRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the image to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16",
-              "1:1"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Image aspect ratio. 16:9 (1344x768), 9:16 (768x1344), or 1:1 (1024x1024). Ignored when reference_image is provided.",
-            "default": "16:9"
-          },
-          "reference_image": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ImageInput"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional reference image for img2img editing. When provided, the prompt acts as an edit instruction. Data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Max 5MB."
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "FlowerGenerateImageRequest"
-      },
-      "FlowerGenerateVideoRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the video to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio. 16:9 (1280x720) or 9:16 (720x1280).",
-            "default": "16:9"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "FlowerGenerateVideoRequest"
-      },
-      "FlowerVideoFromImageRequest": {
-        "properties": {
-          "image": {
-            "$ref": "#/components/schemas/ImageInput",
-            "description": "Image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Max 5MB."
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the desired motion/animation"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio. 16:9 (1280x720) or 9:16 (720x1280).",
-            "default": "16:9"
-          }
-        },
-        "type": "object",
-        "required": [
-          "image",
-          "prompt"
-        ],
-        "title": "FlowerVideoFromImageRequest"
-      },
-      "GenerateImagesRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the images to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "1:1",
-              "2:3",
-              "3:2",
-              "9:16",
-              "16:9"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Image aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
-            "default": "3:2"
-          },
-          "quality": {
-            "type": "string",
-            "enum": [
-              "quality",
-              "speed"
-            ],
-            "title": "Quality",
-            "description": "Image quality mode. 'quality' generates 4 higher-quality images (slower). 'speed' generates 6 images faster (default).",
-            "default": "speed"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "GenerateImagesRequest"
-      },
       "GeneratePromptRequest": {
         "properties": {
           "user_prompt": {
@@ -3542,161 +1948,12 @@
         "title": "GeneratePromptResponse",
         "description": "Response from server-side prompt generation."
       },
-      "GenerateVideoFromIngredientsRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the video to generate"
-          },
-          "reference_images": {
-            "items": {
-              "$ref": "#/components/schemas/ImageInput"
-            },
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Reference Images",
-            "description": "Reference images (1-3) to guide video generation"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio in n:n format.",
-            "default": "16:9"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647,
-                "minimum": 0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Random seed for reproducibility"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "reference_images"
-        ],
-        "title": "GenerateVideoFromIngredientsRequest"
-      },
-      "GenerateVideoFromKeyframesRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the video to generate"
-          },
-          "start_image": {
-            "$ref": "#/components/schemas/ImageInput",
-            "description": "Starting keyframe image (required)"
-          },
-          "end_image": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ImageInput"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional ending keyframe image"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio in n:n format.",
-            "default": "16:9"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647,
-                "minimum": 0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Random seed for reproducibility"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "start_image"
-        ],
-        "title": "GenerateVideoFromKeyframesRequest"
-      },
-      "GenerateVideoRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the video to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "1:1",
-              "2:3",
-              "3:2",
-              "9:16",
-              "16:9"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
-            "default": "16:9"
-          },
-          "resolution": {
-            "type": "string",
-            "enum": [
-              "480p",
-              "720p"
-            ],
-            "title": "Resolution",
-            "description": "Video generation resolution: 480p or 720p.",
-            "default": "480p"
-          },
-          "upscale": {
-            "type": "boolean",
-            "title": "Upscale",
-            "description": "Deprecated. Prefer resolution='720p'. If true and resolution is omitted, 720p is requested directly.",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "GenerateVideoRequest"
-      },
       "GenerationAcceptedResponse": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id",
-            "description": "Generation id. Use it with GET /api/v5/generations/{id}."
+            "description": "Generation id. Use it with GET /api/v6/generations/{id}."
           },
           "object": {
             "type": "string",
@@ -3713,7 +1970,7 @@
           "operation": {
             "type": "string",
             "title": "Operation",
-            "description": "Canonical V5 operation id."
+            "description": "Canonical V6 operation id."
           },
           "provider": {
             "type": "string",
@@ -3798,7 +2055,7 @@
                 "type": "null"
               }
             ],
-            "description": "Optional image upscale configuration. For Flow images, 2x upscale doubles the base credit cost and rate-limit count."
+            "description": "Optional image upscale configuration. For supported Flow image models, 2x upscale doubles the base credit cost and rate-limit count."
           }
         },
         "type": "object",
@@ -3816,7 +2073,7 @@
               }
             ],
             "title": "Operation",
-            "description": "Canonical V5 operation id. See GET /api/v5/capabilities for billing, inputs, and provider behavior."
+            "description": "Canonical V6 operation id. See GET /api/v6/capabilities for billing, inputs, and provider behavior."
           },
           "model": {
             "anyOf": [
@@ -3838,7 +2095,7 @@
           },
           "inputs": {
             "items": {
-              "$ref": "#/components/schemas/V5GenerationInput"
+              "$ref": "#/components/schemas/V6GenerationInput"
             },
             "type": "array",
             "title": "Inputs",
@@ -3938,7 +2195,7 @@
                 "type": "null"
               }
             ],
-            "description": "Optional generation configuration. For Flow images, set upscale.type='2x' to return a 2x upscaled image. 2x upscale doubles the base credit cost and rate-limit count."
+            "description": "Optional generation configuration. For supported Flow image models, set upscale.type='2x' to return a 2x upscaled image. 2x upscale doubles the base credit cost and rate-limit count."
           }
         },
         "type": "object",
@@ -3962,7 +2219,7 @@
             ],
             "title": "Type"
           },
-          "download_path": {
+          "download_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -3971,8 +2228,8 @@
                 "type": "null"
               }
             ],
-            "title": "Download Path",
-            "description": "Storage download path for file-backed media. Resolve it against the active storage origin for the current site or mirror."
+            "title": "Download Url",
+            "description": "Complete download URL for file-backed media."
           },
           "data": {
             "anyOf": [
@@ -4092,7 +2349,7 @@
               }
             ],
             "title": "Operation",
-            "description": "Canonical V5 operation id, when available."
+            "description": "Canonical V6 operation id, when available."
           },
           "operation_type": {
             "type": "string",
@@ -4196,7 +2453,7 @@
             "type": "string",
             "const": "2x",
             "title": "Type",
-            "description": "Upscale type. Currently only '2x' is supported. For Flow images, 2x upscale doubles the base credit cost and rate-limit count."
+            "description": "Upscale type. Currently only '2x' is supported. For supported Flow image models, 2x upscale doubles the base credit cost and rate-limit count."
           }
         },
         "type": "object",
@@ -4232,282 +2489,6 @@
         },
         "type": "object",
         "title": "GenerationUsage"
-      },
-      "GoogleFxGenerateImageFlowRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description of the image to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "IMAGE_ASPECT_RATIO_PORTRAIT",
-              "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
-              "IMAGE_ASPECT_RATIO_LANDSCAPE",
-              "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE",
-              "IMAGE_ASPECT_RATIO_SQUARE"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Output image aspect ratio (portrait or landscape only). Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
-            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Seed for reproducible generation"
-          },
-          "model": {
-            "type": "string",
-            "enum": [
-              "GEM_PIX_2",
-              "IMAGEN_3_5"
-            ],
-            "title": "Model",
-            "description": "Model to use: GEM_PIX_2 (nano banana pro) or IMAGEN_3_5 (imagen 4)",
-            "default": "GEM_PIX_2"
-          },
-          "reference_images": {
-            "anyOf": [
-              {
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "pattern": "^data:[^;]+;base64,"
-                    },
-                    {
-                      "type": "string",
-                      "pattern": "^file:[a-f0-9]{32}$"
-                    }
-                  ],
-                  "description": "Image as data URI or file reference. Maximum size: 5MB"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Images",
-            "description": "Optional reference images (1-10 depending on model). Data URIs or file references."
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "GoogleFxGenerateImageFlowRequest",
-        "description": "Generate an image from a text prompt using Google FX Flow API (GEM_PIX_2 or Imagen 4)."
-      },
-      "GoogleFxGenerateVideoFromIngredientsRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description guiding the video generation"
-          },
-          "reference_images": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^data:[^;]+;base64,"
-                },
-                {
-                  "type": "string",
-                  "pattern": "^file:[a-f0-9]{32}$"
-                }
-              ],
-              "description": "Image as data URI or file reference. Maximum size: 5MB"
-            },
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Reference Images",
-            "description": "1-3 reference images (data URIs or file references). Max 5MB each"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "VIDEO_ASPECT_RATIO_PORTRAIT",
-              "VIDEO_ASPECT_RATIO_LANDSCAPE"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Output video aspect ratio. Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
-            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Seed for reproducible generation"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "reference_images"
-        ],
-        "title": "GoogleFxGenerateVideoFromIngredientsRequest",
-        "description": "Generate a video from 1-3 reference images using Google FX."
-      },
-      "GoogleFxGenerateVideoFromPromptRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description of the video to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "VIDEO_ASPECT_RATIO_PORTRAIT",
-              "VIDEO_ASPECT_RATIO_LANDSCAPE"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Output video aspect ratio. Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
-            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Seed for reproducible generation"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "GoogleFxGenerateVideoFromPromptRequest",
-        "description": "Generate a video from a text prompt using Google FX (VEO)."
-      },
-      "GoogleFxGenerateVideoStartEndRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description guiding the video generation"
-          },
-          "start_image": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^data:[^;]+;base64,"
-              },
-              {
-                "type": "string",
-                "pattern": "^file:[a-f0-9]{32}$"
-              }
-            ],
-            "title": "Start Image",
-            "description": "Starting keyframe image (data URI or file reference). Max 5MB"
-          },
-          "end_image": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "pattern": "^data:[^;]+;base64,"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^file:[a-f0-9]{32}$"
-                  }
-                ],
-                "description": "Image as data URI or file reference. Maximum size: 5MB"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End Image",
-            "description": "Optional ending keyframe image. Max 5MB"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "VIDEO_ASPECT_RATIO_PORTRAIT",
-              "VIDEO_ASPECT_RATIO_LANDSCAPE"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Output video aspect ratio. Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
-            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Seed for reproducible generation"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "start_image"
-        ],
-        "title": "GoogleFxGenerateVideoStartEndRequest",
-        "description": "Generate a video with start and optional end keyframes using Google FX."
       },
       "HTTPValidationError": {
         "properties": {
@@ -4587,50 +2568,6 @@
         ],
         "title": "HourlyUsageStats",
         "description": "Usage statistics for a single endpoint within the current hourly window."
-      },
-      "ImageInput": {
-        "anyOf": [
-          {
-            "type": "string",
-            "pattern": "^data:[^;]+;base64,"
-          },
-          {
-            "type": "string",
-            "pattern": "^file:[a-f0-9]{32}$"
-          }
-        ],
-        "description": "Image as data URI or file reference. Maximum size: 5MB"
-      },
-      "ImageResponse": {
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "default": true
-          },
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider"
-          },
-          "result": {
-            "type": "string",
-            "pattern": "^data:[^;]+;base64,",
-            "title": "Result"
-          },
-          "task_id": {
-            "type": "string",
-            "title": "Task Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "provider",
-          "result",
-          "task_id"
-        ],
-        "title": "ImageResponse",
-        "description": "Response for successful image generation/transformation."
       },
       "ModelArchitecture": {
         "properties": {
@@ -4920,44 +2857,6 @@
         ],
         "title": "ModelQuirkInfo"
       },
-      "OpenAIImageGenerateRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the image to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "pattern": "^[1-9]\\d*:[1-9]\\d*$",
-            "title": "Aspect Ratio",
-            "description": "Requested image aspect ratio in n:n format.",
-            "default": "16:9"
-          },
-          "reference_images": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ImageInput"
-                },
-                "type": "array",
-                "maxItems": 10
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Images",
-            "description": "Optional reference images as data URIs or file references to guide generation."
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "OpenAIImageGenerateRequest"
-      },
       "OperationCancelResult": {
         "properties": {
           "operation_id": {
@@ -5088,231 +2987,6 @@
           "options"
         ],
         "title": "OperationInfo"
-      },
-      "OperationResponse": {
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "const": true,
-            "title": "Success",
-            "description": "Always true when the operation was accepted"
-          },
-          "operation_id": {
-            "type": "string",
-            "title": "Operation Id",
-            "description": "Unique identifier for this operation"
-          },
-          "operation_type": {
-            "type": "string",
-            "title": "Operation Type",
-            "description": "Type of operation (e.g., 'flow_image_generate', 'grok_image_edit')"
-          },
-          "status": {
-            "type": "string",
-            "const": "pending",
-            "title": "Status",
-            "description": "Initial async operation status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "success",
-          "operation_id",
-          "operation_type",
-          "status"
-        ],
-        "title": "OperationResponse",
-        "description": "Response when any operation is initiated (async).\n\nAll V4 operations are async and return this response immediately.\nPoll /api/v4/operations/{operation_id} to get the result."
-      },
-      "OperationStatusResponse": {
-        "properties": {
-          "operation_id": {
-            "type": "string",
-            "title": "Operation Id"
-          },
-          "operation_type": {
-            "type": "string",
-            "title": "Operation Type",
-            "description": "Type of operation"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "processing",
-              "success",
-              "error"
-            ],
-            "title": "Status"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider",
-            "description": "Provider that owns the operation, when known"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model",
-            "description": "Model used for the operation, when known"
-          },
-          "media_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "image",
-                  "video",
-                  "text"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Media Type",
-            "description": "Media type for the operation"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At",
-            "description": "Time the operation was created"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At",
-            "description": "Time the operation status was last updated"
-          },
-          "expires_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires At",
-            "description": "Approximate time the operation status will expire if it is not refreshed"
-          },
-          "cost_charged": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cost Charged",
-            "description": "Rate-limit units charged for this operation, when applicable"
-          },
-          "usage_refunded": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Usage Refunded",
-            "description": "Whether charged usage was refunded"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Result",
-            "description": "List of results when status is 'success'. By default media results are resolved data URIs; pass result_format=ref to receive file: references for streamable storage-server downloads. Extract-prompt returns 1 plain text string."
-          },
-          "warnings": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Warnings",
-            "description": "Non-fatal warnings for successful operations."
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error",
-            "description": "Error message when status is 'error'"
-          },
-          "translations": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Translations",
-            "description": "Translated error messages when status is 'error'"
-          }
-        },
-        "type": "object",
-        "required": [
-          "operation_id",
-          "operation_type",
-          "status"
-        ],
-        "title": "OperationStatusResponse",
-        "description": "Response for operation status check.\n\nUsed by the unified /api/v4/operations/{operation_id} endpoint."
       },
       "PromptTokenUsage": {
         "properties": {
@@ -5463,17 +3137,17 @@
         "title": "UsageResponse",
         "description": "Response for usage statistics endpoint."
       },
-      "V5GenerationInput": {
+      "V6GenerationInput": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/V5MediaInput"
+            "$ref": "#/components/schemas/V6MediaInput"
           },
           {
-            "$ref": "#/components/schemas/V5NamedMediaInput"
+            "$ref": "#/components/schemas/V6NamedMediaInput"
           }
         ]
       },
-      "V5MediaInput": {
+      "V6MediaInput": {
         "anyOf": [
           {
             "type": "string",
@@ -5486,7 +3160,7 @@
         ],
         "description": "Image or video as a data URI, or a 32-character storage file id. Inline images are limited to 5MB; inline videos are limited to 1GB."
       },
-      "V5NamedMediaInput": {
+      "V6NamedMediaInput": {
         "properties": {
           "filename": {
             "type": "string",
@@ -5496,7 +3170,7 @@
             "description": "Client-visible filename for referring to this input in the prompt."
           },
           "input": {
-            "$ref": "#/components/schemas/V5MediaInput",
+            "$ref": "#/components/schemas/V6MediaInput",
             "description": "Image or video input as a data URI or 32-character storage file id."
           }
         },
@@ -5505,7 +3179,7 @@
           "filename",
           "input"
         ],
-        "title": "V5NamedMediaInput"
+        "title": "V6NamedMediaInput"
       },
       "ValidationError": {
         "properties": {
@@ -5546,198 +3220,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "VideoFromImageRequest": {
-        "anyOf": [
-          {
-            "properties": {
-              "image": {
-                "$ref": "#/components/schemas/ImageInput"
-              }
-            },
-            "required": [
-              "image"
-            ]
-          },
-          {
-            "properties": {
-              "images": {
-                "items": {
-                  "$ref": "#/components/schemas/ImageInput"
-                },
-                "type": "array",
-                "minItems": 1
-              }
-            },
-            "required": [
-              "images"
-            ]
-          }
-        ],
-        "properties": {
-          "image": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ImageInput"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Single image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Supported formats: JPEG, PNG, WebP. Maximum size: 5MB."
-          },
-          "images": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ImageInput"
-                },
-                "type": "array",
-                "maxItems": 7,
-                "minItems": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Images",
-            "description": "List of images as data URIs or file references. Maximum 7 images. At least one of 'image' or 'images' must be provided."
-          },
-          "prompt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prompt",
-            "description": "Optional text prompt to guide the video generation. If provided, uses custom mode; otherwise uses normal mode."
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "1:1",
-              "2:3",
-              "3:2",
-              "9:16",
-              "16:9"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Video aspect ratio for multi-image references. Single-image animation follows the input image framing.",
-            "default": "16:9"
-          },
-          "resolution": {
-            "type": "string",
-            "enum": [
-              "480p",
-              "720p"
-            ],
-            "title": "Resolution",
-            "description": "Video generation resolution: 480p or 720p.",
-            "default": "480p"
-          },
-          "upscale": {
-            "type": "boolean",
-            "title": "Upscale",
-            "description": "Deprecated. Prefer resolution='720p'. If true and resolution is omitted, 720p is requested directly.",
-            "default": false
-          }
-        },
-        "type": "object",
-        "title": "VideoFromImageRequest"
-      },
-      "VideoResponse": {
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "default": true
-          },
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider"
-          },
-          "operation_id": {
-            "type": "string",
-            "title": "Operation Id"
-          },
-          "status": {
-            "type": "string",
-            "const": "pending",
-            "title": "Status",
-            "default": "pending"
-          }
-        },
-        "type": "object",
-        "required": [
-          "provider",
-          "operation_id"
-        ],
-        "title": "VideoResponse",
-        "description": "Response when video generation is initiated (async)."
-      },
-      "VideoStatusResponse": {
-        "properties": {
-          "operation_id": {
-            "type": "string",
-            "title": "Operation Id"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "processing",
-              "success",
-              "error"
-            ],
-            "title": "Status"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^data:[^;]+;base64,"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Result"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "translations": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Translations"
-          }
-        },
-        "type": "object",
-        "required": [
-          "operation_id",
-          "status"
-        ],
-        "title": "VideoStatusResponse",
-        "description": "Response for video generation status check."
       },
       "src__api__openai_compatible__ModelInfo": {
         "properties": {
@@ -5833,7 +3315,7 @@
         ],
         "title": "ModelInfo"
       },
-      "src__api__v5__models__ModelInfo": {
+      "src__api__v6__models__ModelInfo": {
         "properties": {
           "id": {
             "type": "string",
