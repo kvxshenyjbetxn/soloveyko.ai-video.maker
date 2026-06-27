@@ -1,5 +1,5 @@
-use eframe::egui;
 use crate::localization::{Language, translate};
+use eframe::egui;
 
 /// Стан одного вікна чату з агентом (зберігається per-job).
 pub struct AgentChatWindowState {
@@ -54,10 +54,13 @@ pub fn draw_agent_chat_windows(
             if let Some(res) = result {
                 match res {
                     Ok(response) => {
-                        agent_chat_arc.lock().unwrap().push(crate::queue::AgentChatMessage {
-                            role: "agent".to_string(),
-                            content: response,
-                        });
+                        agent_chat_arc
+                            .lock()
+                            .unwrap()
+                            .push(crate::queue::AgentChatMessage {
+                                role: "agent".to_string(),
+                                content: response,
+                            });
                         let save_dir = std::path::Path::new(&job_settings.save_path);
                         save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
                         state.error = None;
@@ -93,9 +96,10 @@ pub fn draw_agent_chat_windows(
                     let chat_snapshot = agent_chat_arc.lock().unwrap().clone();
                     let is_loading = *state.loading.lock().unwrap();
                     let pipeline_generating = job_status == crate::queue::JobStatus::Running
-                        && chat_snapshot.last().map(|m| {
-                            m.role == "agent" && !m.content.contains("[STATS]")
-                        }).unwrap_or(false);
+                        && chat_snapshot
+                            .last()
+                            .map(|m| m.role == "agent" && !m.content.contains("[STATS]"))
+                            .unwrap_or(false);
                     let show_spinner = is_loading || pipeline_generating;
 
                     let scroll_height = (ui.available_height() - 120.0).max(80.0);
@@ -131,9 +135,12 @@ pub fn draw_agent_chat_windows(
                                         );
                                         ui.add_space(2.0);
                                         if is_user {
-                                            ui.add(egui::Label::new(
-                                                egui::RichText::new(&msg.content).size(12.0)
-                                            ).wrap());
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(&msg.content).size(12.0),
+                                                )
+                                                .wrap(),
+                                            );
                                         } else {
                                             render_message_content(ui, &msg.content);
                                         }
@@ -154,11 +161,18 @@ pub fn draw_agent_chat_windows(
                     ui.add_space(4.0);
 
                     if let Some(ref err) = state.error {
-                        ui.add(egui::Label::new(
-                            egui::RichText::new(format!("{} {}", translate(language, "agent_chat_error"), err))
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!(
+                                    "{} {}",
+                                    translate(language, "agent_chat_error"),
+                                    err
+                                ))
                                 .color(egui::Color32::from_rgb(231, 76, 60))
                                 .size(11.0),
-                        ).wrap());
+                            )
+                            .wrap(),
+                        );
                         ui.add_space(4.0);
                     }
 
@@ -180,17 +194,29 @@ pub fn draw_agent_chat_windows(
                                             .strong(),
                                     );
                                     ui.label(
-                                        egui::RichText::new(translate(language, "agent_awaiting_hint"))
-                                            .size(12.0)
-                                            .color(egui::Color32::from_rgb(39, 174, 96)),
+                                        egui::RichText::new(translate(
+                                            language,
+                                            "agent_awaiting_hint",
+                                        ))
+                                        .size(12.0)
+                                        .color(egui::Color32::from_rgb(39, 174, 96)),
                                     );
                                 });
                                 ui.add_space(4.0);
-                                if ui.add(egui::Button::new(
-                                    egui::RichText::new(translate(language, "agent_resume_pipeline_btn"))
-                                        .strong()
-                                        .size(13.0)
-                                ).min_size(egui::vec2(ui.available_width(), 28.0))).clicked() {
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new(translate(
+                                                language,
+                                                "agent_resume_pipeline_btn",
+                                            ))
+                                            .strong()
+                                            .size(13.0),
+                                        )
+                                        .min_size(egui::vec2(ui.available_width(), 28.0)),
+                                    )
+                                    .clicked()
+                                {
                                     trigger_resume_pipeline = true;
                                 }
                             });
@@ -222,20 +248,28 @@ pub fn draw_agent_chat_windows(
                         }
 
                         // Кнопка «Надіслати» — доступна коли є сесія і є текст
-                        if ui.add_enabled(
-                            !is_loading && has_session && !state.input.trim().is_empty(),
-                            egui::Button::new(translate(language, "agent_chat_send_btn")),
-                        ).clicked() {
+                        if ui
+                            .add_enabled(
+                                !is_loading && has_session && !state.input.trim().is_empty(),
+                                egui::Button::new(translate(language, "agent_chat_send_btn")),
+                            )
+                            .clicked()
+                        {
                             trigger_send = true;
                         }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Кнопка «Перебудувати таймлінію»
-                            if ui.add(
-                                egui::Button::new(
-                                    egui::RichText::new(translate(language, "agent_chat_rebuild_btn")).strong()
-                                )
-                            ).clicked() {
+                            if ui
+                                .add(egui::Button::new(
+                                    egui::RichText::new(translate(
+                                        language,
+                                        "agent_chat_rebuild_btn",
+                                    ))
+                                    .strong(),
+                                ))
+                                .clicked()
+                            {
                                 trigger_rebuild = true;
                             }
                         });
@@ -249,10 +283,13 @@ pub fn draw_agent_chat_windows(
             if !message.is_empty() {
                 let session_snapshot = agent_session_arc.lock().unwrap().clone();
                 if let Some(session) = session_snapshot {
-                    agent_chat_arc.lock().unwrap().push(crate::queue::AgentChatMessage {
-                        role: "user".to_string(),
-                        content: message.clone(),
-                    });
+                    agent_chat_arc
+                        .lock()
+                        .unwrap()
+                        .push(crate::queue::AgentChatMessage {
+                            role: "user".to_string(),
+                            content: message.clone(),
+                        });
                     let save_dir = std::path::Path::new(&job_settings.save_path);
                     save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
                     state.input.clear();
@@ -359,10 +396,10 @@ fn render_result_line(ui: &mut egui::Ui, text: &str, is_error: bool) {
 fn render_stats_line(ui: &mut egui::Ui, data: &str) {
     let mut iter = data.split('|');
     let duration_s: f64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    let in_tok: u64     = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-    let out_tok: u64    = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-    let cost: f64       = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    let turns: u64      = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let in_tok: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let out_tok: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let cost: f64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    let turns: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
 
     let sep_color = ui.visuals().weak_text_color().linear_multiply(0.35);
 
@@ -372,22 +409,42 @@ fn render_stats_line(ui: &mut egui::Ui, data: &str) {
 
     ui.horizontal(|ui| {
         ui.add_space(4.0);
-        ui.label(egui::RichText::new(format!("{:.1}s", duration_s)).size(11.0).weak());
+        ui.label(
+            egui::RichText::new(format!("{:.1}s", duration_s))
+                .size(11.0)
+                .weak(),
+        );
         draw_dot_sep(ui, sep_color);
 
         let green = egui::Color32::from_rgb(46, 180, 100);
         draw_icon_arrow_up(ui, green);
-        ui.label(egui::RichText::new(format!("{}", in_tok)).size(11.0).color(green));
+        ui.label(
+            egui::RichText::new(format!("{}", in_tok))
+                .size(11.0)
+                .color(green),
+        );
         ui.add_space(4.0);
 
         let blue = egui::Color32::from_rgb(52, 152, 219);
         draw_icon_arrow_down(ui, blue);
-        ui.label(egui::RichText::new(format!("{} tok", out_tok)).size(11.0).color(blue));
+        ui.label(
+            egui::RichText::new(format!("{} tok", out_tok))
+                .size(11.0)
+                .color(blue),
+        );
 
         draw_dot_sep(ui, sep_color);
-        ui.label(egui::RichText::new(format!("${:.4}", cost)).size(11.0).weak());
+        ui.label(
+            egui::RichText::new(format!("${:.4}", cost))
+                .size(11.0)
+                .weak(),
+        );
         draw_dot_sep(ui, sep_color);
-        ui.label(egui::RichText::new(format!("{} turns", turns)).size(11.0).weak());
+        ui.label(
+            egui::RichText::new(format!("{} turns", turns))
+                .size(11.0)
+                .weak(),
+        );
     });
 
     ui.add_space(4.0);
@@ -397,7 +454,7 @@ fn render_stats_line(ui: &mut egui::Ui, data: &str) {
 
 fn render_live_stats_line(ui: &mut egui::Ui, data: &str) {
     let mut iter = data.split('|');
-    let in_tok:  u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let in_tok: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let out_tok: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
 
     let dim = ui.visuals().weak_text_color().linear_multiply(0.5);
@@ -405,11 +462,19 @@ fn render_live_stats_line(ui: &mut egui::Ui, data: &str) {
         ui.add_space(4.0);
         let green = egui::Color32::from_rgb(46, 180, 100).linear_multiply(0.7);
         draw_icon_arrow_up(ui, green);
-        ui.label(egui::RichText::new(format!("{}", in_tok)).size(10.0).color(green));
+        ui.label(
+            egui::RichText::new(format!("{}", in_tok))
+                .size(10.0)
+                .color(green),
+        );
         ui.add_space(4.0);
         let blue = egui::Color32::from_rgb(52, 152, 219).linear_multiply(0.7);
         draw_icon_arrow_down(ui, blue);
-        ui.label(egui::RichText::new(format!("{} tok", out_tok)).size(10.0).color(blue));
+        ui.label(
+            egui::RichText::new(format!("{} tok", out_tok))
+                .size(10.0)
+                .color(blue),
+        );
         ui.add_space(4.0);
         ui.label(egui::RichText::new("...").size(10.0).color(dim));
     });
@@ -424,9 +489,9 @@ fn render_think_line(ui: &mut egui::Ui, text: &str) {
         }
         ui.add_space(5.0);
         let color = ui.visuals().weak_text_color().linear_multiply(0.7);
-        ui.add(egui::Label::new(
-            egui::RichText::new(text).size(11.0).color(color).italics()
-        ).wrap());
+        ui.add(
+            egui::Label::new(egui::RichText::new(text).size(11.0).color(color).italics()).wrap(),
+        );
     });
 }
 
@@ -434,7 +499,10 @@ fn draw_h_line(ui: &mut egui::Ui, color: egui::Color32) {
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 1.0), egui::Sense::hover());
     if ui.is_rect_visible(rect) {
-        ui.painter().line_segment([rect.left_center(), rect.right_center()], egui::Stroke::new(1.0, color));
+        ui.painter().line_segment(
+            [rect.left_center(), rect.right_center()],
+            egui::Stroke::new(1.0, color),
+        );
     }
 }
 
@@ -489,14 +557,21 @@ fn draw_icon_x(painter: &egui::Painter, rect: egui::Rect) {
     let stroke = egui::Stroke::new(1.5, color);
     let d = 2.5;
     let c = rect.center();
-    painter.line_segment([egui::pos2(c.x - d, c.y - d), egui::pos2(c.x + d, c.y + d)], stroke);
-    painter.line_segment([egui::pos2(c.x + d, c.y - d), egui::pos2(c.x - d, c.y + d)], stroke);
+    painter.line_segment(
+        [egui::pos2(c.x - d, c.y - d), egui::pos2(c.x + d, c.y + d)],
+        stroke,
+    );
+    painter.line_segment(
+        [egui::pos2(c.x + d, c.y - d), egui::pos2(c.x - d, c.y + d)],
+        stroke,
+    );
 }
 
 fn save_agent_chat(save_dir: &std::path::Path, chat: &[crate::queue::AgentChatMessage]) {
-    let messages: Vec<serde_json::Value> = chat.iter().map(|m| {
-        serde_json::json!({ "role": m.role, "content": m.content })
-    }).collect();
+    let messages: Vec<serde_json::Value> = chat
+        .iter()
+        .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
+        .collect();
     let json = serde_json::to_string_pretty(&messages).unwrap_or_default();
     let _ = std::fs::write(save_dir.join("agent_chat.json"), json);
 }

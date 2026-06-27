@@ -56,7 +56,9 @@ impl PiLimiter {
         let mut active = self.active.lock().unwrap();
         loop {
             let max = *self.max_threads.lock().unwrap();
-            if *active < max { break; }
+            if *active < max {
+                break;
+            }
             active = self.condvar.wait(active).unwrap();
         }
         *active += 1;
@@ -65,7 +67,9 @@ impl PiLimiter {
 
     fn release(&self) {
         let mut active = self.active.lock().unwrap();
-        if *active > 0 { *active -= 1; }
+        if *active > 0 {
+            *active -= 1;
+        }
         self.condvar.notify_one();
     }
 
@@ -102,12 +106,18 @@ pub fn call_pi_new_session_streaming(
         }
     };
 
-    log(&format!("Starting Pi CLI. Model: {}, session: {}", model, session_id));
+    log(&format!(
+        "Starting Pi CLI. Model: {}, session: {}",
+        model, session_id
+    ));
 
     let mut cmd = pi_command();
-    cmd.arg("--model").arg(model)
-        .arg("--session-id").arg(session_id)
-        .arg("-p").arg(user_content)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("--session-id")
+        .arg(session_id)
+        .arg("-p")
+        .arg(user_content)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -116,7 +126,10 @@ pub fn call_pi_new_session_streaming(
     }
 
     let output = cmd.output().map_err(|e| {
-        format!("Failed to launch pi CLI: {}. Make sure pi is installed and in PATH.", e)
+        format!(
+            "Failed to launch pi CLI: {}. Make sure pi is installed and in PATH.",
+            e
+        )
     })?;
 
     let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -153,9 +166,12 @@ pub fn call_pi_resume(
     log(&format!("Resuming Pi CLI session: {}", session_id));
 
     let mut cmd = pi_command();
-    cmd.arg("--model").arg(model)
-        .arg("--session-id").arg(session_id)
-        .arg("-p").arg(message)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("--session-id")
+        .arg(session_id)
+        .arg("-p")
+        .arg(message)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -163,7 +179,9 @@ pub fn call_pi_resume(
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -171,7 +189,11 @@ pub fn call_pi_resume(
         Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(format!("Pi CLI error (exit {:?}): {}", output.status.code(), stderr))
+        Err(format!(
+            "Pi CLI error (exit {:?}): {}",
+            output.status.code(),
+            stderr
+        ))
     }
 }
 
@@ -195,8 +217,10 @@ pub fn call_pi_cli(
     log(&format!("Pi CLI call. Model: {}", model));
 
     let mut cmd = pi_command();
-    cmd.arg("--model").arg(model)
-        .arg("-p").arg(user_content)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("-p")
+        .arg(user_content)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -204,7 +228,9 @@ pub fn call_pi_cli(
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -212,6 +238,10 @@ pub fn call_pi_cli(
         Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(format!("Pi CLI error (exit {:?}): {}", output.status.code(), stderr))
+        Err(format!(
+            "Pi CLI error (exit {:?}): {}",
+            output.status.code(),
+            stderr
+        ))
     }
 }

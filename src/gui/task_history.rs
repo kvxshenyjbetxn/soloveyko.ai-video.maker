@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::localization::{Language, translate};
 use crate::gui::settings::storage::TaskHistoryEntry;
+use crate::localization::{Language, translate};
+use eframe::egui;
 
 fn format_ts(ts: i64) -> String {
     use chrono::{Local, TimeZone};
@@ -14,11 +14,26 @@ fn format_ts(ts: i64) -> String {
 /// Малює 5 крапок-індикаторів увімкнених етапів через painter — без тексту.
 fn stage_dots(ui: &mut egui::Ui, language: Language, entry: &TaskHistoryEntry) {
     let stages = [
-        (entry.stage_translation, translate(language, "task_history_stage_t")),
-        (entry.stage_voiceover,   translate(language, "task_history_stage_v")),
-        (entry.stage_video,       translate(language, "task_history_stage_vid")),
-        (entry.stage_subtitles,   translate(language, "task_history_stage_s")),
-        (entry.stage_editing,     translate(language, "task_history_stage_m")),
+        (
+            entry.stage_translation,
+            translate(language, "task_history_stage_t"),
+        ),
+        (
+            entry.stage_voiceover,
+            translate(language, "task_history_stage_v"),
+        ),
+        (
+            entry.stage_video,
+            translate(language, "task_history_stage_vid"),
+        ),
+        (
+            entry.stage_subtitles,
+            translate(language, "task_history_stage_s"),
+        ),
+        (
+            entry.stage_editing,
+            translate(language, "task_history_stage_m"),
+        ),
     ];
 
     let r = 3.5_f32;
@@ -41,7 +56,8 @@ fn stage_dots(ui: &mut egui::Ui, language: Language, entry: &TaskHistoryEntry) {
     }
 
     // Tooltip: перелік увімкнених етапів
-    let active: Vec<&str> = stages.iter()
+    let active: Vec<&str> = stages
+        .iter()
         .filter(|(en, _)| *en)
         .map(|(_, lbl)| *lbl)
         .collect();
@@ -66,7 +82,12 @@ pub fn draw_task_history_panel(
     ui.set_min_width(panel_width);
 
     egui::Frame::none()
-        .inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 8.0, bottom: 4.0 })
+        .inner_margin(egui::Margin {
+            left: 8.0,
+            right: 8.0,
+            top: 8.0,
+            bottom: 4.0,
+        })
         .show(ui, |ui| {
             ui.set_max_width(panel_width - 16.0);
             ui.add(egui::Label::new(
@@ -119,17 +140,20 @@ pub fn draw_task_history_panel(
                 let frame_resp = egui::Frame::none()
                     .fill(hover_fill)
                     .rounding(egui::Rounding::same(4.0))
-                    .inner_margin(egui::Margin { left: 6.0, right: 6.0, top: 4.0, bottom: 4.0 })
+                    .inner_margin(egui::Margin {
+                        left: 6.0,
+                        right: 6.0,
+                        top: 4.0,
+                        bottom: 4.0,
+                    })
                     .show(ui, |ui| {
                         ui.set_max_width(inner_width);
 
                         // Рядок 1: назва
                         ui.add_sized(
                             [inner_width, 16.0],
-                            egui::Label::new(
-                                egui::RichText::new(&entry.name).size(12.0).strong(),
-                            )
-                            .truncate(),
+                            egui::Label::new(egui::RichText::new(&entry.name).size(12.0).strong())
+                                .truncate(),
                         );
 
                         // Рядок 2: дата + крапки етапів в одному рядку

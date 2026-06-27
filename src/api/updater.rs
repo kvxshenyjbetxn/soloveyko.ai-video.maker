@@ -66,10 +66,7 @@ pub fn check_for_updates(result: Arc<Mutex<Option<UpdateInfo>>>, ctx: egui::Cont
             .timeout(std::time::Duration::from_secs(15))
             .build();
 
-        let url = format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            REPO
-        );
+        let url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
 
         let release: GithubRelease = match agent
             .get(&url)

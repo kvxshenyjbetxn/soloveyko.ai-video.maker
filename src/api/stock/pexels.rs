@@ -1,5 +1,5 @@
+use super::{StockPhoto, StockProvider, StockVideo};
 use serde::Deserialize;
-use super::{StockPhoto, StockVideo, StockProvider};
 
 pub struct PexelsProvider;
 
@@ -77,9 +77,16 @@ struct VideosResponse {
 // ─── Реалізація трейту ────────────────────────────────────────────────────────
 
 impl StockProvider for PexelsProvider {
-    fn name(&self) -> &str { "Pexels" }
+    fn name(&self) -> &str {
+        "Pexels"
+    }
 
-    fn search_photos(&self, key: &str, query: &str, per_page: u32) -> Result<Vec<StockPhoto>, String> {
+    fn search_photos(
+        &self,
+        key: &str,
+        query: &str,
+        per_page: u32,
+    ) -> Result<Vec<StockPhoto>, String> {
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(15))
             .build();
@@ -97,17 +104,26 @@ impl StockProvider for PexelsProvider {
             .into_json::<PhotosResponse>()
             .map_err(|e| format!("Pexels JSON error: {e}"))?;
 
-        Ok(data.photos.into_iter().map(|p| StockPhoto {
-            id: p.id.to_string(),
-            preview_url: p.src.medium,
-            original_url: p.src.original,
-            width: p.width,
-            height: p.height,
-            author: p.photographer,
-        }).collect())
+        Ok(data
+            .photos
+            .into_iter()
+            .map(|p| StockPhoto {
+                id: p.id.to_string(),
+                preview_url: p.src.medium,
+                original_url: p.src.original,
+                width: p.width,
+                height: p.height,
+                author: p.photographer,
+            })
+            .collect())
     }
 
-    fn search_videos(&self, key: &str, query: &str, per_page: u32) -> Result<Vec<StockVideo>, String> {
+    fn search_videos(
+        &self,
+        key: &str,
+        query: &str,
+        per_page: u32,
+    ) -> Result<Vec<StockVideo>, String> {
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(15))
             .build();
@@ -125,26 +141,35 @@ impl StockProvider for PexelsProvider {
             .into_json::<VideosResponse>()
             .map_err(|e| format!("Pexels JSON error: {e}"))?;
 
-        Ok(data.videos.into_iter().filter_map(|v| {
-            // Обираємо найкращий HD landscape файл (width > height), потім будь-який HD, потім перший
-            let best = v.video_files.iter()
-                .filter(|f| f.quality == "hd" && f.width.unwrap_or(0) > f.height.unwrap_or(0))
-                .max_by_key(|f| f.width.unwrap_or(0))
-                .or_else(|| v.video_files.iter()
-                    .filter(|f| f.quality == "hd")
-                    .max_by_key(|f| f.width.unwrap_or(0)))
-                .or_else(|| v.video_files.first())?;
+        Ok(data
+            .videos
+            .into_iter()
+            .filter_map(|v| {
+                // Обираємо найкращий HD landscape файл (width > height), потім будь-який HD, потім перший
+                let best = v
+                    .video_files
+                    .iter()
+                    .filter(|f| f.quality == "hd" && f.width.unwrap_or(0) > f.height.unwrap_or(0))
+                    .max_by_key(|f| f.width.unwrap_or(0))
+                    .or_else(|| {
+                        v.video_files
+                            .iter()
+                            .filter(|f| f.quality == "hd")
+                            .max_by_key(|f| f.width.unwrap_or(0))
+                    })
+                    .or_else(|| v.video_files.first())?;
 
-            Some(StockVideo {
-                id: v.id.to_string(),
-                thumbnail_url: v.image,
-                duration_secs: v.duration,
-                download_url: best.link.clone(),
-                width: best.width.unwrap_or(0),
-                height: best.height.unwrap_or(0),
-                author: v.user.name,
+                Some(StockVideo {
+                    id: v.id.to_string(),
+                    thumbnail_url: v.image,
+                    duration_secs: v.duration,
+                    download_url: best.link.clone(),
+                    width: best.width.unwrap_or(0),
+                    height: best.height.unwrap_or(0),
+                    author: v.user.name,
+                })
             })
-        }).collect())
+            .collect())
     }
 }
 

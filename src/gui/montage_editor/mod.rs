@@ -1,33 +1,32 @@
-mod types;
-mod utils;
 mod audio;
-mod media;
 mod frame_cache;
-mod state;
-mod topbar;
+mod inspector;
+mod media;
 mod media_pool;
 mod preview;
-mod inspector;
+mod state;
 mod timeline;
+mod topbar;
+mod types;
+mod utils;
 
-pub use types::{
-    ClipKind, MontagePreviewSettings, MontageEditorActions,
-    PreviewQuality, PreviewRenderSettings,
-};
-pub use media::MediaItem;
-pub use frame_cache::FrameCache;
 pub use audio::{
     AudioPlayer, PlayingAudio, embedded_audio_cache_path, extract_embedded_audio_async,
 };
+pub use frame_cache::FrameCache;
+pub use media::MediaItem;
 pub use state::MontageEditorState;
+pub use types::{
+    ClipKind, MontageEditorActions, MontagePreviewSettings, PreviewQuality, PreviewRenderSettings,
+};
 
+use crate::localization::{Language, translate};
+use eframe::egui;
+use egui::{Color32, Frame, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use eframe::egui;
-use egui::{Color32, Frame, Sense, Stroke, Vec2};
-use crate::localization::{Language, translate};
 
 // ─── Головне вікно редактора ──────────────────────────────────────────────────
 
@@ -105,7 +104,11 @@ pub fn draw_montage_editor_window(
 
     // Поки є медіа з незавершеною екстракцією кадрів — продовжуємо опитування,
     // щоб UI автоматично підхопив новий кадр як тільки ffmpeg його запише.
-    if editor.media_pool.iter().any(|m| !m.is_extraction_complete()) {
+    if editor
+        .media_pool
+        .iter()
+        .any(|m| !m.is_extraction_complete())
+    {
         ctx.request_repaint_after(std::time::Duration::from_millis(300));
     }
 
@@ -117,8 +120,11 @@ pub fn draw_montage_editor_window(
         for (i, m) in editor.media_pool.iter().enumerate() {
             if !m.path.exists() && !loading.contains(&m.path) {
                 let mp4 = m.path.with_extension("mp4");
-                if mp4.exists() { replacements.push((m.path.clone(), mp4)); }
-                else            { to_remove.push(i); }
+                if mp4.exists() {
+                    replacements.push((m.path.clone(), mp4));
+                } else {
+                    to_remove.push(i);
+                }
             }
         }
         drop(loading);
@@ -129,7 +135,11 @@ pub fn draw_montage_editor_window(
                 if clip.path.as_deref() == Some(old.as_path()) {
                     clip.path = Some(new.clone());
                     clip.kind = ClipKind::Video;
-                    clip.name = new.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                    clip.name = new
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_string();
                 }
             }
             if let Some(m) = editor.media_pool.iter_mut().find(|m| m.path == old) {
@@ -147,12 +157,17 @@ pub fn draw_montage_editor_window(
         }
 
         // Другий прохід: кліпи що вказують на неіснуючий файл, але в пулі вже є відповідний .mp4
-        let clip_fixes: Vec<(String, PathBuf, String)> = editor.clips.iter()
+        let clip_fixes: Vec<(String, PathBuf, String)> = editor
+            .clips
+            .iter()
             .filter_map(|clip| {
                 clip.path.as_ref().and_then(|p| {
                     if !p.exists() {
                         let mp4 = p.with_extension("mp4");
-                        editor.media_pool.iter().find(|m| m.path == mp4)
+                        editor
+                            .media_pool
+                            .iter()
+                            .find(|m| m.path == mp4)
                             .map(|pm| (clip.id.clone(), pm.path.clone(), pm.name.clone()))
                     } else {
                         None
@@ -183,9 +198,10 @@ pub fn draw_montage_editor_window(
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z) && !i.modifiers.shift) {
             editor.undo();
         }
-        if ctx.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::Y))
-            || (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::Z)))
-        {
+        if ctx.input(|i| {
+            (i.modifiers.command && i.key_pressed(egui::Key::Y))
+                || (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::Z))
+        }) {
             editor.redo();
         }
     }
@@ -214,11 +230,19 @@ pub fn draw_montage_editor_window(
                         // тому грає з попередньо витягнутого WAV-кешу
                         let play_path = if clip.is_embedded_audio {
                             let cached = embedded_audio_cache_path(cp, &editor.save_path);
-                            if cached.exists() { cached } else { continue; }
+                            if cached.exists() {
+                                cached
+                            } else {
+                                continue;
+                            }
                         } else {
                             cp.clone()
                         };
-                        let vol = editor.track_volumes.get(clip.track_idx).copied().unwrap_or(1.0);
+                        let vol = editor
+                            .track_volumes
+                            .get(clip.track_idx)
+                            .copied()
+                            .unwrap_or(1.0);
                         targets.push(TargetAudio {
                             path: play_path,
                             start: clip.start_secs,
@@ -267,15 +291,19 @@ pub fn draw_montage_editor_window(
     }
 
     let title = format!(
-        "{}: {} #{}", translate(language, "montage_editor_title"),
-        editor.job_name, job_id + 1
+        "{}: {} #{}",
+        translate(language, "montage_editor_title"),
+        editor.job_name,
+        job_id + 1
     );
     let mut is_open = true;
     let mut close_after = false;
 
-    let is_awaiting = jobs.iter().find(|j| j.id == job_id).map(|j| {
-        *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMontageControl
-    }).unwrap_or(false);
+    let is_awaiting = jobs
+        .iter()
+        .find(|j| j.id == job_id)
+        .map(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMontageControl)
+        .unwrap_or(false);
 
     let win_id = if editor.maximized {
         "montage_editor_window_maximized"
@@ -311,42 +339,64 @@ pub fn draw_montage_editor_window(
         }
         ui.separator();
 
-            egui::TopBottomPanel::bottom("montage_editor_timeline_panel")
-                .resizable(false)
-                .exact_height(editor.timeline_height)
-                .frame(Frame::none().fill(Color32::from_rgb(14, 14, 17)).inner_margin(egui::Margin::symmetric(4.0, 4.0)))
-                .show_inside(ui, |ui| {
-                    timeline::draw_timeline(ui, language, editor, anim_loading, regen_paths);
-                });
+        egui::TopBottomPanel::bottom("montage_editor_timeline_panel")
+            .resizable(false)
+            .exact_height(editor.timeline_height)
+            .frame(
+                Frame::none()
+                    .fill(Color32::from_rgb(14, 14, 17))
+                    .inner_margin(egui::Margin::symmetric(4.0, 4.0)),
+            )
+            .show_inside(ui, |ui| {
+                timeline::draw_timeline(ui, language, editor, anim_loading, regen_paths);
+            });
 
-            egui::CentralPanel::default()
-                .frame(Frame::none())
-                .show_inside(ui, |ui| {
-                    egui::SidePanel::left("editor_media_pool")
-                        .resizable(true)
-                        .default_width(220.0)
-                        .min_width(160.0)
-                        .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
-                        .show_inside(ui, |ui| {
-                            media_pool::draw_media_pool(ui, language, editor, anim_loading, regen_paths);
-                        });
+        egui::CentralPanel::default()
+            .frame(Frame::none())
+            .show_inside(ui, |ui| {
+                egui::SidePanel::left("editor_media_pool")
+                    .resizable(true)
+                    .default_width(220.0)
+                    .min_width(160.0)
+                    .frame(
+                        Frame::none()
+                            .fill(Color32::from_rgb(18, 18, 20))
+                            .inner_margin(6.0),
+                    )
+                    .show_inside(ui, |ui| {
+                        media_pool::draw_media_pool(
+                            ui,
+                            language,
+                            editor,
+                            anim_loading,
+                            regen_paths,
+                        );
+                    });
 
-                    egui::SidePanel::right("editor_inspector")
-                        .resizable(true)
-                        .default_width(240.0)
-                        .min_width(180.0)
-                        .frame(Frame::none().fill(Color32::from_rgb(18, 18, 20)).inner_margin(6.0))
-                        .show_inside(ui, |ui| {
-                            inspector::draw_inspector(ui, language, editor);
-                        });
+                egui::SidePanel::right("editor_inspector")
+                    .resizable(true)
+                    .default_width(240.0)
+                    .min_width(180.0)
+                    .frame(
+                        Frame::none()
+                            .fill(Color32::from_rgb(18, 18, 20))
+                            .inner_margin(6.0),
+                    )
+                    .show_inside(ui, |ui| {
+                        inspector::draw_inspector(ui, language, editor);
+                    });
 
-                    egui::CentralPanel::default()
-                        .frame(Frame::none().fill(Color32::from_rgb(10, 10, 12)).inner_margin(6.0))
-                        .show_inside(ui, |ui| {
-                            preview::draw_preview(ui, editor);
-                        });
-                });
-        });
+                egui::CentralPanel::default()
+                    .frame(
+                        Frame::none()
+                            .fill(Color32::from_rgb(10, 10, 12))
+                            .inner_margin(6.0),
+                    )
+                    .show_inside(ui, |ui| {
+                        preview::draw_preview(ui, editor);
+                    });
+            });
+    });
 
     if let Some(ref inner_resp) = window_response {
         if inner_resp.response.double_clicked() {
@@ -361,7 +411,13 @@ pub fn draw_montage_editor_window(
     let preview_render_changed = editor.pending_preview_render.take();
     let regen_action = regen_opt.and_then(|(path, is_custom)| {
         jobs.iter().find(|j| j.id == job_id).map(|job| {
-            (path, job.settings.clone(), is_custom, job_id, job.name.clone())
+            (
+                path,
+                job.settings.clone(),
+                is_custom,
+                job_id,
+                job.name.clone(),
+            )
         })
     });
 
@@ -394,7 +450,8 @@ pub fn draw_montage_editor_window(
                     .interactable(true)
                     .show(ctx, |ui| {
                         ui.allocate_rect(screen, Sense::hover());
-                        ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(215));
+                        ui.painter()
+                            .rect_filled(screen, 0.0, Color32::from_black_alpha(215));
                         ui.put(
                             egui::Rect::from_center_size(screen.center(), Vec2::splat(40.0)),
                             egui::Spinner::new().size(40.0),
@@ -403,15 +460,19 @@ pub fn draw_montage_editor_window(
                 ctx.request_repaint();
             }
         } else {
-            let need_load = editor.pool_preview_texture
-                .as_ref().map(|(p, _)| p != preview_path).unwrap_or(true);
+            let need_load = editor
+                .pool_preview_texture
+                .as_ref()
+                .map(|(p, _)| p != preview_path)
+                .unwrap_or(true);
             if need_load {
                 let tex = load_preview_texture(ctx, preview_path, &editor.media_pool);
                 editor.pool_preview_texture = tex.map(|t| (preview_path.clone(), t));
             }
 
             if let Some((_, ref texture)) = editor.pool_preview_texture.clone() {
-                let is_anim = anim_loading.lock().unwrap().contains(preview_path) || regen_paths.contains(preview_path);
+                let is_anim = anim_loading.lock().unwrap().contains(preview_path)
+                    || regen_paths.contains(preview_path);
                 let (keep_open, regen_kind) = draw_montage_media_preview(ctx, texture, is_anim);
                 if !keep_open {
                     editor.pool_preview = None;
@@ -426,7 +487,12 @@ pub fn draw_montage_editor_window(
         }
     }
 
-    MontageEditorActions { animate_paths, regen_action, open_stock_picker, preview_render_changed }
+    MontageEditorActions {
+        animate_paths,
+        regen_action,
+        open_stock_picker,
+        preview_render_changed,
+    }
 }
 
 /// Завантажує текстуру для fullscreen preview: зображення читає напряму,
@@ -436,20 +502,22 @@ fn load_preview_texture(
     path: &Path,
     media_pool: &[MediaItem],
 ) -> Option<egui::TextureHandle> {
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
         crate::gui::gallery::preview::load_image_texture(ctx, path)
     } else if matches!(ext.as_str(), "mp4" | "mov" | "webm") {
-        media_pool.iter()
-            .find(|m| m.path == path)
-            .and_then(|m| {
-                let frame = m.cache_dir.join("000001.jpg");
-                if frame.exists() {
-                    crate::gui::gallery::preview::load_image_texture(ctx, &frame)
-                } else {
-                    None
-                }
-            })
+        media_pool.iter().find(|m| m.path == path).and_then(|m| {
+            let frame = m.cache_dir.join("000001.jpg");
+            if frame.exists() {
+                crate::gui::gallery::preview::load_image_texture(ctx, &frame)
+            } else {
+                None
+            }
+        })
     } else {
         None
     }
@@ -473,8 +541,8 @@ fn draw_montage_media_preview(
     let screen = ctx.screen_rect();
     let pad = 40.0;
     let img_sz = texture.size_vec2();
-    let scale = ((screen.width() - pad * 2.0) / img_sz.x)
-        .min((screen.height() - pad * 2.0) / img_sz.y);
+    let scale =
+        ((screen.width() - pad * 2.0) / img_sz.x).min((screen.height() - pad * 2.0) / img_sz.y);
     let disp = img_sz * scale;
     let img_rect = egui::Rect::from_center_size(screen.center(), disp);
 
@@ -485,35 +553,76 @@ fn draw_montage_media_preview(
         .interactable(true)
         .show(ctx, |ui| {
             let bg = ui.allocate_rect(screen, Sense::click());
-            ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(215));
+            ui.painter()
+                .rect_filled(screen, 0.0, Color32::from_black_alpha(215));
 
-            ui.put(img_rect, egui::Image::from_texture(texture).fit_to_exact_size(disp));
+            ui.put(
+                img_rect,
+                egui::Image::from_texture(texture).fit_to_exact_size(disp),
+            );
 
             if is_animating {
-                ui.painter().rect_filled(img_rect, 0.0, Color32::from_black_alpha(120));
+                ui.painter()
+                    .rect_filled(img_rect, 0.0, Color32::from_black_alpha(120));
                 ui.put(img_rect, egui::Spinner::new().size(32.0));
             }
 
             let btn_sz = egui::vec2(36.0, 36.0);
-            let top_y  = screen.top() + 22.0;
+            let top_y = screen.top() + 22.0;
 
             let close_c = egui::pos2(screen.right() - 22.0, top_y);
-            let close_r = ui.interact(egui::Rect::from_center_size(close_c, btn_sz), egui::Id::new("mep_close"), Sense::click());
-            let cc = if close_r.hovered() { Color32::WHITE } else { Color32::from_gray(160) };
+            let close_r = ui.interact(
+                egui::Rect::from_center_size(close_c, btn_sz),
+                egui::Id::new("mep_close"),
+                Sense::click(),
+            );
+            let cc = if close_r.hovered() {
+                Color32::WHITE
+            } else {
+                Color32::from_gray(160)
+            };
             let r = 8.0;
             let st = Stroke::new(2.0, cc);
-            ui.painter().line_segment([close_c + Vec2::new(-r,-r), close_c + Vec2::new(r,r)], st);
-            ui.painter().line_segment([close_c + Vec2::new(r,-r), close_c + Vec2::new(-r,r)], st);
+            ui.painter()
+                .line_segment([close_c + Vec2::new(-r, -r), close_c + Vec2::new(r, r)], st);
+            ui.painter()
+                .line_segment([close_c + Vec2::new(r, -r), close_c + Vec2::new(-r, r)], st);
 
             let cust_c = egui::pos2(screen.right() - 66.0, top_y);
-            let cust_r = ui.interact(egui::Rect::from_center_size(cust_c, btn_sz), egui::Id::new("mep_custom"), Sense::click());
-            let cc = if cust_r.hovered() { Color32::WHITE } else { Color32::from_gray(160) };
-            crate::gui::gallery::icons::draw_menu_icon(ui.painter(), cust_c, 8.0, Stroke::new(2.0, cc));
+            let cust_r = ui.interact(
+                egui::Rect::from_center_size(cust_c, btn_sz),
+                egui::Id::new("mep_custom"),
+                Sense::click(),
+            );
+            let cc = if cust_r.hovered() {
+                Color32::WHITE
+            } else {
+                Color32::from_gray(160)
+            };
+            crate::gui::gallery::icons::draw_menu_icon(
+                ui.painter(),
+                cust_c,
+                8.0,
+                Stroke::new(2.0, cc),
+            );
 
             let same_c = egui::pos2(screen.right() - 110.0, top_y);
-            let same_r = ui.interact(egui::Rect::from_center_size(same_c, btn_sz), egui::Id::new("mep_same"), Sense::click());
-            let cc = if same_r.hovered() { Color32::WHITE } else { Color32::from_gray(160) };
-            crate::gui::gallery::icons::draw_refresh_icon(ui.painter(), same_c, 9.0, Stroke::new(2.0, cc));
+            let same_r = ui.interact(
+                egui::Rect::from_center_size(same_c, btn_sz),
+                egui::Id::new("mep_same"),
+                Sense::click(),
+            );
+            let cc = if same_r.hovered() {
+                Color32::WHITE
+            } else {
+                Color32::from_gray(160)
+            };
+            crate::gui::gallery::icons::draw_refresh_icon(
+                ui.painter(),
+                same_c,
+                9.0,
+                Stroke::new(2.0, cc),
+            );
 
             if close_r.clicked() {
                 keep_open = false;
@@ -523,7 +632,9 @@ fn draw_montage_media_preview(
                 regen_kind = Some(true);
             } else if bg.clicked() {
                 if let Some(pos) = bg.interact_pointer_pos() {
-                    if !img_rect.contains(pos) { keep_open = false; }
+                    if !img_rect.contains(pos) {
+                        keep_open = false;
+                    }
                 }
             }
         });

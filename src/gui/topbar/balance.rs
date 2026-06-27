@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::localization::{Language, translate};
 use super::thread_load_color;
+use crate::localization::{Language, translate};
+use eframe::egui;
 
 /// Вікно балансів сервісів (OpenRouter, VoiceBot, Googler).
 pub fn draw_balance_window(
@@ -29,10 +29,13 @@ pub fn draw_balance_window(
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("OpenRouter").strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add_enabled(
-                            !openrouter_key.is_empty(),
-                            egui::Button::new(translate(language, "balance_refresh")).small(),
-                        ).clicked() {
+                        if ui
+                            .add_enabled(
+                                !openrouter_key.is_empty(),
+                                egui::Button::new(translate(language, "balance_refresh")).small(),
+                            )
+                            .clicked()
+                        {
                             crate::api::openrouter::fetch_balance(
                                 openrouter_key.to_string(),
                                 Arc::clone(openrouter_balance),
@@ -44,12 +47,19 @@ pub fn draw_balance_window(
                 ui.separator();
                 if let Ok(guard) = openrouter_balance.try_lock() {
                     match guard.as_ref() {
-                        Some(text) => { ui.label(text.as_str()); }
+                        Some(text) => {
+                            ui.label(text.as_str());
+                        }
                         None if openrouter_key.is_empty() => {
-                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                            ui.label(
+                                egui::RichText::new(translate(language, "balance_no_key")).weak(),
+                            );
                         }
                         None => {
-                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                            ui.label(
+                                egui::RichText::new(translate(language, "balance_not_loaded"))
+                                    .weak(),
+                            );
                         }
                     }
                 }
@@ -63,10 +73,13 @@ pub fn draw_balance_window(
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("VoiceBot").strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add_enabled(
-                            !voicebot_key.is_empty(),
-                            egui::Button::new(translate(language, "balance_refresh")).small(),
-                        ).clicked() {
+                        if ui
+                            .add_enabled(
+                                !voicebot_key.is_empty(),
+                                egui::Button::new(translate(language, "balance_refresh")).small(),
+                            )
+                            .clicked()
+                        {
                             crate::api::voicebot::fetch_balance(
                                 voicebot_key.to_string(),
                                 Arc::clone(voicebot_balance),
@@ -78,12 +91,19 @@ pub fn draw_balance_window(
                 ui.separator();
                 if let Ok(guard) = voicebot_balance.try_lock() {
                     match guard.as_ref() {
-                        Some(text) => { ui.label(text.as_str()); }
+                        Some(text) => {
+                            ui.label(text.as_str());
+                        }
                         None if voicebot_key.is_empty() => {
-                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                            ui.label(
+                                egui::RichText::new(translate(language, "balance_no_key")).weak(),
+                            );
                         }
                         None => {
-                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                            ui.label(
+                                egui::RichText::new(translate(language, "balance_not_loaded"))
+                                    .weak(),
+                            );
                         }
                     }
                 }
@@ -97,10 +117,13 @@ pub fn draw_balance_window(
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Googler").strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add_enabled(
-                            !googler_key.is_empty(),
-                            egui::Button::new(translate(language, "balance_refresh")).small(),
-                        ).clicked() {
+                        if ui
+                            .add_enabled(
+                                !googler_key.is_empty(),
+                                egui::Button::new(translate(language, "balance_refresh")).small(),
+                            )
+                            .clicked()
+                        {
                             crate::api::googler::fetch_balance(
                                 googler_key.to_string(),
                                 Arc::clone(googler_balance),
@@ -126,10 +149,15 @@ pub fn draw_balance_window(
                                 });
                         }
                         None if googler_key.is_empty() => {
-                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                            ui.label(
+                                egui::RichText::new(translate(language, "balance_no_key")).weak(),
+                            );
                         }
                         None => {
-                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                            ui.label(
+                                egui::RichText::new(translate(language, "balance_not_loaded"))
+                                    .weak(),
+                            );
                         }
                     }
                 }
@@ -139,7 +167,10 @@ pub fn draw_balance_window(
 
             // Кнопка "Оновити всі"
             ui.vertical_centered(|ui| {
-                if ui.button(translate(language, "balance_refresh_all")).clicked() {
+                if ui
+                    .button(translate(language, "balance_refresh_all"))
+                    .clicked()
+                {
                     let ctx2 = ui.ctx().clone();
                     if !openrouter_key.is_empty() {
                         crate::api::openrouter::fetch_balance(
@@ -204,7 +235,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::openrouter::OpenRouterLimiter::get().active_count(), *openrouter_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::openrouter::OpenRouterLimiter::get().active_count(),
+                        *openrouter_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -227,7 +262,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::claude::ClaudeLimiter::get().active_count(), *claude_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::claude::ClaudeLimiter::get().active_count(),
+                        *claude_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -250,7 +289,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::gemini::GeminiLimiter::get().active_count(), *gemini_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::gemini::GeminiLimiter::get().active_count(),
+                        *gemini_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -273,7 +316,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::codex::CodexLimiter::get().active_count(), *codex_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::codex::CodexLimiter::get().active_count(),
+                        *codex_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -296,7 +343,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::agy::AgyLimiter::get().active_count(), *agy_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::agy::AgyLimiter::get().active_count(),
+                        *agy_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -319,7 +370,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::pi::PiLimiter::get().active_count(), *pi_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::pi::PiLimiter::get().active_count(),
+                        *pi_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -364,7 +419,9 @@ pub fn draw_threads_window(
                     active_label(ui, active, 5);
                 });
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(translate(language, "balance_assemblyai_limit")).weak());
+                ui.label(
+                    egui::RichText::new(translate(language, "balance_assemblyai_limit")).weak(),
+                );
             });
 
             ui.add_space(4.0);
@@ -374,11 +431,17 @@ pub fn draw_threads_window(
                 ui.set_min_width(ui.available_width());
                 ui.label(egui::RichText::new("Edge TTS").strong());
                 ui.separator();
-                ui.label(egui::RichText::new(translate(language, "balance_edge_tts_status")).weak());
+                ui.label(
+                    egui::RichText::new(translate(language, "balance_edge_tts_status")).weak(),
+                );
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::edgetts::EdgeTTSLimiter::get().active_count(), *edge_tts_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::edgetts::EdgeTTSLimiter::get().active_count(),
+                        *edge_tts_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
@@ -407,23 +470,33 @@ pub fn draw_threads_window(
                     .show(ui, |ui| {
                         ui.label(translate(language, "balance_img_threads"));
                         ui.horizontal(|ui| {
-                            let color = thread_load_color(img_active, *googler_image_max_threads, ui.visuals().weak_text_color());
+                            let color = thread_load_color(
+                                img_active,
+                                *googler_image_max_threads,
+                                ui.visuals().weak_text_color(),
+                            );
                             ui.label(egui::RichText::new(format!("{} /", img_active)).color(color));
                             let mut val = *googler_image_max_threads;
                             if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
                                 *googler_image_max_threads = val;
-                                crate::api::googler::GooglerImageLimiter::get().set_max_threads(val);
+                                crate::api::googler::GooglerImageLimiter::get()
+                                    .set_max_threads(val);
                             }
                         });
                         ui.end_row();
                         ui.label(translate(language, "balance_video_threads"));
                         ui.horizontal(|ui| {
-                            let color = thread_load_color(vid_active, *googler_video_max_threads, ui.visuals().weak_text_color());
+                            let color = thread_load_color(
+                                vid_active,
+                                *googler_video_max_threads,
+                                ui.visuals().weak_text_color(),
+                            );
                             ui.label(egui::RichText::new(format!("{} /", vid_active)).color(color));
                             let mut val = *googler_video_max_threads;
                             if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
                                 *googler_video_max_threads = val;
-                                crate::api::googler::GooglerVideoLimiter::get().set_max_threads(val);
+                                crate::api::googler::GooglerVideoLimiter::get()
+                                    .set_max_threads(val);
                             }
                         });
                         ui.end_row();
@@ -440,7 +513,11 @@ pub fn draw_threads_window(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    active_label(ui, crate::api::ffmpeg::FfmpegLimiter::get().active_count(), *ffmpeg_max_threads);
+                    active_label(
+                        ui,
+                        crate::api::ffmpeg::FfmpegLimiter::get().active_count(),
+                        *ffmpeg_max_threads,
+                    );
                 });
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {

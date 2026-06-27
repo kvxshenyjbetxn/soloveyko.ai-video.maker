@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::{Path, PathBuf};
-use eframe::egui;
 use super::media::MediaItem;
 use super::types::{ClipKind, PreviewRenderSettings};
+use eframe::egui;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 
 const PREFETCH_AHEAD_FRAMES: u32 = 2;
 const MAX_PARALLEL_FRAME_LOADS: usize = 3;
@@ -52,10 +52,8 @@ impl FrameCache {
         let img = image::load_from_memory(&bytes).ok()?;
         let rgba = img.to_rgba8();
         let (w, h) = rgba.dimensions();
-        let ci = egui::ColorImage::from_rgba_unmultiplied(
-            [w as usize, h as usize],
-            &rgba.into_raw(),
-        );
+        let ci =
+            egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &rgba.into_raw());
         Some(ctx.load_texture(key, ci, egui::TextureOptions::LINEAR))
     }
 
@@ -147,8 +145,12 @@ impl FrameCache {
 
         match media.kind {
             ClipKind::Image => {
-                let Ok(bytes) = std::fs::read(&media.path) else { return false };
-                let Ok(img) = image::load_from_memory(&bytes) else { return false };
+                let Ok(bytes) = std::fs::read(&media.path) else {
+                    return false;
+                };
+                let Ok(img) = image::load_from_memory(&bytes) else {
+                    return false;
+                };
                 let width = settings.quality.sharp_width();
                 let thumb = img.thumbnail(width, width * 2);
                 Self::save_jpeg(&thumb, out, settings.quality.sharp_jpeg_quality()).is_ok()
@@ -159,16 +161,26 @@ impl FrameCache {
                     .max(0.0);
                 let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
                 cmd.args([
-                    "-y", "-v", "error", "-threads", "1",
-                    "-ss", &format!("{seek:.3}"),
-                    "-i", media.path.to_string_lossy().as_ref(),
-                    "-vframes", "1",
-                    "-vf", &format!("scale={}:-2", settings.quality.sharp_width()),
-                    "-q:v", settings.quality.sharp_ffmpeg_qscale(),
+                    "-y",
+                    "-v",
+                    "error",
+                    "-threads",
+                    "1",
+                    "-ss",
+                    &format!("{seek:.3}"),
+                    "-i",
+                    media.path.to_string_lossy().as_ref(),
+                    "-vframes",
+                    "1",
+                    "-vf",
+                    &format!("scale={}:-2", settings.quality.sharp_width()),
+                    "-q:v",
+                    settings.quality.sharp_ffmpeg_qscale(),
                     out.to_string_lossy().as_ref(),
                 ]);
                 crate::bundle::set_no_window(&mut cmd);
-                matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success()) && out.exists()
+                matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success())
+                    && out.exists()
             }
             ClipKind::Audio => false,
         }
@@ -232,8 +244,16 @@ impl FrameCache {
             .rev()
             .filter_map(|key| {
                 let idx = Self::frame_index_from_key(&prefix, key)?;
-                let dist = if idx <= frame_idx { frame_idx - idx } else { idx - frame_idx };
-                if dist <= max_distance { Some((dist, key)) } else { None }
+                let dist = if idx <= frame_idx {
+                    frame_idx - idx
+                } else {
+                    idx - frame_idx
+                };
+                if dist <= max_distance {
+                    Some((dist, key))
+                } else {
+                    None
+                }
             })
             .min_by_key(|(distance, _)| *distance)
             .and_then(|(_, key)| self.textures.get(key))
@@ -249,7 +269,12 @@ impl FrameCache {
     ) {
         if frame_idx == 1
             || self
-                .cached_near_frame(media, frame_idx, FrameQuality::Scrub, settings.fps.ceil() as u32)
+                .cached_near_frame(
+                    media,
+                    frame_idx,
+                    FrameQuality::Scrub,
+                    settings.fps.ceil() as u32,
+                )
                 .is_some()
         {
             return;
@@ -288,7 +313,13 @@ impl FrameCache {
             self.touch_key(&scrub_key);
             if !sharp_when_idle && !matches!(media.kind, ClipKind::Image) {
                 for i in 1..=PREFETCH_AHEAD_FRAMES {
-                    self.request_frame_async(ctx, media, frame_idx + i, settings, FrameQuality::Scrub);
+                    self.request_frame_async(
+                        ctx,
+                        media,
+                        frame_idx + i,
+                        settings,
+                        FrameQuality::Scrub,
+                    );
                 }
             }
             return Some(texture);

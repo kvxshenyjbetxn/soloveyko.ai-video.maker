@@ -1,8 +1,10 @@
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use super::types::{ClipKind, PreviewRenderSettings};
-use super::utils::{frame_cache_dir, probe_duration, probe_has_audio, sharp_frame_cache_dir, uuid_str};
+use super::utils::{
+    frame_cache_dir, probe_duration, probe_has_audio, sharp_frame_cache_dir, uuid_str,
+};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 // ─── Медіа-файл у пулі ───────────────────────────────────────────────────────
 
@@ -36,16 +38,21 @@ impl MediaItem {
     /// Створює медіа-елемент і запускає фонове витягування кадрів на диск.
     /// `cache_base` — базова папка задачі (save_path).
     pub fn new(path: PathBuf, cache_base: &Path, preview: PreviewRenderSettings) -> Self {
-        let name = path.file_name()
+        let name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("?")
             .to_string();
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
 
-        let is_image = matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp");
+        let is_image = matches!(
+            ext.as_str(),
+            "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp"
+        );
         let is_video = matches!(ext.as_str(), "mp4" | "mov" | "avi" | "mkv" | "webm");
         let is_audio = matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac");
 
@@ -104,12 +111,16 @@ impl MediaItem {
                     if delay_ms > 0 {
                         std::thread::sleep(std::time::Duration::from_millis(delay_ms));
                     }
-                    if out.exists() { break; }
+                    if out.exists() {
+                        break;
+                    }
                     if let Ok(bytes) = std::fs::read(&path_clone) {
                         if let Ok(img) = image::load_from_memory(&bytes) {
                             let width = preview.quality.scrub_width();
                             let thumb = img.thumbnail(width, width * 2);
-                            if save_preview_jpeg(&thumb, &out, preview.quality.jpeg_quality()).is_ok() {
+                            if save_preview_jpeg(&thumb, &out, preview.quality.jpeg_quality())
+                                .is_ok()
+                            {
                                 std::fs::write(dir.join(".complete"), b"1").ok();
                                 break;
                             }
@@ -134,11 +145,19 @@ impl MediaItem {
                 if !first_frame.exists() {
                     let mut quick = std::process::Command::new(crate::bundle::ffmpeg_path());
                     quick.args([
-                        "-y", "-v", "error", "-threads", "1",
-                        "-i", &path_str,
-                        "-vframes", "1",
-                        "-vf", &format!("scale={}:-2", scrub_w),
-                        "-q:v", qscale,
+                        "-y",
+                        "-v",
+                        "error",
+                        "-threads",
+                        "1",
+                        "-i",
+                        &path_str,
+                        "-vframes",
+                        "1",
+                        "-vf",
+                        &format!("scale={}:-2", scrub_w),
+                        "-q:v",
+                        qscale,
                         first_frame.to_str().unwrap_or(""),
                     ]);
                     crate::bundle::set_no_window(&mut quick);
@@ -153,10 +172,17 @@ impl MediaItem {
                 };
                 let mut ffmpeg_preview = std::process::Command::new(crate::bundle::ffmpeg_path());
                 ffmpeg_preview.args([
-                    "-y", "-v", "error", "-threads", "1",
-                    "-i", &path_str,
-                    "-vf", &format!("scale={}:-2,fps={}", scrub_w, fps_val),
-                    "-q:v", qscale,
+                    "-y",
+                    "-v",
+                    "error",
+                    "-threads",
+                    "1",
+                    "-i",
+                    &path_str,
+                    "-vf",
+                    &format!("scale={}:-2,fps={}", scrub_w, fps_val),
+                    "-q:v",
+                    qscale,
                     out_str,
                 ]);
                 crate::bundle::set_no_window(&mut ffmpeg_preview);

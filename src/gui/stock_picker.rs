@@ -1,18 +1,26 @@
-use eframe::egui;
-use crate::localization::{Language, translate};
 use crate::api::stock::{SegmentCache, SelectedMedia, load_cache, save_cache};
-use crate::gui::montage_editor::{MediaItem, FrameCache, PreviewRenderSettings};
+use crate::gui::montage_editor::{FrameCache, MediaItem, PreviewRenderSettings};
+use crate::localization::{Language, translate};
+use eframe::egui;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Arc на результат фонового Pexels пошуку для одного сегменту.
 /// None = ще виконується; Some(Ok(...)) = готово; Some(Err(...)) = помилка.
-type SegmentSearchArc = Arc<Mutex<Option<Result<
-    (Vec<crate::api::stock::CachedPhoto>, Vec<crate::api::stock::CachedVideo>),
-    String,
->>>>;
-
+type SegmentSearchArc = Arc<
+    Mutex<
+        Option<
+            Result<
+                (
+                    Vec<crate::api::stock::CachedPhoto>,
+                    Vec<crate::api::stock::CachedVideo>,
+                ),
+                String,
+            >,
+        >,
+    >,
+>;
 
 // ─── Структури стану ──────────────────────────────────────────────────────────
 
@@ -25,7 +33,8 @@ pub struct StockPickerState {
     /// Текстури мініатюр: preview_url → TextureHandle
     pub thumbnails: std::collections::HashMap<String, Option<egui::TextureHandle>>,
     /// Завантаження мініатюри у фоні
-    pub thumb_loading: std::collections::HashMap<String, Arc<Mutex<Option<Option<egui::ColorImage>>>>>,
+    pub thumb_loading:
+        std::collections::HashMap<String, Arc<Mutex<Option<Option<egui::ColorImage>>>>>,
     /// Активне завантаження відео з відстеженням прогресу
     pub video_download: Option<VideoDownloadState>,
     /// Відкритий міні-редактор нарізки (після завантаження)
@@ -92,8 +101,7 @@ impl StockPickerState {
         preview_render: PreviewRenderSettings,
     ) -> Option<Self> {
         let path = Path::new(&save_path);
-        let mut cache = load_cache(path)
-            .or_else(|| build_skeleton_cache_from_timeline(path))?;
+        let mut cache = load_cache(path).or_else(|| build_skeleton_cache_from_timeline(path))?;
         // Оновлюємо segment_duration якщо вони були 0.0 (timeline ще не існував при запуску пайплайну)
         sync_segment_durations_from_timeline(path, &mut cache);
         let edit_keyword = cache.first().map(|s| s.keyword.clone()).unwrap_or_default();
@@ -168,7 +176,9 @@ fn build_skeleton_cache_from_timeline(save_dir: &Path) -> Option<Vec<SegmentCach
     let content = std::fs::read_to_string(save_dir.join("timeline.json")).ok()?;
     let v: serde_json::Value = serde_json::from_str(&content).ok()?;
     let segs = v["segments"].as_array()?;
-    let result: Vec<SegmentCache> = segs.iter().enumerate()
+    let result: Vec<SegmentCache> = segs
+        .iter()
+        .enumerate()
         .filter_map(|(i, s)| {
             let text = s["text"].as_str()?.to_string();
             let start = s["start_secs"].as_f64().unwrap_or(0.0);
@@ -185,17 +195,29 @@ fn build_skeleton_cache_from_timeline(save_dir: &Path) -> Option<Vec<SegmentCach
             })
         })
         .collect();
-    if result.is_empty() { None } else { Some(result) }
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
 }
 
 // ─── Lazy search ──────────────────────────────────────────────────────────────
 
 /// Запускає фоновий пошук стоку для сегмента якщо він ще не має результатів.
 fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &egui::Context) {
-    if state.segment_search.contains_key(&seg_idx) { return; }
-    let Some(seg) = state.cache.get(seg_idx) else { return };
-    if !seg.photos.is_empty() || !seg.videos.is_empty() { return; }
-    if !state.use_pexels && !state.use_pixabay { return; }
+    if state.segment_search.contains_key(&seg_idx) {
+        return;
+    }
+    let Some(seg) = state.cache.get(seg_idx) else {
+        return;
+    };
+    if !seg.photos.is_empty() || !seg.videos.is_empty() {
+        return;
+    }
+    if !state.use_pexels && !state.use_pixabay {
+        return;
+    }
 
     let keyword = seg.keyword.clone();
     let pexels_key = state.pexels_key.clone();
@@ -320,7 +342,9 @@ pub fn draw_stock_picker(
 
 /// Перевіряє прогрес завантаження і переходить до trim_edit якщо готово
 fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
-    if state.trim_edit.is_some() { return; }
+    if state.trim_edit.is_some() {
+        return;
+    }
     let done = if let Some(dl) = &state.video_download {
         let p = *dl.progress.lock().unwrap();
         p >= 1.0 && dl.dest_path.exists()
@@ -329,7 +353,9 @@ fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
     };
     if done {
         if let Some(dl) = state.video_download.take() {
-            let seg_dur = state.cache.get(dl.segment_idx)
+            let seg_dur = state
+                .cache
+                .get(dl.segment_idx)
                 .map(|s| s.segment_duration)
                 .unwrap_or(0.0);
             let segment_duration = if seg_dur > 0.0 {
@@ -340,8 +366,11 @@ fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
             let render = state.preview_render;
             let frames_raw = Arc::new(Mutex::new(Vec::new()));
             spawn_frame_extraction(
-                dl.dest_path.clone(), dl.video_duration, 8,
-                Arc::clone(&frames_raw), ctx.clone(),
+                dl.dest_path.clone(),
+                dl.video_duration,
+                8,
+                Arc::clone(&frames_raw),
+                ctx.clone(),
             );
             let media = MediaItem::new(dl.dest_path.clone(), Path::new(&state.save_path), render);
             let frame_cache = FrameCache::new(60);
@@ -387,20 +416,31 @@ fn spawn_frame_extraction(
         let _ = std::fs::create_dir_all(&tmp_dir);
 
         if let Ok(entries) = std::fs::read_dir(&tmp_dir) {
-            for e in entries.flatten() { let _ = std::fs::remove_file(e.path()); }
+            for e in entries.flatten() {
+                let _ = std::fs::remove_file(e.path());
+            }
         }
 
         let out_pattern = tmp_dir.join("frame_%03d.jpg");
-        let fps_val = if video_duration > 0.0 { n_frames as f32 / video_duration } else { 1.0 };
+        let fps_val = if video_duration > 0.0 {
+            n_frames as f32 / video_duration
+        } else {
+            1.0
+        };
 
         let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
-        cmd.arg("-i").arg(&video_path)
-           .arg("-vf").arg(format!("fps={:.4},scale=320:-2", fps_val))
-           .arg("-q:v").arg("4")
-           .arg("-frames:v").arg(n_frames.to_string())
-           .arg("-y")
-           .arg("-loglevel").arg("error")
-           .arg(&out_pattern);
+        cmd.arg("-i")
+            .arg(&video_path)
+            .arg("-vf")
+            .arg(format!("fps={:.4},scale=320:-2", fps_val))
+            .arg("-q:v")
+            .arg("4")
+            .arg("-frames:v")
+            .arg(n_frames.to_string())
+            .arg("-y")
+            .arg("-loglevel")
+            .arg("error")
+            .arg(&out_pattern);
         crate::bundle::set_no_window(&mut cmd);
 
         if cmd.status().map(|s| s.success()).unwrap_or(false) {
@@ -409,14 +449,18 @@ fn spawn_frame_extraction(
             } else {
                 1.0
             };
-            let mut entries: Vec<_> = std::fs::read_dir(&tmp_dir).ok()
-                .into_iter().flatten()
+            let mut entries: Vec<_> = std::fs::read_dir(&tmp_dir)
+                .ok()
+                .into_iter()
+                .flatten()
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jpg"))
                 .collect();
             entries.sort_by_key(|e| e.path());
 
-            let results: Vec<(f32, Vec<u8>)> = entries.iter().enumerate()
+            let results: Vec<(f32, Vec<u8>)> = entries
+                .iter()
+                .enumerate()
                 .filter_map(|(i, entry)| {
                     let bytes = std::fs::read(entry.path()).ok()?;
                     Some((i as f32 * step, bytes))
@@ -432,7 +476,9 @@ fn spawn_frame_extraction(
 /// Переносить готові сирі байти кадрів у текстури (викликається кожен кадр UI)
 fn flush_trim_frames(ctx: &egui::Context, trim: &mut TrimEditState) {
     if let Ok(mut guard) = trim.frames_raw.try_lock() {
-        if guard.is_empty() { return; }
+        if guard.is_empty() {
+            return;
+        }
         let raw = std::mem::take(&mut *guard);
         for (t, bytes) in raw {
             if let Ok(img) = image::load_from_memory(&bytes) {
@@ -447,7 +493,8 @@ fn flush_trim_frames(ctx: &egui::Context, trim: &mut TrimEditState) {
                 trim.preview_frames.push((t, tex));
             }
         }
-        trim.preview_frames.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        trim.preview_frames
+            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     }
 }
 
@@ -459,7 +506,9 @@ fn draw_trim_editor(
     state: &mut StockPickerState,
     action: &mut StockPickerAction,
 ) {
-    let Some(trim) = &mut state.trim_edit else { return };
+    let Some(trim) = &mut state.trim_edit else {
+        return;
+    };
 
     flush_trim_frames(ctx, trim);
 
@@ -483,16 +532,18 @@ fn draw_trim_editor(
         }
     }
 
-    let show_time = (trim.trim_start + trim.playhead)
-        .min((trim.video_duration - 0.001).max(0.0));
+    let show_time = (trim.trim_start + trim.playhead).min((trim.video_duration - 0.001).max(0.0));
     // sharp_when_idle = true щоб показувати чіткий кадр коли плеєр на паузі
-    let preview_tex = trim.frame_cache
+    let preview_tex = trim
+        .frame_cache
         .get_frame(ctx, &trim.media, show_time, !trim.is_playing, trim.render)
         .or_else(|| {
             // Fallback: найближчий кадр стрічки поки екстракція ще йде
-            trim.preview_frames.iter()
+            trim.preview_frames
+                .iter()
                 .min_by(|a, b| {
-                    (a.0 - trim.trim_start).abs()
+                    (a.0 - trim.trim_start)
+                        .abs()
                         .partial_cmp(&(b.0 - trim.trim_start).abs())
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
@@ -500,8 +551,11 @@ fn draw_trim_editor(
         });
 
     // Клонуємо кадри для малювання смуги (уникаємо подвійного borrow)
-    let strip_frames: Vec<(f32, egui::TextureHandle)> = trim.preview_frames
-        .iter().map(|(t, tex)| (*t, tex.clone())).collect();
+    let strip_frames: Vec<(f32, egui::TextureHandle)> = trim
+        .preview_frames
+        .iter()
+        .map(|(t, tex)| (*t, tex.clone()))
+        .collect();
 
     let title = format!("✂ {}", trim.filename);
     let mut confirmed = false;
@@ -523,7 +577,10 @@ fn draw_trim_editor(
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(format!("📹 {:.1}с", trim.video_duration)).weak());
                 ui.separator();
-                ui.label(egui::RichText::new(format!("▶ Фрагмент: {:.1}с", trim.segment_duration)).strong());
+                ui.label(
+                    egui::RichText::new(format!("▶ Фрагмент: {:.1}с", trim.segment_duration))
+                        .strong(),
+                );
                 ui.separator();
                 ui.label(format!("{:.1}с → {:.1}с", trim.trim_start, trim_end));
             });
@@ -542,10 +599,8 @@ fn draw_trim_editor(
                 let indent = ((avail_w - preview_w) * 0.5).max(0.0);
                 ui.add_space(0.0);
                 let start_x = ui.cursor().min.x + indent;
-                let (preview_rect, _) = ui.allocate_exact_size(
-                    egui::vec2(avail_w, preview_h),
-                    egui::Sense::hover(),
-                );
+                let (preview_rect, _) =
+                    ui.allocate_exact_size(egui::vec2(avail_w, preview_h), egui::Sense::hover());
                 let actual_rect = egui::Rect::from_min_size(
                     egui::pos2(start_x, preview_rect.min.y),
                     egui::vec2(preview_w, preview_h),
@@ -556,14 +611,19 @@ fn draw_trim_editor(
 
                 if let Some(tex) = &preview_tex {
                     painter.image(
-                        tex.id(), actual_rect,
+                        tex.id(),
+                        actual_rect,
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                         egui::Color32::WHITE,
                     );
                     // Amber dot — екстракція ще виконується у фоні
                     if !trim.media.is_extraction_complete() {
                         let dot = egui::pos2(actual_rect.right() - 10.0, actual_rect.top() + 10.0);
-                        painter.circle_filled(dot, 5.0, egui::Color32::from_rgba_unmultiplied(255, 180, 0, 220));
+                        painter.circle_filled(
+                            dot,
+                            5.0,
+                            egui::Color32::from_rgba_unmultiplied(255, 180, 0, 220),
+                        );
                     }
                     // Playhead-лінія знизу превью
                     if trim.is_playing && trim.segment_duration > 0.0 {
@@ -575,7 +635,8 @@ fn draw_trim_editor(
                                 egui::pos2(actual_rect.left(), bar_y),
                                 egui::vec2(bar_w, 3.0),
                             ),
-                            0.0, egui::Color32::from_rgba_unmultiplied(52, 152, 219, 200),
+                            0.0,
+                            egui::Color32::from_rgba_unmultiplied(52, 152, 219, 200),
                         );
                     }
                 } else {
@@ -585,8 +646,11 @@ fn draw_trim_editor(
                         "🎬"
                     };
                     painter.text(
-                        actual_rect.center(), egui::Align2::CENTER_CENTER,
-                        icon, egui::FontId::proportional(36.0), egui::Color32::GRAY,
+                        actual_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icon,
+                        egui::FontId::proportional(36.0),
+                        egui::Color32::GRAY,
                     );
                 }
             }
@@ -613,7 +677,8 @@ fn draw_trim_editor(
                         egui::vec2(frame_w, strip_height),
                     );
                     painter.image(
-                        tex.id(), fr,
+                        tex.id(),
+                        fr,
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                         egui::Color32::WHITE,
                     );
@@ -631,42 +696,83 @@ fn draw_trim_editor(
 
                 // Затемнення поза виділенням
                 painter.rect_filled(
-                    egui::Rect::from_min_max(strip_rect.min, egui::pos2(handle_rect.min.x, strip_rect.max.y)),
-                    0.0, egui::Color32::from_rgba_unmultiplied(0, 0, 0, 140),
+                    egui::Rect::from_min_max(
+                        strip_rect.min,
+                        egui::pos2(handle_rect.min.x, strip_rect.max.y),
+                    ),
+                    0.0,
+                    egui::Color32::from_rgba_unmultiplied(0, 0, 0, 140),
                 );
                 painter.rect_filled(
-                    egui::Rect::from_min_max(egui::pos2(handle_rect.max.x, strip_rect.min.y), strip_rect.max),
-                    0.0, egui::Color32::from_rgba_unmultiplied(0, 0, 0, 140),
+                    egui::Rect::from_min_max(
+                        egui::pos2(handle_rect.max.x, strip_rect.min.y),
+                        strip_rect.max,
+                    ),
+                    0.0,
+                    egui::Color32::from_rgba_unmultiplied(0, 0, 0, 140),
                 );
 
                 // Виділений фрагмент
-                painter.rect_filled(handle_rect, 4.0, egui::Color32::from_rgba_unmultiplied(52, 152, 219, 80));
-                painter.rect_stroke(handle_rect, 4.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+                painter.rect_filled(
+                    handle_rect,
+                    4.0,
+                    egui::Color32::from_rgba_unmultiplied(52, 152, 219, 80),
+                );
+                painter.rect_stroke(
+                    handle_rect,
+                    4.0,
+                    egui::Stroke::new(2.0, egui::Color32::WHITE),
+                );
 
                 // Ручки по краях
                 let lx = handle_rect.min.x + 4.0;
                 let rx = handle_rect.max.x - 4.0;
                 let cy = handle_rect.center().y;
-                painter.line_segment([egui::pos2(lx, cy - 8.0), egui::pos2(lx, cy + 8.0)], egui::Stroke::new(2.0, egui::Color32::WHITE));
-                painter.line_segment([egui::pos2(rx, cy - 8.0), egui::pos2(rx, cy + 8.0)], egui::Stroke::new(2.0, egui::Color32::WHITE));
+                painter.line_segment(
+                    [egui::pos2(lx, cy - 8.0), egui::pos2(lx, cy + 8.0)],
+                    egui::Stroke::new(2.0, egui::Color32::WHITE),
+                );
+                painter.line_segment(
+                    [egui::pos2(rx, cy - 8.0), egui::pos2(rx, cy + 8.0)],
+                    egui::Stroke::new(2.0, egui::Color32::WHITE),
+                );
 
                 // Мітки часу
                 let label_y = strip_rect.max.y + 4.0;
                 let fmt_time = |s: f32| -> String {
                     let m = (s as u32) / 60;
                     let sec = s as u32 % 60;
-                    if m > 0 { format!("{m}:{sec:02}") } else { format!("{sec}с") }
+                    if m > 0 {
+                        format!("{m}:{sec:02}")
+                    } else {
+                        format!("{sec}с")
+                    }
                 };
                 for frac in [0.0f32, 0.25, 0.5, 0.75, 1.0] {
                     let t = frac * trim.video_duration;
                     let x = strip_rect.min.x + frac * w;
-                    let align = if frac == 0.0 { egui::Align2::LEFT_TOP } else if frac == 1.0 { egui::Align2::RIGHT_TOP } else { egui::Align2::CENTER_TOP };
-                    painter.text(egui::pos2(x, label_y), align, fmt_time(t),
-                        egui::FontId::proportional(10.0), egui::Color32::GRAY);
+                    let align = if frac == 0.0 {
+                        egui::Align2::LEFT_TOP
+                    } else if frac == 1.0 {
+                        egui::Align2::RIGHT_TOP
+                    } else {
+                        egui::Align2::CENTER_TOP
+                    };
+                    painter.text(
+                        egui::pos2(x, label_y),
+                        align,
+                        fmt_time(t),
+                        egui::FontId::proportional(10.0),
+                        egui::Color32::GRAY,
+                    );
                 }
 
                 // Drag взаємодія
-                let drag_resp = ui.interact(strip_rect, egui::Id::new("trim_strip_drag"), egui::Sense::click_and_drag());
+                let drag_resp = ui.interact(
+                    strip_rect,
+                    egui::Id::new("trim_strip_drag"),
+                    egui::Sense::click_and_drag(),
+                );
                 if drag_resp.dragged() {
                     let delta_secs = drag_resp.drag_delta().x / w * trim.video_duration;
                     trim.trim_start = (trim.trim_start + delta_secs).clamp(0.0, max_start);
@@ -696,15 +802,25 @@ fn draw_trim_editor(
 
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(
-                    translate(language, "stock_trim_label")
-                ).weak().size(11.0));
+                ui.label(
+                    egui::RichText::new(translate(language, "stock_trim_label"))
+                        .weak()
+                        .size(11.0),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new(translate(language, "stock_trim_confirm")).strong()).clicked() {
+                    if ui
+                        .button(
+                            egui::RichText::new(translate(language, "stock_trim_confirm")).strong(),
+                        )
+                        .clicked()
+                    {
                         confirmed = true;
                     }
                     ui.add_space(8.0);
-                    if ui.button(translate(language, "stock_trim_cancel")).clicked() {
+                    if ui
+                        .button(translate(language, "stock_trim_cancel"))
+                        .clicked()
+                    {
                         cancelled = true;
                     }
                 });
@@ -752,7 +868,11 @@ fn draw_single_mode(
     let seg_idx = state.active_segment;
     let title = if let Some(seg) = state.cache.get(seg_idx) {
         let kw: String = seg.keyword.chars().take(50).collect();
-        let sfx = if seg.keyword.chars().count() > 50 { "…" } else { "" };
+        let sfx = if seg.keyword.chars().count() > 50 {
+            "…"
+        } else {
+            ""
+        };
         format!("🖼 {}{}", kw, sfx)
     } else {
         "🖼 Stock Picker".to_string()
@@ -777,7 +897,12 @@ fn draw_single_mode(
         .show(ctx, |ui| {
             // Клонуємо дані сегмента щоб уникнути borrow conflicts з edit_keyword
             let (seg_text, selected, photos, videos) = if let Some(seg) = state.cache.get(seg_idx) {
-                (seg.segment_text.clone(), seg.selected.clone(), seg.photos.clone(), seg.videos.clone())
+                (
+                    seg.segment_text.clone(),
+                    seg.selected.clone(),
+                    seg.photos.clone(),
+                    seg.videos.clone(),
+                )
             } else {
                 return;
             };
@@ -794,9 +919,15 @@ fn draw_single_mode(
                     state.show_services_filter = !state.show_services_filter;
                 }
 
-                ui.add(egui::TextEdit::singleline(&mut state.edit_keyword)
-                    .desired_width(ui.available_width() - 44.0));
-                if ui.button("🔄").on_hover_text(translate(language, "stock_search_retrigger")).clicked() {
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.edit_keyword)
+                        .desired_width(ui.available_width() - 44.0),
+                );
+                if ui
+                    .button("🔄")
+                    .on_hover_text(translate(language, "stock_search_retrigger"))
+                    .clicked()
+                {
                     retrigger_search = true;
                 }
             });
@@ -831,8 +962,16 @@ fn draw_single_mode(
             // Опис сцени
             if !seg_text.is_empty() {
                 let preview: String = seg_text.chars().take(120).collect();
-                let sfx = if seg_text.chars().count() > 120 { "…" } else { "" };
-                ui.label(egui::RichText::new(format!("{}{}", preview, sfx)).weak().size(11.0));
+                let sfx = if seg_text.chars().count() > 120 {
+                    "…"
+                } else {
+                    ""
+                };
+                ui.label(
+                    egui::RichText::new(format!("{}{}", preview, sfx))
+                        .weak()
+                        .size(11.0),
+                );
                 ui.add_space(4.0);
             }
 
@@ -842,15 +981,28 @@ fn draw_single_mode(
                     let p = *dl.progress.lock().unwrap();
                     ui.horizontal(|ui| {
                         if p < 0.0 {
-                            ui.label(egui::RichText::new("❌ Помилка завантаження").color(egui::Color32::RED).size(12.0));
+                            ui.label(
+                                egui::RichText::new("❌ Помилка завантаження")
+                                    .color(egui::Color32::RED)
+                                    .size(12.0),
+                            );
                         } else {
-                            ui.label(egui::RichText::new(format!("⬇ {} {:.0}%", dl.filename, p * 100.0)).size(12.0));
+                            ui.label(
+                                egui::RichText::new(format!("⬇ {} {:.0}%", dl.filename, p * 100.0))
+                                    .size(12.0),
+                            );
                             let bar_w = ui.available_width().min(300.0);
-                            let (bar_rect, _) = ui.allocate_exact_size(egui::vec2(bar_w, 10.0), egui::Sense::hover());
-                            ui.painter().rect_filled(bar_rect, 5.0, egui::Color32::from_gray(50));
+                            let (bar_rect, _) = ui
+                                .allocate_exact_size(egui::vec2(bar_w, 10.0), egui::Sense::hover());
+                            ui.painter()
+                                .rect_filled(bar_rect, 5.0, egui::Color32::from_gray(50));
                             ui.painter().rect_filled(
-                                egui::Rect::from_min_size(bar_rect.min, egui::vec2(bar_w * p.clamp(0.0, 1.0), 10.0)),
-                                5.0, egui::Color32::from_rgb(52, 152, 219),
+                                egui::Rect::from_min_size(
+                                    bar_rect.min,
+                                    egui::vec2(bar_w * p.clamp(0.0, 1.0), 10.0),
+                                ),
+                                5.0,
+                                egui::Color32::from_rgb(52, 152, 219),
                             );
                         }
                     });
@@ -864,7 +1016,7 @@ fn draw_single_mode(
                     ui.label(
                         egui::RichText::new(format!("✔ {}", sel.filename))
                             .color(egui::Color32::from_rgb(46, 204, 113))
-                            .size(12.0)
+                            .size(12.0),
                     );
                 });
                 ui.add_space(4.0);
@@ -886,22 +1038,40 @@ fn draw_single_mode(
                 || (state.use_pixabay && state.pixabay_key.is_empty());
 
             if is_any_key_missing {
-                ui.colored_label(egui::Color32::KHAKI, translate(language, "stock_key_missing_warning"));
+                ui.colored_label(
+                    egui::Color32::KHAKI,
+                    translate(language, "stock_key_missing_warning"),
+                );
                 ui.add_space(2.0);
             }
 
             if !has_any_working_key {
-                ui.label(egui::RichText::new("Потрібно вказати хоча б один API-ключ для активних сервісів").weak());
+                ui.label(
+                    egui::RichText::new(
+                        "Потрібно вказати хоча б один API-ключ для активних сервісів",
+                    )
+                    .weak(),
+                );
             } else if is_searching && photos.is_empty() && videos.is_empty() {
                 ui.label(egui::RichText::new("🔍 Шукаємо…").weak().size(13.0));
             } else {
                 ui.horizontal(|ui| {
-                    if ui.selectable_label(is_video_mode,
-                        egui::RichText::new(format!("🎬 Відео ({})", videos.len()))).clicked() {
+                    if ui
+                        .selectable_label(
+                            is_video_mode,
+                            egui::RichText::new(format!("🎬 Відео ({})", videos.len())),
+                        )
+                        .clicked()
+                    {
                         state.show_videos = Some(true);
                     }
-                    if ui.selectable_label(!is_video_mode,
-                        egui::RichText::new(format!("📷 Фото ({})", photos.len()))).clicked() {
+                    if ui
+                        .selectable_label(
+                            !is_video_mode,
+                            egui::RichText::new(format!("📷 Фото ({})", photos.len())),
+                        )
+                        .clicked()
+                    {
                         state.show_videos = Some(false);
                     }
                 });
@@ -920,40 +1090,104 @@ fn draw_single_mode(
                         let cols = ((avail_w / col_w).floor() as usize).max(1);
 
                         if is_video_mode {
-                            let pexels_videos: Vec<_> = videos.iter().filter(|v| v.provider == "Pexels" || v.provider.is_empty()).cloned().collect();
-                            let pixabay_videos: Vec<_> = videos.iter().filter(|v| v.provider == "Pixabay").cloned().collect();
+                            let pexels_videos: Vec<_> = videos
+                                .iter()
+                                .filter(|v| v.provider == "Pexels" || v.provider.is_empty())
+                                .cloned()
+                                .collect();
+                            let pixabay_videos: Vec<_> = videos
+                                .iter()
+                                .filter(|v| v.provider == "Pixabay")
+                                .cloned()
+                                .collect();
 
                             if !pexels_videos.is_empty() {
-                                ui.label(egui::RichText::new("🎬 Pexels Videos").strong().size(13.0));
+                                ui.label(
+                                    egui::RichText::new("🎬 Pexels Videos").strong().size(13.0),
+                                );
                                 ui.add_space(4.0);
-                                draw_video_grid(ui, ctx, state, "pexels_v", seg_idx, &pexels_videos, thumb_size, cols, action);
+                                draw_video_grid(
+                                    ui,
+                                    ctx,
+                                    state,
+                                    "pexels_v",
+                                    seg_idx,
+                                    &pexels_videos,
+                                    thumb_size,
+                                    cols,
+                                    action,
+                                );
                                 ui.add_space(12.0);
                             }
 
                             if !pixabay_videos.is_empty() {
-                                ui.label(egui::RichText::new("🎬 Pixabay Videos").strong().size(13.0));
+                                ui.label(
+                                    egui::RichText::new("🎬 Pixabay Videos").strong().size(13.0),
+                                );
                                 ui.add_space(4.0);
-                                draw_video_grid(ui, ctx, state, "pixabay_v", seg_idx, &pixabay_videos, thumb_size, cols, action);
+                                draw_video_grid(
+                                    ui,
+                                    ctx,
+                                    state,
+                                    "pixabay_v",
+                                    seg_idx,
+                                    &pixabay_videos,
+                                    thumb_size,
+                                    cols,
+                                    action,
+                                );
                             }
 
                             if pexels_videos.is_empty() && pixabay_videos.is_empty() {
                                 ui.label(egui::RichText::new("Немає результатів").weak());
                             }
                         } else {
-                            let pexels_photos: Vec<_> = photos.iter().filter(|p| p.provider == "Pexels" || p.provider.is_empty()).cloned().collect();
-                            let pixabay_photos: Vec<_> = photos.iter().filter(|p| p.provider == "Pixabay").cloned().collect();
+                            let pexels_photos: Vec<_> = photos
+                                .iter()
+                                .filter(|p| p.provider == "Pexels" || p.provider.is_empty())
+                                .cloned()
+                                .collect();
+                            let pixabay_photos: Vec<_> = photos
+                                .iter()
+                                .filter(|p| p.provider == "Pixabay")
+                                .cloned()
+                                .collect();
 
                             if !pexels_photos.is_empty() {
-                                ui.label(egui::RichText::new("📷 Pexels Photos").strong().size(13.0));
+                                ui.label(
+                                    egui::RichText::new("📷 Pexels Photos").strong().size(13.0),
+                                );
                                 ui.add_space(4.0);
-                                draw_photo_grid(ui, ctx, state, "pexels_p", seg_idx, &pexels_photos, thumb_size, cols, action);
+                                draw_photo_grid(
+                                    ui,
+                                    ctx,
+                                    state,
+                                    "pexels_p",
+                                    seg_idx,
+                                    &pexels_photos,
+                                    thumb_size,
+                                    cols,
+                                    action,
+                                );
                                 ui.add_space(12.0);
                             }
 
                             if !pixabay_photos.is_empty() {
-                                ui.label(egui::RichText::new("📷 Pixabay Photos").strong().size(13.0));
+                                ui.label(
+                                    egui::RichText::new("📷 Pixabay Photos").strong().size(13.0),
+                                );
                                 ui.add_space(4.0);
-                                draw_photo_grid(ui, ctx, state, "pixabay_p", seg_idx, &pixabay_photos, thumb_size, cols, action);
+                                draw_photo_grid(
+                                    ui,
+                                    ctx,
+                                    state,
+                                    "pixabay_p",
+                                    seg_idx,
+                                    &pixabay_photos,
+                                    thumb_size,
+                                    cols,
+                                    action,
+                                );
                             }
 
                             if pexels_photos.is_empty() && pixabay_photos.is_empty() {
@@ -966,7 +1200,10 @@ fn draw_single_mode(
             ui.separator();
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(translate(language, "stock_picker_close")).clicked() {
+                    if ui
+                        .button(translate(language, "stock_picker_close"))
+                        .clicked()
+                    {
                         *action = StockPickerAction::Close;
                     }
                 });
@@ -1017,8 +1254,13 @@ fn draw_video_grid(
                     if ui.is_rect_visible(rect) {
                         let dur_text = format!("{}с", vid.duration_secs);
                         let tp = egui::pos2(rect.right() - 4.0, rect.bottom() - 4.0);
-                        ui.painter().text(tp, egui::Align2::RIGHT_BOTTOM, &dur_text,
-                            egui::FontId::proportional(11.0), egui::Color32::WHITE);
+                        ui.painter().text(
+                            tp,
+                            egui::Align2::RIGHT_BOTTOM,
+                            &dur_text,
+                            egui::FontId::proportional(11.0),
+                            egui::Color32::WHITE,
+                        );
                     }
                     if resp.clicked() && state.video_download.is_none() {
                         start_video_download_if_needed(ctx, state, seg_idx, vid, action);
@@ -1026,7 +1268,9 @@ fn draw_video_grid(
                     let author: String = vid.author.chars().take(18).collect();
                     ui.label(egui::RichText::new(author).size(10.0).weak());
                 });
-                if (col_idx + 1) % cols == 0 { ui.end_row(); }
+                if (col_idx + 1) % cols == 0 {
+                    ui.end_row();
+                }
             }
         });
 }
@@ -1059,8 +1303,13 @@ fn draw_photo_grid(
                     if ui.is_rect_visible(rect) {
                         let dim_text = format!("{}×{}", photo.width, photo.height);
                         let tp = egui::pos2(rect.right() - 4.0, rect.bottom() - 4.0);
-                        ui.painter().text(tp, egui::Align2::RIGHT_BOTTOM, &dim_text,
-                            egui::FontId::proportional(10.0), egui::Color32::WHITE);
+                        ui.painter().text(
+                            tp,
+                            egui::Align2::RIGHT_BOTTOM,
+                            &dim_text,
+                            egui::FontId::proportional(10.0),
+                            egui::Color32::WHITE,
+                        );
                     }
                     if resp.clicked() {
                         start_photo_download(ctx, state, seg_idx, photo, action);
@@ -1068,7 +1317,9 @@ fn draw_photo_grid(
                     let author: String = photo.author.chars().take(18).collect();
                     ui.label(egui::RichText::new(author).size(10.0).weak());
                 });
-                if (col_idx + 1) % cols == 0 { ui.end_row(); }
+                if (col_idx + 1) % cols == 0 {
+                    ui.end_row();
+                }
             }
         });
 }
@@ -1107,7 +1358,11 @@ fn start_video_download_if_needed(
     let dest = Path::new(&state.save_path).join("media").join(&filename);
 
     // Закриваємо trim editor якщо він відкритий для іншого відео
-    let is_same_open = state.trim_edit.as_ref().map(|t| t.video_id == vid.id).unwrap_or(false);
+    let is_same_open = state
+        .trim_edit
+        .as_ref()
+        .map(|t| t.video_id == vid.id)
+        .unwrap_or(false);
     if !is_same_open {
         state.trim_edit = None;
     }
@@ -1117,7 +1372,8 @@ fn start_video_download_if_needed(
     let media_dir = Path::new(&state.save_path).join("media");
     let seg_prefix = format!("{:04}_", seg_idx + 1);
     let old_files: Vec<PathBuf> = if let Ok(entries) = std::fs::read_dir(&media_dir) {
-        entries.flatten()
+        entries
+            .flatten()
             .filter(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
                 name.starts_with(&seg_prefix) && name != filename
@@ -1139,14 +1395,25 @@ fn start_video_download_if_needed(
 
     // Якщо файл вже є (і належить потрібному відео) — одразу відкриваємо trim редактор
     if dest.exists() {
-        let seg_dur = state.cache.get(seg_idx).map(|s| s.segment_duration).unwrap_or(0.0);
+        let seg_dur = state
+            .cache
+            .get(seg_idx)
+            .map(|s| s.segment_duration)
+            .unwrap_or(0.0);
         let video_dur = vid.duration_secs as f32;
-        let segment_duration = if seg_dur > 0.0 { seg_dur.min(video_dur) } else { video_dur };
+        let segment_duration = if seg_dur > 0.0 {
+            seg_dur.min(video_dur)
+        } else {
+            video_dur
+        };
         let render = state.preview_render;
         let frames_raw = Arc::new(Mutex::new(Vec::new()));
         spawn_frame_extraction(
-            dest.clone(), video_dur, 8,
-            Arc::clone(&frames_raw), ctx.clone(),
+            dest.clone(),
+            video_dur,
+            8,
+            Arc::clone(&frames_raw),
+            ctx.clone(),
         );
         let media = MediaItem::new(dest.clone(), Path::new(&state.save_path), render);
         let frame_cache = FrameCache::new(60);
@@ -1204,9 +1471,13 @@ fn start_photo_download(
     photo: &crate::api::stock::CachedPhoto,
     action: &mut StockPickerAction,
 ) {
-    let ext = photo.original_url
-        .split('?').next().unwrap_or("")
-        .rsplit('.').next()
+    let ext = photo
+        .original_url
+        .split('?')
+        .next()
+        .unwrap_or("")
+        .rsplit('.')
+        .next()
         .filter(|e| e.len() <= 4)
         .unwrap_or("jpg");
     let filename = format!("{:04}.{}", seg_idx + 1, ext);
@@ -1248,23 +1519,40 @@ fn draw_thumb(
     resp: &egui::Response,
     thumb_url: &str,
 ) {
-    if !ui.is_rect_visible(rect) { return; }
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
     let tex_opt = state.thumbnails.get(thumb_url);
     match tex_opt {
         Some(Some(tex)) => {
-            ui.painter().image(tex.id(), rect,
+            ui.painter().image(
+                tex.id(),
+                rect,
                 egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)),
-                egui::Color32::WHITE);
+                egui::Color32::WHITE,
+            );
         }
         Some(None) => {
-            ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(60));
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "✗",
-                egui::FontId::default(), egui::Color32::GRAY);
+            ui.painter()
+                .rect_filled(rect, 4.0, egui::Color32::from_gray(60));
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "✗",
+                egui::FontId::default(),
+                egui::Color32::GRAY,
+            );
         }
         None => {
-            ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(40));
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "⏳",
-                egui::FontId::default(), egui::Color32::GRAY);
+            ui.painter()
+                .rect_filled(rect, 4.0, egui::Color32::from_gray(40));
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "⏳",
+                egui::FontId::default(),
+                egui::Color32::GRAY,
+            );
             if !state.thumb_loading.contains_key(thumb_url) {
                 let arc = Arc::new(Mutex::new(None::<Option<egui::ColorImage>>));
                 let arc_c = Arc::clone(&arc);
@@ -1272,14 +1560,13 @@ fn draw_thumb(
                 let ctx_c = ctx.clone();
                 std::thread::spawn(move || {
                     let res = (|| -> Result<egui::ColorImage, String> {
-                        let r = ureq::get(&url_c).call()
-                            .map_err(|e| e.to_string())?;
+                        let r = ureq::get(&url_c).call().map_err(|e| e.to_string())?;
                         use std::io::Read;
                         let mut bytes = Vec::new();
-                        r.into_reader().read_to_end(&mut bytes)
+                        r.into_reader()
+                            .read_to_end(&mut bytes)
                             .map_err(|e| e.to_string())?;
-                        let img = image::load_from_memory(&bytes)
-                            .map_err(|e| e.to_string())?;
+                        let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?;
                         let rgba = img.to_rgba8();
                         let size = [rgba.width() as usize, rgba.height() as usize];
                         Ok(egui::ColorImage::from_rgba_unmultiplied(size, &rgba))
@@ -1300,23 +1587,35 @@ fn draw_thumb(
         }
     }
     if resp.hovered() {
-        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+        ui.painter()
+            .rect_stroke(rect, 4.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
         // Збільшений preview у tooltip
         if let Some(Some(tex)) = state.thumbnails.get(thumb_url) {
             let tex = tex.clone();
-            let layer_id = egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("stock_preview_layer"));
-            egui::show_tooltip_at_pointer(ctx, layer_id, egui::Id::new("stock_thumb_preview"), |ui: &mut egui::Ui| {
-                let preview_w = 320.0_f32;
-                let (w, h) = (tex.size()[0] as f32, tex.size()[1] as f32);
-                let aspect = if h > 0.0 { w / h } else { 16.0 / 9.0 };
-                ui.image(egui::load::SizedTexture::new(tex.id(), egui::vec2(preview_w, preview_w / aspect)));
-            });
+            let layer_id =
+                egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("stock_preview_layer"));
+            egui::show_tooltip_at_pointer(
+                ctx,
+                layer_id,
+                egui::Id::new("stock_thumb_preview"),
+                |ui: &mut egui::Ui| {
+                    let preview_w = 320.0_f32;
+                    let (w, h) = (tex.size()[0] as f32, tex.size()[1] as f32);
+                    let aspect = if h > 0.0 { w / h } else { 16.0 / 9.0 };
+                    ui.image(egui::load::SizedTexture::new(
+                        tex.id(),
+                        egui::vec2(preview_w, preview_w / aspect),
+                    ));
+                },
+            );
         }
     }
 }
 
 fn flush_thumb_loading(ctx: &egui::Context, state: &mut StockPickerState) {
-    let ready: Vec<(String, Option<egui::ColorImage>)> = state.thumb_loading.iter()
+    let ready: Vec<(String, Option<egui::ColorImage>)> = state
+        .thumb_loading
+        .iter()
         .filter_map(|(url, arc)| {
             let mut guard = arc.try_lock().ok()?;
             let opt = guard.take()?;

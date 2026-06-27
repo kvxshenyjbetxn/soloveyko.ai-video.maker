@@ -1,4 +1,4 @@
-use crate::localization::{translate, Language};
+use crate::localization::{Language, translate};
 use eframe::egui;
 
 /// Малює секцію "Шаблони" на панелі пайплайну з можливістю завантаження та видалення.

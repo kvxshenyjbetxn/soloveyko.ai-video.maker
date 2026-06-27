@@ -57,8 +57,8 @@ pub fn transcribe(
 ) -> Result<(String, serde_json::Value), String> {
     let _permit = AssemblyAILimiter::get().acquire();
 
-    let audio_bytes = std::fs::read(audio_path)
-        .map_err(|e| format!("Failed to read audio: {}", e))?;
+    let audio_bytes =
+        std::fs::read(audio_path).map_err(|e| format!("Failed to read audio: {}", e))?;
 
     let upload_url = upload_audio(key, &audio_bytes)?;
     let transcript_id = create_transcript(key, &upload_url, language)?;
@@ -197,8 +197,11 @@ fn words_to_srt(words: &[serde_json::Value], max_line_width: usize) -> String {
             format!("{} {}", current_text, text)
         };
 
-        let ends_sentence = current_text.ends_with('.') || current_text.ends_with('!') || current_text.ends_with('?');
-        let would_overflow = max_line_width > 0 && appended.len() > max_line_width && !current_text.is_empty();
+        let ends_sentence = current_text.ends_with('.')
+            || current_text.ends_with('!')
+            || current_text.ends_with('?');
+        let would_overflow =
+            max_line_width > 0 && appended.len() > max_line_width && !current_text.is_empty();
 
         if (ends_sentence || would_overflow) && !current_text.is_empty() {
             segments.push((seg_start.unwrap_or(start), seg_end, current_text.clone()));
@@ -218,7 +221,11 @@ fn words_to_srt(words: &[serde_json::Value], max_line_width: usize) -> String {
     let mut srt = String::new();
     for (i, (start_ms, end_ms, text)) in segments.iter().enumerate() {
         srt.push_str(&format!("{}\n", i + 1));
-        srt.push_str(&format!("{} --> {}\n", ms_to_srt(*start_ms), ms_to_srt(*end_ms)));
+        srt.push_str(&format!(
+            "{} --> {}\n",
+            ms_to_srt(*start_ms),
+            ms_to_srt(*end_ms)
+        ));
         srt.push_str(text);
         srt.push_str("\n\n");
     }
@@ -239,14 +246,20 @@ pub fn whisperx_words_to_srt(words: &[serde_json::Value], max_line_width: usize)
     let mut seg_end: u64 = 0;
 
     for word in words {
-        let text = word.get("word").and_then(|t| t.as_str()).unwrap_or("").trim();
-        if text.is_empty() { continue; }
+        let text = word
+            .get("word")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .trim();
+        if text.is_empty() {
+            continue;
+        }
 
         // WhisperX зберігає час у секундах (f64), переводимо у мілісекунди
         let start = word.get("start").and_then(|s| s.as_f64()).unwrap_or(0.0);
-        let end   = word.get("end").and_then(|e| e.as_f64()).unwrap_or(0.0);
+        let end = word.get("end").and_then(|e| e.as_f64()).unwrap_or(0.0);
         let start_ms = (start * 1000.0) as u64;
-        let end_ms   = (end   * 1000.0) as u64;
+        let end_ms = (end * 1000.0) as u64;
 
         if seg_start.is_none() {
             seg_start = Some(start_ms);
@@ -258,8 +271,11 @@ pub fn whisperx_words_to_srt(words: &[serde_json::Value], max_line_width: usize)
             format!("{} {}", current_text, text)
         };
 
-        let ends_sentence = current_text.ends_with('.') || current_text.ends_with('!') || current_text.ends_with('?');
-        let would_overflow = max_line_width > 0 && appended.len() > max_line_width && !current_text.is_empty();
+        let ends_sentence = current_text.ends_with('.')
+            || current_text.ends_with('!')
+            || current_text.ends_with('?');
+        let would_overflow =
+            max_line_width > 0 && appended.len() > max_line_width && !current_text.is_empty();
 
         if (ends_sentence || would_overflow) && !current_text.is_empty() {
             segments.push((seg_start.unwrap_or(start_ms), seg_end, current_text.clone()));
@@ -279,7 +295,11 @@ pub fn whisperx_words_to_srt(words: &[serde_json::Value], max_line_width: usize)
     let mut srt = String::new();
     for (i, (start_ms, end_ms, text)) in segments.iter().enumerate() {
         srt.push_str(&format!("{}\n", i + 1));
-        srt.push_str(&format!("{} --> {}\n", ms_to_srt(*start_ms), ms_to_srt(*end_ms)));
+        srt.push_str(&format!(
+            "{} --> {}\n",
+            ms_to_srt(*start_ms),
+            ms_to_srt(*end_ms)
+        ));
         srt.push_str(text);
         srt.push_str("\n\n");
     }

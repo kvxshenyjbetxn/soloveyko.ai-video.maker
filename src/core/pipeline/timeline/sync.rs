@@ -784,11 +784,17 @@ fn write_sync_debug(
         .unwrap_or(0);
 
     let mut report = String::new();
-    let _ = writeln!(report, "====================================================================================================");
+    let _ = writeln!(
+        report,
+        "===================================================================================================="
+    );
     let _ = writeln!(report, "SYNCHRONIZATION DEBUG REPORT");
     let _ = writeln!(report, "Generated: {} (unix)", now);
     let _ = writeln!(report, "Task: {}", task_label);
-    let _ = writeln!(report, "====================================================================================================\n");
+    let _ = writeln!(
+        report,
+        "====================================================================================================\n"
+    );
     let _ = writeln!(report, "SUMMARY");
     let _ = writeln!(report, "--------------------------------------------------");
     let _ = writeln!(report, "Total Segments: {}", segments.len());
@@ -801,13 +807,19 @@ fn write_sync_debug(
     );
     let _ = writeln!(report, "Avg Confidence: {}%\n", avg_conf);
     let _ = writeln!(report, "DETAILED SYNCHRONIZATION TABLE");
-    let _ = writeln!(report, "====================================================================================================");
+    let _ = writeln!(
+        report,
+        "===================================================================================================="
+    );
     let _ = writeln!(
         report,
         "{:<5}{:<21}{:<21}{:<21}{:<9}{}",
         "#", "Image", "Display Time", "Subtitle Match", "Conf", "Text Segment"
     );
-    let _ = writeln!(report, "----------------------------------------------------------------------------------------------------");
+    let _ = writeln!(
+        report,
+        "----------------------------------------------------------------------------------------------------"
+    );
 
     for (i, (r, st)) in results.iter().zip(segment_timings.iter()).enumerate() {
         let img_name = if r.filename.is_empty() {

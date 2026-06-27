@@ -106,10 +106,8 @@ pub fn load_cache(save_dir: &std::path::Path) -> Option<Vec<SegmentCache>> {
 /// Зберігає stock_cache.json у папку задачі
 pub fn save_cache(save_dir: &std::path::Path, cache: &[SegmentCache]) -> Result<(), String> {
     let path = save_dir.join("stock_cache.json");
-    let json = serde_json::to_string_pretty(cache)
-        .map_err(|e| format!("JSON error: {e}"))?;
-    std::fs::write(path, json)
-        .map_err(|e| format!("Write error: {e}"))
+    let json = serde_json::to_string_pretty(cache).map_err(|e| format!("JSON error: {e}"))?;
+    std::fs::write(path, json).map_err(|e| format!("Write error: {e}"))
 }
 
 /// Стокове фото з довільного провайдера
@@ -143,8 +141,18 @@ pub struct StockVideo {
 pub trait StockProvider: Send + Sync {
     #[allow(dead_code)]
     fn name(&self) -> &str;
-    fn search_photos(&self, key: &str, query: &str, per_page: u32) -> Result<Vec<StockPhoto>, String>;
-    fn search_videos(&self, key: &str, query: &str, per_page: u32) -> Result<Vec<StockVideo>, String>;
+    fn search_photos(
+        &self,
+        key: &str,
+        query: &str,
+        per_page: u32,
+    ) -> Result<Vec<StockPhoto>, String>;
+    fn search_videos(
+        &self,
+        key: &str,
+        query: &str,
+        per_page: u32,
+    ) -> Result<Vec<StockVideo>, String>;
 }
 
 /// Завантажує файл з URL і зберігає на диск
@@ -168,7 +176,8 @@ pub fn download_file_with_progress(
         .call()
         .map_err(|e| format!("Помилка завантаження: {e}"))?;
 
-    let total_size = response.header("Content-Length")
+    let total_size = response
+        .header("Content-Length")
         .and_then(|s| s.parse::<usize>().ok());
 
     let mut reader = response.into_reader();
@@ -198,6 +207,5 @@ pub fn download_file_with_progress(
     if let Some(prog) = progress {
         *prog.lock().unwrap() = 1.0;
     }
-    std::fs::write(dest, &bytes)
-        .map_err(|e| format!("Помилка збереження: {e}"))
+    std::fs::write(dest, &bytes).map_err(|e| format!("Помилка збереження: {e}"))
 }

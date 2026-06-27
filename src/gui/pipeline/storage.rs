@@ -1,4 +1,4 @@
-use crate::localization::{translate, Language};
+use crate::localization::{Language, translate};
 use eframe::egui;
 
 /// Малює секцію "Шлях збереження" з окремими полями для macOS та Windows.

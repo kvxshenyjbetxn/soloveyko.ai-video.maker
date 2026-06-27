@@ -10,7 +10,7 @@ pub mod translation_control;
 pub mod video;
 pub mod voiceover;
 
-use crate::localization::{translate, Language};
+use crate::localization::{Language, translate};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 

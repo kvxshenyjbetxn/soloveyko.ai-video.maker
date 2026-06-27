@@ -1,8 +1,8 @@
 use std::fmt;
 
-pub mod uk;
 pub mod en;
 pub mod ru;
+pub mod uk;
 
 /// Підтримувані мови інтерфейсу програми.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

@@ -1,4 +1,4 @@
-use crate::localization::{translate, Language};
+use crate::localization::{Language, translate};
 use eframe::egui;
 
 /// Малює секцію "Контроль" на панелі пайплайну з налаштуваннями контролю етапів.

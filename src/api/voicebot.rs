@@ -59,7 +59,6 @@ impl<'a> Drop for VoiceBotPermit<'a> {
     }
 }
 
-
 #[derive(serde::Deserialize)]
 pub struct BalanceResponse {
     pub balance_text: String,
@@ -139,7 +138,10 @@ pub fn get_task_status(key: &str, task_id: u64) -> Result<String, String> {
         .build();
 
     let resp = agent
-        .get(&format!("https://voiceapi.csv666.ru/tasks/{}/status", task_id))
+        .get(&format!(
+            "https://voiceapi.csv666.ru/tasks/{}/status",
+            task_id
+        ))
         .set("X-API-Key", key)
         .set("Accept", "application/json")
         .call()
@@ -160,13 +162,20 @@ pub fn download_task_result(key: &str, task_id: u64, save_dir: &str) -> Result<S
         .build();
 
     let resp = agent
-        .get(&format!("https://voiceapi.csv666.ru/tasks/{}/result", task_id))
+        .get(&format!(
+            "https://voiceapi.csv666.ru/tasks/{}/result",
+            task_id
+        ))
         .set("X-API-Key", key)
         .call()
         .map_err(|e| format!("Failed to download result: {}", e))?;
 
     let content_type = resp.content_type().to_string();
-    let ext = if content_type.contains("zip") { "zip" } else { "mp3" };
+    let ext = if content_type.contains("zip") {
+        "zip"
+    } else {
+        "mp3"
+    };
     let filename = format!("voice.{}", ext);
 
     let mut bytes = Vec::new();
@@ -175,8 +184,7 @@ pub fn download_task_result(key: &str, task_id: u64, save_dir: &str) -> Result<S
         .map_err(|e| format!("Failed to read response data: {}", e))?;
 
     let path = std::path::Path::new(save_dir).join(&filename);
-    std::fs::write(&path, &bytes)
-        .map_err(|e| format!("Failed to save file: {}", e))?;
+    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to save file: {}", e))?;
 
     Ok(filename)
 }

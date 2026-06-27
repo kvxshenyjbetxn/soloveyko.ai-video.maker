@@ -27,25 +27,33 @@ const WHISPER_NAME_LEGACY3: &str = "whisper.exe";
 const WHISPER_NAME: &str = "whisper";
 
 #[cfg(target_os = "windows")]
-const FFMPEG_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffmpeg.exe";
+const FFMPEG_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffmpeg.exe";
 #[cfg(not(target_os = "windows"))]
-const FFMPEG_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffmpeg";
+const FFMPEG_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffmpeg";
 
 #[cfg(target_os = "windows")]
-const FFPROBE_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffprobe.exe";
+const FFPROBE_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffprobe.exe";
 #[cfg(not(target_os = "windows"))]
-const FFPROBE_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffprobe";
+const FFPROBE_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffprobe";
 
 /// На Windows — zip-архів з папкою всередині, в якій лежить main.exe.
 #[cfg(target_os = "windows")]
-const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper.win.zip";
+const WHISPER_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper.win.zip";
 #[cfg(not(target_os = "windows"))]
-const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper";
+const WHISPER_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper";
 
 #[cfg(target_os = "windows")]
-const WHISPERX_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_win.zip";
+const WHISPERX_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_win.zip";
 #[cfg(target_os = "macos")]
-const WHISPERX_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_mac.zip";
+const WHISPERX_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_mac.zip";
 
 #[cfg(target_os = "windows")]
 const WHISPERX_DIR_NAME: &str = "whisperx_win";
@@ -59,7 +67,8 @@ const WHISPERX_CLI_NAME: &str = "whisperx_cli";
 
 /// Тільки Windows — AMD GPU-оптимізований whisper (zip → папка whisper-amd/).
 #[cfg(target_os = "windows")]
-const WHISPER_AMD_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper-amd.zip";
+const WHISPER_AMD_URL: &str =
+    "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper-amd.zip";
 
 const WHISPER_AMD_DIR_NAME: &str = "whisper-amd";
 
@@ -104,19 +113,29 @@ pub fn whisper_path() -> String {
     #[cfg(target_os = "windows")]
     {
         let folder_bin = dir.join(WHISPER_WIN_DIR).join(WHISPER_WIN_CLI);
-        if folder_bin.exists() { return folder_bin.to_string_lossy().into_owned(); }
+        if folder_bin.exists() {
+            return folder_bin.to_string_lossy().into_owned();
+        }
         let legacy1 = dir.join(WHISPER_WIN_DIR).join(WHISPER_NAME_LEGACY);
-        if legacy1.exists() { return legacy1.to_string_lossy().into_owned(); }
+        if legacy1.exists() {
+            return legacy1.to_string_lossy().into_owned();
+        }
         let legacy2 = dir.join(WHISPER_NAME_LEGACY2);
-        if legacy2.exists() { return legacy2.to_string_lossy().into_owned(); }
+        if legacy2.exists() {
+            return legacy2.to_string_lossy().into_owned();
+        }
         let legacy3 = dir.join(WHISPER_NAME_LEGACY3);
-        if legacy3.exists() { return legacy3.to_string_lossy().into_owned(); }
+        if legacy3.exists() {
+            return legacy3.to_string_lossy().into_owned();
+        }
         return WHISPER_WIN_CLI.to_string();
     }
     #[cfg(not(target_os = "windows"))]
     {
         let local = dir.join(WHISPER_NAME);
-        if local.exists() { return local.to_string_lossy().into_owned(); }
+        if local.exists() {
+            return local.to_string_lossy().into_owned();
+        }
         WHISPER_NAME.to_string()
     }
 }
@@ -154,7 +173,9 @@ pub fn whisper_amd_local_exists() -> bool {
 
 /// Повний шлях до виконуваного файлу whisper-amd (платформозалежно).
 pub fn whisper_amd_cmd_path() -> PathBuf {
-    bin_dir().join(WHISPER_AMD_DIR_NAME).join(WHISPER_AMD_CLI_NAME)
+    bin_dir()
+        .join(WHISPER_AMD_DIR_NAME)
+        .join(WHISPER_AMD_CLI_NAME)
 }
 
 /// Завантажує whisper-amd у bin_dir (розпаковує папку з zip).
@@ -163,8 +184,7 @@ pub fn whisper_amd_cmd_path() -> PathBuf {
 pub fn download_whisper_amd(on_progress: impl FnMut(String)) -> Result<(), String> {
     let mut on_progress = on_progress;
     let dir = bin_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
 
     if whisper_amd_local_exists() {
         return Ok(());
@@ -181,8 +201,7 @@ pub fn download_whisper_amd(on_progress: impl FnMut(String)) -> Result<(), Strin
 pub fn download_whisperx(on_progress: impl FnMut(String)) -> Result<(), String> {
     let mut on_progress = on_progress;
     let dir = bin_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
 
     if whisperx_local_exists() {
         return Ok(());
@@ -216,18 +235,21 @@ pub fn whisper_model_exists(model: &str) -> bool {
 /// Приблизний розмір ggml-моделі у MB (для відображення перед завантаженням).
 pub fn whisper_model_size_mb(model: &str) -> f64 {
     match model {
-        "tiny"           => 75.0,
-        "base"           => 148.0,
-        "small"          => 488.0,
-        "medium"         => 1500.0,
-        "large-v3"       => 3100.0,
+        "tiny" => 75.0,
+        "base" => 148.0,
+        "small" => 488.0,
+        "medium" => 1500.0,
+        "large-v3" => 3100.0,
         "large-v3-turbo" => 1600.0,
-        _                => 0.0,
+        _ => 0.0,
     }
 }
 
 /// Завантажує ggml-модель whisper.cpp із HuggingFace у папку bin/models.
-pub fn download_whisper_model(model: &str, mut on_progress: impl FnMut(String)) -> Result<(), String> {
+pub fn download_whisper_model(
+    model: &str,
+    mut on_progress: impl FnMut(String),
+) -> Result<(), String> {
     let dir = models_dir();
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Не вдалося створити папку models: {}", e))?;
@@ -251,8 +273,7 @@ pub fn download_whisper_model(model: &str, mut on_progress: impl FnMut(String)) 
 /// `on_progress` викликається з рядком прогресу, наприклад `"ffmpeg (7.2 / 76.0 MB, 9%)"`.
 pub fn download_all(mut on_progress: impl FnMut(String)) -> Result<(), String> {
     let dir = bin_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
 
     let ffmpeg_dest = dir.join(FFMPEG_NAME);
     if !ffmpeg_dest.exists() {
@@ -272,13 +293,14 @@ pub fn download_all(mut on_progress: impl FnMut(String)) -> Result<(), String> {
 /// Non-Windows: завантажує одиночний бінарник.
 pub fn download_whisper(mut on_progress: impl FnMut(String)) -> Result<(), String> {
     let dir = bin_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
 
     #[cfg(target_os = "windows")]
     {
         let target = dir.join(WHISPER_WIN_DIR).join(WHISPER_WIN_CLI);
-        if target.exists() { return Ok(()); }
+        if target.exists() {
+            return Ok(());
+        }
         let bytes = download_to_bytes(WHISPER_URL, "whisper", &mut on_progress)?;
         extract_folder_from_zip(&bytes, &dir)?;
         return Ok(());
@@ -287,7 +309,9 @@ pub fn download_whisper(mut on_progress: impl FnMut(String)) -> Result<(), Strin
     #[cfg(not(target_os = "windows"))]
     {
         let dest = dir.join(WHISPER_NAME);
-        if dest.exists() { return Ok(()); }
+        if dest.exists() {
+            return Ok(());
+        }
         download_file(WHISPER_URL, &dest, "whisper", &mut on_progress)?;
         return Ok(());
     }
@@ -295,7 +319,6 @@ pub fn download_whisper(mut on_progress: impl FnMut(String)) -> Result<(), Strin
     #[allow(unreachable_code)]
     Ok(())
 }
-
 
 /// Завантажує URL у пам'ять з відображенням прогресу.
 fn download_to_bytes(
@@ -327,7 +350,10 @@ fn download_to_bytes(
         let progress_str = if let Some(total) = total_bytes {
             let total_mb = total as f64 / 1_048_576.0;
             let pct = (buf.len() as f64 / total as f64 * 100.0) as u32;
-            format!("{} ({:.1} / {:.1} MB, {}%)", label, downloaded_mb, total_mb, pct)
+            format!(
+                "{} ({:.1} / {:.1} MB, {}%)",
+                label, downloaded_mb, total_mb, pct
+            )
         } else {
             format!("{} ({:.1} MB)", label, downloaded_mb)
         };
@@ -344,11 +370,12 @@ fn extract_folder_from_zip(bytes: &[u8], dest_parent: &PathBuf) -> Result<(), St
     use std::io::Read;
 
     let cursor = std::io::Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("Помилка відкриття zip: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Помилка відкриття zip: {}", e))?;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
+        let mut entry = archive
+            .by_index(i)
             .map_err(|e| format!("Помилка читання запису zip: {}", e))?;
 
         let entry_name = entry.name().to_string();
@@ -369,7 +396,8 @@ fn extract_folder_from_zip(bytes: &[u8], dest_parent: &PathBuf) -> Result<(), St
                     .map_err(|e| format!("Помилка створення папки: {}", e))?;
             }
             let mut contents = Vec::new();
-            entry.read_to_end(&mut contents)
+            entry
+                .read_to_end(&mut contents)
                 .map_err(|e| format!("Помилка читання файлу {}: {}", entry_name, e))?;
 
             #[cfg(unix)]
@@ -394,7 +422,10 @@ fn extract_folder_from_zip(bytes: &[u8], dest_parent: &PathBuf) -> Result<(), St
                     std::fs::write(&out_path, &contents)
                         .map_err(|e| format!("Помилка запису {}: {}", entry_name, e))?;
                     if unix_mode & 0o111 != 0 {
-                        let _ = std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(0o755));
+                        let _ = std::fs::set_permissions(
+                            &out_path,
+                            std::fs::Permissions::from_mode(0o755),
+                        );
                     }
                 }
             }
@@ -419,8 +450,7 @@ fn download_file(
 ) -> Result<(), String> {
     let buf = download_to_bytes(url, label, on_progress)?;
 
-    std::fs::write(dest, &buf)
-        .map_err(|e| format!("Помилка запису: {}", e))?;
+    std::fs::write(dest, &buf).map_err(|e| format!("Помилка запису: {}", e))?;
 
     #[cfg(unix)]
     {
@@ -451,11 +481,15 @@ pub fn find_npm_cmd_windows(name: &str) -> Option<String> {
     let cmd_name = format!("{}.cmd", name);
     if let Ok(appdata) = std::env::var("APPDATA") {
         let p = format!("{}\\npm\\{}", appdata, cmd_name);
-        if std::path::Path::new(&p).exists() { return Some(p); }
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
     }
     if let Ok(localdata) = std::env::var("LOCALAPPDATA") {
         let p = format!("{}\\npm\\{}", localdata, cmd_name);
-        if std::path::Path::new(&p).exists() { return Some(p); }
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
     }
     None
 }
@@ -469,13 +503,17 @@ pub fn find_npm_node_script_windows(cmd_name: &str) -> Option<(String, String)> 
     // Читаємо .cmd файл і витягуємо шлях до JS скрипту зі рядка виду:
     // "%_prog%"  "%dp0%\node_modules\pkg\dist\cli.js" %*
     let content = std::fs::read_to_string(&cmd_path).ok()?;
-    let script_path = content.lines()
+    let script_path = content
+        .lines()
         .find(|l| l.contains("node_modules") && l.contains(".js"))?
         // витягуємо шлях між другою парою лапок
         .split('"')
         .find(|s| s.contains("node_modules") && s.ends_with(".js"))?
         // %dp0% розгортаємо у реальну директорію npm
-        .replace("%dp0%", &std::path::Path::new(&cmd_path).parent()?.to_string_lossy());
+        .replace(
+            "%dp0%",
+            &std::path::Path::new(&cmd_path).parent()?.to_string_lossy(),
+        );
 
     if !std::path::Path::new(&script_path).exists() {
         return None;
@@ -546,7 +584,10 @@ pub fn new_cli_command(name: &str) -> std::process::Command {
         let mut cmd = std::process::Command::new("cmd");
         if name == "codex" {
             if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let codex_candidate = format!("{}\\Programs\\OpenAI\\Codex\\bin\\codex.exe", local_app_data);
+                let codex_candidate = format!(
+                    "{}\\Programs\\OpenAI\\Codex\\bin\\codex.exe",
+                    local_app_data
+                );
                 if std::path::Path::new(&codex_candidate).exists() {
                     cmd.args(&["/C", &codex_candidate]);
                     set_no_window(&mut cmd);
@@ -597,4 +638,3 @@ pub fn new_direct_cli_command(name: &str) -> std::process::Command {
         std::process::Command::new(name)
     }
 }
-

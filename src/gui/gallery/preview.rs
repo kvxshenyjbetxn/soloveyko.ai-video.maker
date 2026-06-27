@@ -1,8 +1,11 @@
-use eframe::egui;
 use super::icons::{draw_menu_icon, draw_refresh_icon};
+use eframe::egui;
 
 /// Завантажує зображення з диску та повертає TextureHandle для egui.
-pub fn load_image_texture(ctx: &egui::Context, path: &std::path::Path) -> Option<egui::TextureHandle> {
+pub fn load_image_texture(
+    ctx: &egui::Context,
+    path: &std::path::Path,
+) -> Option<egui::TextureHandle> {
     let data = std::fs::read(path).ok()?;
     let img = image::load_from_memory(&data).ok()?;
     let rgba = img.to_rgba8();
@@ -17,7 +20,9 @@ pub fn start_image_loading(
     path: std::path::PathBuf,
     ctx: egui::Context,
     loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
-    result: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
+    result: std::sync::Arc<
+        std::sync::Mutex<Vec<(std::path::PathBuf, Option<egui::TextureHandle>)>>,
+    >,
 ) {
     std::thread::spawn(move || {
         loading.lock().unwrap().insert(path.clone());
@@ -60,12 +65,17 @@ pub fn draw_image_preview(
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             let bg = ui.allocate_rect(screen_rect, egui::Sense::click());
-            ui.painter().rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(215));
+            ui.painter()
+                .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(215));
 
-            ui.put(img_rect, egui::Image::from_texture(texture).fit_to_exact_size(display_size));
+            ui.put(
+                img_rect,
+                egui::Image::from_texture(texture).fit_to_exact_size(display_size),
+            );
 
             if regen_loading {
-                ui.painter().rect_filled(img_rect, 0.0, egui::Color32::from_black_alpha(120));
+                ui.painter()
+                    .rect_filled(img_rect, 0.0, egui::Color32::from_black_alpha(120));
                 ui.put(img_rect, egui::Spinner::new().size(32.0));
             }
 
@@ -74,27 +84,66 @@ pub fn draw_image_preview(
 
             // Кнопка X (закрити)
             let close_center = egui::pos2(screen_rect.right() - 22.0, top_y);
-            let close_rect   = egui::Rect::from_center_size(close_center, btn_size);
-            let close_resp   = ui.interact(close_rect, egui::Id::new("gp_close"), egui::Sense::click());
-            let close_color  = if close_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
+            let close_rect = egui::Rect::from_center_size(close_center, btn_size);
+            let close_resp =
+                ui.interact(close_rect, egui::Id::new("gp_close"), egui::Sense::click());
+            let close_color = if close_resp.hovered() {
+                egui::Color32::WHITE
+            } else {
+                egui::Color32::from_gray(160)
+            };
             let xs = egui::Stroke::new(2.0, close_color);
             let r = 8.0;
-            ui.painter().line_segment([close_center + egui::vec2(-r,-r), close_center + egui::vec2(r,r)], xs);
-            ui.painter().line_segment([close_center + egui::vec2(r,-r), close_center + egui::vec2(-r,r)], xs);
+            ui.painter().line_segment(
+                [
+                    close_center + egui::vec2(-r, -r),
+                    close_center + egui::vec2(r, r),
+                ],
+                xs,
+            );
+            ui.painter().line_segment(
+                [
+                    close_center + egui::vec2(r, -r),
+                    close_center + egui::vec2(-r, r),
+                ],
+                xs,
+            );
 
             // Кнопка "Кастомна перегенерація" (≡)
             let custom_center = egui::pos2(screen_rect.right() - 66.0, top_y);
-            let custom_rect   = egui::Rect::from_center_size(custom_center, btn_size);
-            let custom_resp   = ui.interact(custom_rect, egui::Id::new("gp_custom"), egui::Sense::click());
-            let custom_color  = if custom_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
-            draw_menu_icon(ui.painter(), custom_center, 8.0, egui::Stroke::new(2.0, custom_color));
+            let custom_rect = egui::Rect::from_center_size(custom_center, btn_size);
+            let custom_resp = ui.interact(
+                custom_rect,
+                egui::Id::new("gp_custom"),
+                egui::Sense::click(),
+            );
+            let custom_color = if custom_resp.hovered() {
+                egui::Color32::WHITE
+            } else {
+                egui::Color32::from_gray(160)
+            };
+            draw_menu_icon(
+                ui.painter(),
+                custom_center,
+                8.0,
+                egui::Stroke::new(2.0, custom_color),
+            );
 
             // Кнопка "Та сама перегенерація" (↻)
             let same_center = egui::pos2(screen_rect.right() - 110.0, top_y);
-            let same_rect   = egui::Rect::from_center_size(same_center, btn_size);
-            let same_resp   = ui.interact(same_rect, egui::Id::new("gp_same"), egui::Sense::click());
-            let same_color  = if same_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
-            draw_refresh_icon(ui.painter(), same_center, 9.0, egui::Stroke::new(2.0, same_color));
+            let same_rect = egui::Rect::from_center_size(same_center, btn_size);
+            let same_resp = ui.interact(same_rect, egui::Id::new("gp_same"), egui::Sense::click());
+            let same_color = if same_resp.hovered() {
+                egui::Color32::WHITE
+            } else {
+                egui::Color32::from_gray(160)
+            };
+            draw_refresh_icon(
+                ui.painter(),
+                same_center,
+                9.0,
+                egui::Stroke::new(2.0, same_color),
+            );
 
             if close_resp.clicked() {
                 keep_open = false;

@@ -69,12 +69,14 @@ pub fn call_openrouter(
         temperature,
     };
 
-    let request_value = ureq::serde_json::to_value(&request).map_err(|e| {
-        format!("Serialization error: {}", e)
-    })?;
+    let request_value =
+        ureq::serde_json::to_value(&request).map_err(|e| format!("Serialization error: {}", e))?;
 
     for attempt in 1..=MAX_RETRIES {
-        log(&format!("OpenRouter request. Model: {}, attempt {}/{}", model, attempt, MAX_RETRIES));
+        log(&format!(
+            "OpenRouter request. Model: {}, attempt {}/{}",
+            model, attempt, MAX_RETRIES
+        ));
 
         let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
@@ -94,7 +96,10 @@ pub fn call_openrouter(
         let data = match res.into_json::<ChatResponse>() {
             Ok(d) => d,
             Err(e) => {
-                log(&format!("Response parsing error (attempt {}): {}", attempt, e));
+                log(&format!(
+                    "Response parsing error (attempt {}): {}",
+                    attempt, e
+                ));
                 continue;
             }
         };
@@ -102,14 +107,18 @@ pub fn call_openrouter(
         let cost = data.usage.as_ref().and_then(|u| u.cost);
 
         let choice = data.choices.into_iter().next();
-        let finish_reason = choice.as_ref()
+        let finish_reason = choice
+            .as_ref()
             .and_then(|c| c.finish_reason.as_deref())
             .unwrap_or("unknown")
             .to_string();
         let text = choice.and_then(|c| c.message.content).unwrap_or_default();
 
         if text.trim().is_empty() {
-            log(&format!("Порожня відповідь (attempt {}/{}, finish_reason: {}), повтор...", attempt, MAX_RETRIES, finish_reason));
+            log(&format!(
+                "Порожня відповідь (attempt {}/{}, finish_reason: {}), повтор...",
+                attempt, MAX_RETRIES, finish_reason
+            ));
             continue;
         }
 
@@ -120,7 +129,10 @@ pub fn call_openrouter(
         return Ok((text, cost));
     }
 
-    Err(format!("LLM не повернув відповідь після {} спроб", MAX_RETRIES))
+    Err(format!(
+        "LLM не повернув відповідь після {} спроб",
+        MAX_RETRIES
+    ))
 }
 
 /// Викликає LLM-сервіс із підстановкою `{{text}}` у промт і повертає текст відповіді та вартість.
@@ -146,15 +158,32 @@ pub fn call_llm(
     };
 
     if service == "Claude Code" {
-        crate::api::claude::call_claude_code(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+        crate::api::claude::call_claude_code(
+            model,
+            &user_content,
+            job_info,
+            working_dir,
+            allow_tools,
+        )
+        .map(|res| (res, None))
     } else if service == "Gemini CLI" {
-        crate::api::gemini::call_gemini_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+        crate::api::gemini::call_gemini_cli(
+            model,
+            &user_content,
+            job_info,
+            working_dir,
+            allow_tools,
+        )
+        .map(|res| (res, None))
     } else if service == "Codex CLI" {
-        crate::api::codex::call_codex(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+        crate::api::codex::call_codex(model, &user_content, job_info, working_dir, allow_tools)
+            .map(|res| (res, None))
     } else if service == "AGY CLI" {
-        crate::api::agy::call_agy_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+        crate::api::agy::call_agy_cli(model, &user_content, job_info, working_dir, allow_tools)
+            .map(|res| (res, None))
     } else if service == "Pi CLI" {
-        crate::api::pi::call_pi_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
+        crate::api::pi::call_pi_cli(model, &user_content, job_info, working_dir, allow_tools)
+            .map(|res| (res, None))
     } else {
         call_openrouter(key, model, user_content, temperature, job_info)
     }

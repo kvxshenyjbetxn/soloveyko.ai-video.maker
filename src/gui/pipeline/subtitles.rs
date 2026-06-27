@@ -1,5 +1,5 @@
 use crate::gui::welcome::BinaryDownload;
-use crate::localization::{translate, Language};
+use crate::localization::{Language, translate};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 

@@ -12,7 +12,7 @@ pub enum AppTheme {
 }
 
 /// Застосовує обрану тему та колір акценту до контексту egui.
-/// 
+///
 /// Виконує перемикання колірної палітри інтерфейсу між світлою,
 /// темною та глибокою чорною AMOLED (без використання сірих тонів),
 /// а також встановлює кастомний колір акценту для виділень та посилань.
@@ -26,7 +26,7 @@ pub fn apply_theme(ctx: &egui::Context, theme: AppTheme, accent_color: egui::Col
         }
         AppTheme::Amoled => {
             let mut v = egui::Visuals::dark();
-            
+
             // Налаштовуємо повністю чорний колір фону для AMOLED екранів (#000000)
             v.panel_fill = egui::Color32::from_rgb(0, 0, 0);
             v.window_fill = egui::Color32::from_rgb(0, 0, 0);
@@ -35,11 +35,11 @@ pub fn apply_theme(ctx: &egui::Context, theme: AppTheme, accent_color: egui::Col
             v
         }
     };
-    
+
     // Застосовуємо обраний колір акценту для елементів виділення та гіперпосилань
     visuals.selection.bg_fill = accent_color;
     visuals.hyperlink_color = accent_color;
-    
+
     // Застосовуємо оновлені параметри візуалів
     ctx.set_visuals(visuals);
 

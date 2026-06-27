@@ -1,7 +1,7 @@
-use eframe::egui;
-use crate::localization::{Language, translate};
 use super::state::MontageEditorState;
 use super::types::ClipKind;
+use crate::localization::{Language, translate};
+use eframe::egui;
 
 // ─── Інспектор ───────────────────────────────────────────────────────────────
 
@@ -10,7 +10,13 @@ pub(super) fn draw_inspector(
     language: Language,
     editor: &mut MontageEditorState,
 ) {
-    ui.label(egui::RichText::new(format!("⚙ {}", translate(language, "montage_editor_inspector"))).strong());
+    ui.label(
+        egui::RichText::new(format!(
+            "⚙ {}",
+            translate(language, "montage_editor_inspector")
+        ))
+        .strong(),
+    );
     ui.separator();
 
     let sel_id = editor.selected_clip_id.clone();
@@ -25,23 +31,42 @@ pub(super) fn draw_inspector(
             // ── Час/тривалість/доріжка ───────────────────────────────────────
             ui.horizontal(|ui| {
                 ui.label(translate(language, "montage_editor_clip_start"));
-                ui.add(egui::DragValue::new(&mut clip.start_secs).speed(0.05).range(0.0..=3600.0));
+                ui.add(
+                    egui::DragValue::new(&mut clip.start_secs)
+                        .speed(0.05)
+                        .range(0.0..=3600.0),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label(translate(language, "montage_editor_clip_dur"));
-                ui.add(egui::DragValue::new(&mut clip.duration).speed(0.05).range(0.1..=3600.0));
+                ui.add(
+                    egui::DragValue::new(&mut clip.duration)
+                        .speed(0.05)
+                        .range(0.1..=3600.0),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label(translate(language, "montage_editor_clip_track"));
                 let mut t = clip.track_idx as i32;
-                if ui.add(egui::DragValue::new(&mut t).speed(1.0).range(0..=(num_tracks as i32 - 1))).changed() {
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut t)
+                            .speed(1.0)
+                            .range(0..=(num_tracks as i32 - 1)),
+                    )
+                    .changed()
+                {
                     clip.track_idx = t as usize;
                 }
             });
 
             // ── Трансформ (масштаб + позиція) ───────────────────────────────
             ui.add_space(8.0);
-            ui.label(egui::RichText::new(translate(language, "montage_editor_transform")).strong().size(11.0));
+            ui.label(
+                egui::RichText::new(translate(language, "montage_editor_transform"))
+                    .strong()
+                    .size(11.0),
+            );
             ui.separator();
 
             ui.horizontal(|ui| {
@@ -58,7 +83,10 @@ pub(super) fn draw_inspector(
             });
 
             ui.add_space(4.0);
-            if ui.small_button(translate(language, "montage_editor_reset_transform")).clicked() {
+            if ui
+                .small_button(translate(language, "montage_editor_reset_transform"))
+                .clicked()
+            {
                 clip.scale = 1.0;
                 clip.pos_x = 0.0;
                 clip.pos_y = 0.0;
@@ -74,17 +102,30 @@ pub(super) fn draw_inspector(
             // ── Ефекти (лише для зображень) ─────────────────────────────────
             if matches!(clip.kind, ClipKind::Image) {
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new(translate(language, "montage_editor_effects")).strong().size(11.0));
+                ui.label(
+                    egui::RichText::new(translate(language, "montage_editor_effects"))
+                        .strong()
+                        .size(11.0),
+                );
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut clip.zoom_enabled, translate(language, "montage_editor_clip_zoom"));
+                    ui.checkbox(
+                        &mut clip.zoom_enabled,
+                        translate(language, "montage_editor_clip_zoom"),
+                    );
                     ui.add_space(8.0);
-                    ui.checkbox(&mut clip.shake_enabled, translate(language, "montage_editor_clip_shake"));
+                    ui.checkbox(
+                        &mut clip.shake_enabled,
+                        translate(language, "montage_editor_clip_shake"),
+                    );
                 });
             }
 
             ui.add_space(8.0);
-            if ui.button(translate(language, "montage_editor_delete_clip")).clicked() {
+            if ui
+                .button(translate(language, "montage_editor_delete_clip"))
+                .clicked()
+            {
                 editor.clips.remove(idx);
                 editor.selected_clip_id = None;
             }

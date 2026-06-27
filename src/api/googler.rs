@@ -75,11 +75,17 @@ struct UsageResponse {
 
 fn parse_balance(data: UsageResponse) -> GooglerBalance {
     GooglerBalance {
-        img_used: data.current_usage.hourly_usage.image_generation
+        img_used: data
+            .current_usage
+            .hourly_usage
+            .image_generation
             .map(|s| s.current_usage)
             .unwrap_or(0),
         img_limit: data.account_limits.img_gen_per_hour_limit,
-        video_used: data.current_usage.hourly_usage.video_generation
+        video_used: data
+            .current_usage
+            .hourly_usage
+            .video_generation
             .map(|s| s.current_usage)
             .unwrap_or(0),
         video_limit: data.account_limits.video_gen_per_hour_limit,
@@ -112,8 +118,7 @@ pub fn check_key(
                     let bal = parse_balance(data);
                     let status = format!(
                         "✔ img: {}/{}/h • vid: {}/{}/h",
-                        bal.img_used, bal.img_limit,
-                        bal.video_used, bal.video_limit
+                        bal.img_used, bal.img_limit, bal.video_used, bal.video_limit
                     );
                     (status, Some(bal))
                 }
@@ -202,7 +207,11 @@ fn fetch_result_data_uri(download_url: &str, agent: &ureq::Agent) -> Result<Stri
 }
 
 /// Опитує generation v6 до завершення. Повертає data URI, текст або помилку.
-fn poll_v6_generation(key: &str, generation_id: &str, agent: &ureq::Agent) -> Result<String, String> {
+fn poll_v6_generation(
+    key: &str,
+    generation_id: &str,
+    agent: &ureq::Agent,
+) -> Result<String, String> {
     let url = format!("{}/v6/generations/{}", BASE_URL, generation_id);
     let poll_interval = std::time::Duration::from_secs(3);
 
@@ -239,7 +248,9 @@ fn poll_v6_generation(key: &str, generation_id: &str, agent: &ureq::Agent) -> Re
                 return Err("Результат v6 не містить даних".to_string());
             }
             "failed" => {
-                return Err(status.error.unwrap_or_else(|| "Невідома помилка v6".to_string()));
+                return Err(status
+                    .error
+                    .unwrap_or_else(|| "Невідома помилка v6".to_string()));
             }
             _ => {}
         }
@@ -288,7 +299,11 @@ fn is_hourly_limit_exceeded(err: &str) -> bool {
 }
 
 /// Формує запит генерації зображення для канонічних операцій v6.
-fn image_generation_body(provider: &str, prompt: &str, aspect_ratio: &str) -> Result<serde_json::Value, String> {
+fn image_generation_body(
+    provider: &str,
+    prompt: &str,
+    aspect_ratio: &str,
+) -> Result<serde_json::Value, String> {
     let body = match provider {
         // Старі Flow-ключі мігруємо на підтримувані v6 моделі.
         "flow_IMAGEN_3_5" | "flow_GEM_PIX_2" | "flow_nano_banana_pro" => {
@@ -326,7 +341,11 @@ fn image_generation_body(provider: &str, prompt: &str, aspect_ratio: &str) -> Re
 }
 
 /// Формує запит text-to-video для канонічних операцій v6.
-fn video_generation_body(provider: &str, prompt: &str, aspect_ratio: &str) -> Result<serde_json::Value, String> {
+fn video_generation_body(
+    provider: &str,
+    prompt: &str,
+    aspect_ratio: &str,
+) -> Result<serde_json::Value, String> {
     let body = match provider {
         "flow" | "flow_fast" => serde_json::json!({
             "operation": "flow_video_from_text",
@@ -371,7 +390,11 @@ fn video_generation_body(provider: &str, prompt: &str, aspect_ratio: &str) -> Re
 }
 
 /// Формує запит image-to-video для канонічних операцій v6.
-fn animation_generation_body(provider: &str, image_data_uri: &str, prompt: &str) -> Result<serde_json::Value, String> {
+fn animation_generation_body(
+    provider: &str,
+    image_data_uri: &str,
+    prompt: &str,
+) -> Result<serde_json::Value, String> {
     let body = match provider {
         "flow" | "flow_fast" => serde_json::json!({
             "operation": "flow_video_from_ingredients",
@@ -486,7 +509,10 @@ pub fn generate_image_with_priority(
                         failures += 1;
                         crate::logger::log(&format!(
                             " Зображення [{}] спроба {}/{}: {}",
-                            provider, failures, RETRIES + 1, e
+                            provider,
+                            failures,
+                            RETRIES + 1,
+                            e
                         ));
                         if failures > RETRIES {
                             break;
@@ -501,28 +527,21 @@ pub fn generate_image_with_priority(
     Err("Всі провайдери зображень вичерпані".to_string())
 }
 
-/// Спроба анімації зображення (image-to-video) через конкретного провайдера.
-fn try_animate_image(
-    key: &str,
-    image_data_uri: &str,
-    prompt: &str,
-    provider: &str,
-    agent: &ureq::Agent,
-) -> Result<String, String> {
-    let _permit = GooglerVideoLimiter::get().acquire();
-    let body = animation_generation_body(provider, image_data_uri, prompt)?;
-    start_v6_generation(key, body, agent)
-}
-
 /// Анімує зображення в відео з перебором провайдерів за пріоритетом (image-to-video).
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+/// `on_started` викликається лише тоді, коли запит справді отримав слот у лімітері
+/// і прямо зараз починає анімацію, а не просто стоїть у черзі.
 /// Повертає `(provider_name, data_uri)` — щоб caller знав який провайдер переміг.
-pub fn animate_image_with_priority(
+pub fn animate_image_with_priority<F>(
     key: &str,
     image_data_uri: &str,
     prompt: &str,
     priority: &[String],
-) -> Result<(String, String), String> {
+    mut on_started: F,
+) -> Result<(String, String), String>
+where
+    F: FnMut(&str),
+{
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -534,7 +553,13 @@ pub fn animate_image_with_priority(
     for provider in priority {
         let mut failures = 0u32;
         loop {
-            match try_animate_image(key, image_data_uri, prompt, provider, &agent) {
+            let _permit = GooglerVideoLimiter::get().acquire();
+            on_started(provider);
+
+            let result = animation_generation_body(provider, image_data_uri, prompt)
+                .and_then(|body| start_v6_generation(key, body, &agent));
+
+            match result {
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
                     if is_concurrency_exceeded(&e) {
@@ -553,7 +578,10 @@ pub fn animate_image_with_priority(
                         failures += 1;
                         crate::logger::log(&format!(
                             " Анімація [{}] спроба {}/{}: {}",
-                            provider, failures, RETRIES + 1, e
+                            provider,
+                            failures,
+                            RETRIES + 1,
+                            e
                         ));
                         if failures > RETRIES {
                             break;
@@ -614,10 +642,7 @@ where
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
                     if is_concurrency_exceeded(&e) {
-                        crate::logger::log(&format!(
-                            " Відео [{}] ліміт потоків, чекаю…",
-                            provider
-                        ));
+                        crate::logger::log(&format!(" Відео [{}] ліміт потоків, чекаю…", provider));
                         std::thread::sleep(DELAY);
                     } else if is_hourly_limit_exceeded(&e) {
                         crate::logger::log(&format!(
@@ -629,7 +654,10 @@ where
                         failures += 1;
                         crate::logger::log(&format!(
                             " Відео [{}] спроба {}/{}: {}",
-                            provider, failures, RETRIES + 1, e
+                            provider,
+                            failures,
+                            RETRIES + 1,
+                            e
                         ));
                         if failures > RETRIES {
                             break;
@@ -672,7 +700,9 @@ impl GooglerImageLimiter {
         let mut active = self.active.lock().unwrap();
         loop {
             let max = *self.max_threads.lock().unwrap();
-            if *active < max { break; }
+            if *active < max {
+                break;
+            }
             active = self.condvar.wait(active).unwrap();
         }
         *active += 1;
@@ -681,7 +711,9 @@ impl GooglerImageLimiter {
 
     fn release(&self) {
         let mut active = self.active.lock().unwrap();
-        if *active > 0 { *active -= 1; }
+        if *active > 0 {
+            *active -= 1;
+        }
         self.condvar.notify_one();
     }
 
@@ -726,7 +758,9 @@ impl GooglerVideoLimiter {
         let mut active = self.active.lock().unwrap();
         loop {
             let max = *self.max_threads.lock().unwrap();
-            if *active < max { break; }
+            if *active < max {
+                break;
+            }
             active = self.condvar.wait(active).unwrap();
         }
         *active += 1;
@@ -735,7 +769,9 @@ impl GooglerVideoLimiter {
 
     fn release(&self) {
         let mut active = self.active.lock().unwrap();
-        if *active > 0 { *active -= 1; }
+        if *active > 0 {
+            *active -= 1;
+        }
         self.condvar.notify_one();
     }
 

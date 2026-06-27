@@ -296,7 +296,10 @@ fn run_edge_tts_voiceover(
                 crate::logger::log_job(
                     job_id,
                     job_name,
-                    &format!("[EdgeTTS] Warning: FFmpeg merge failed ({}). Falling back to binary merge...", e),
+                    &format!(
+                        "[EdgeTTS] Warning: FFmpeg merge failed ({}). Falling back to binary merge...",
+                        e
+                    ),
                 );
                 if let Err(binary_err) = merge_audio_binary(&chunk_paths, &final_output_path) {
                     return Err(format!(

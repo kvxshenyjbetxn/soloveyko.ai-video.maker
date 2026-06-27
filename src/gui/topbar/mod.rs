@@ -1,5 +1,5 @@
-use eframe::egui;
 use crate::localization::{Language, translate};
+use eframe::egui;
 
 pub mod balance;
 pub use balance::{draw_balance_window, draw_threads_window};
@@ -33,7 +33,8 @@ pub fn draw_chip(ui: &mut egui::Ui, text: &str, text_color: egui::Color32) -> eg
         } else {
             ui.visuals().faint_bg_color
         };
-        ui.painter().rect_filled(rect, egui::Rounding::same(4.0), fill);
+        ui.painter()
+            .rect_filled(rect, egui::Rounding::same(4.0), fill);
         ui.painter().galley(rect.min + padding, galley, text_color);
     }
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -41,7 +42,11 @@ pub fn draw_chip(ui: &mut egui::Ui, text: &str, text_color: egui::Color32) -> eg
 
 /// Малює компактний чіп з балансом. При наведенні підсвічується і змінює курсор.
 pub fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) -> egui::Response {
-    draw_chip(ui, &format!("{}: {}", prefix, value), ui.visuals().text_color())
+    draw_chip(
+        ui,
+        &format!("{}: {}", prefix, value),
+        ui.visuals().text_color(),
+    )
 }
 
 /// Малює верхню навігаційну панель з вкладками та балансами.
@@ -60,23 +65,44 @@ pub fn draw_navigation_bar(
         .min_height(40.0)
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
-                ui.selectable_value(active_tab, Tab::Main, egui::RichText::new(translate(language, "tab_main")).size(14.0));
+                ui.selectable_value(
+                    active_tab,
+                    Tab::Main,
+                    egui::RichText::new(translate(language, "tab_main")).size(14.0),
+                );
 
                 let has_media = jobs.iter().any(|j| {
-                    std::path::Path::new(&j.settings.save_path).join("media").exists()
+                    std::path::Path::new(&j.settings.save_path)
+                        .join("media")
+                        .exists()
                 });
                 if has_media {
-                    ui.selectable_value(active_tab, Tab::Gallery, egui::RichText::new(translate(language, "tab_gallery")).size(14.0));
+                    ui.selectable_value(
+                        active_tab,
+                        Tab::Gallery,
+                        egui::RichText::new(translate(language, "tab_gallery")).size(14.0),
+                    );
                 } else if *active_tab == Tab::Gallery {
                     *active_tab = Tab::Main;
                 }
 
-                ui.selectable_value(active_tab, Tab::Settings, egui::RichText::new(translate(language, "tab_settings")).size(14.0));
-                ui.selectable_value(active_tab, Tab::Logs, egui::RichText::new(translate(language, "tab_logs")).size(14.0));
+                ui.selectable_value(
+                    active_tab,
+                    Tab::Settings,
+                    egui::RichText::new(translate(language, "tab_settings")).size(14.0),
+                );
+                ui.selectable_value(
+                    active_tab,
+                    Tab::Logs,
+                    egui::RichText::new(translate(language, "tab_logs")).size(14.0),
+                );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
-                    if ui.add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false)).clicked() {
+                    if ui
+                        .add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false))
+                        .clicked()
+                    {
                         *balance_window_open = true;
                     }
                     ui.add_space(4.0);
@@ -101,8 +127,7 @@ pub fn draw_navigation_bar(
                         if let Some(bal) = guard.as_ref() {
                             let text = format!(
                                 "img: {}/{} vid: {}/{}",
-                                bal.img_used, bal.img_limit,
-                                bal.video_used, bal.video_limit,
+                                bal.img_used, bal.img_limit, bal.video_used, bal.video_limit,
                             );
                             if draw_balance_chip(ui, "Googler", &text).clicked() {
                                 *balance_window_open = true;
@@ -137,32 +162,122 @@ pub fn draw_status_bar(
                 ui.spacing_mut().item_spacing.x = 8.0;
                 let normal = ui.visuals().text_color();
 
-                let thread_chip = |ui: &mut egui::Ui, name: &str, active: usize, max: usize| -> bool {
-                    let color = thread_load_color(active, max, normal);
-                    draw_chip(ui, &format!("{}: {}/{}", name, active, max), color).clicked()
-                };
+                let thread_chip =
+                    |ui: &mut egui::Ui, name: &str, active: usize, max: usize| -> bool {
+                        let color = thread_load_color(active, max, normal);
+                        draw_chip(ui, &format!("{}: {}/{}", name, active, max), color).clicked()
+                    };
 
-                if ui.add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false)).clicked() {
+                if ui
+                    .add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false))
+                    .clicked()
+                {
                     open_threads = true;
                 }
                 ui.add_space(4.0);
 
-                if thread_chip(ui, "Googler vid", crate::api::googler::GooglerVideoLimiter::get().active_count(), googler_video_max_threads) { open_threads = true; }
-                if thread_chip(ui, "Googler img", crate::api::googler::GooglerImageLimiter::get().active_count(), googler_image_max_threads) { open_threads = true; }
+                if thread_chip(
+                    ui,
+                    "Googler vid",
+                    crate::api::googler::GooglerVideoLimiter::get().active_count(),
+                    googler_video_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "Googler img",
+                    crate::api::googler::GooglerImageLimiter::get().active_count(),
+                    googler_image_max_threads,
+                ) {
+                    open_threads = true;
+                }
                 ui.separator();
-                if thread_chip(ui, "FFmpeg", crate::api::ffmpeg::FfmpegLimiter::get().active_count(), ffmpeg_max_threads) { open_threads = true; }
+                if thread_chip(
+                    ui,
+                    "FFmpeg",
+                    crate::api::ffmpeg::FfmpegLimiter::get().active_count(),
+                    ffmpeg_max_threads,
+                ) {
+                    open_threads = true;
+                }
                 ui.separator();
-                if thread_chip(ui, "AssemblyAI", crate::api::assemblyai::AssemblyAILimiter::get().active_count(), 5) { open_threads = true; }
-                if thread_chip(ui, "EdgeTTS", crate::api::edgetts::EdgeTTSLimiter::get().active_count(), edge_tts_max_threads) { open_threads = true; }
-                if thread_chip(ui, "VoiceBot", crate::api::voicebot::VoiceBotLimiter::get().active_count(), 5) { open_threads = true; }
+                if thread_chip(
+                    ui,
+                    "AssemblyAI",
+                    crate::api::assemblyai::AssemblyAILimiter::get().active_count(),
+                    5,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "EdgeTTS",
+                    crate::api::edgetts::EdgeTTSLimiter::get().active_count(),
+                    edge_tts_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "VoiceBot",
+                    crate::api::voicebot::VoiceBotLimiter::get().active_count(),
+                    5,
+                ) {
+                    open_threads = true;
+                }
                 ui.separator();
-                if thread_chip(ui, "Gemini", crate::api::gemini::GeminiLimiter::get().active_count(), gemini_max_threads) { open_threads = true; }
-                if thread_chip(ui, "Claude", crate::api::claude::ClaudeLimiter::get().active_count(), claude_max_threads) { open_threads = true; }
-                if thread_chip(ui, "Codex", crate::api::codex::CodexLimiter::get().active_count(), codex_max_threads) { open_threads = true; }
-                if thread_chip(ui, "AGY", crate::api::agy::AgyLimiter::get().active_count(), agy_max_threads) { open_threads = true; }
-                if thread_chip(ui, "Pi", crate::api::pi::PiLimiter::get().active_count(), pi_max_threads) { open_threads = true; }
-                if thread_chip(ui, "OR", crate::api::openrouter::OpenRouterLimiter::get().active_count(), openrouter_max_threads) { open_threads = true; }
+                if thread_chip(
+                    ui,
+                    "Gemini",
+                    crate::api::gemini::GeminiLimiter::get().active_count(),
+                    gemini_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "Claude",
+                    crate::api::claude::ClaudeLimiter::get().active_count(),
+                    claude_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "Codex",
+                    crate::api::codex::CodexLimiter::get().active_count(),
+                    codex_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "AGY",
+                    crate::api::agy::AgyLimiter::get().active_count(),
+                    agy_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "Pi",
+                    crate::api::pi::PiLimiter::get().active_count(),
+                    pi_max_threads,
+                ) {
+                    open_threads = true;
+                }
+                if thread_chip(
+                    ui,
+                    "OR",
+                    crate::api::openrouter::OpenRouterLimiter::get().active_count(),
+                    openrouter_max_threads,
+                ) {
+                    open_threads = true;
+                }
             });
-            if open_threads { *threads_window_open = true; }
+            if open_threads {
+                *threads_window_open = true;
+            }
         });
 }

@@ -11,7 +11,9 @@ pub struct ChildTracker {
 impl ChildTracker {
     pub fn get() -> &'static Self {
         static TRACKER: OnceLock<ChildTracker> = OnceLock::new();
-        TRACKER.get_or_init(|| ChildTracker { pids: Mutex::new(Vec::new()) })
+        TRACKER.get_or_init(|| ChildTracker {
+            pids: Mutex::new(Vec::new()),
+        })
     }
 
     pub fn add(&self, pid: u32) {
@@ -66,8 +68,6 @@ fn kill_by_pid(pid: u32) {
         .args(["-9", &pid.to_string()])
         .status();
 }
-
-
 
 /// Лімітер одночасних процесів FFmpeg (семафор)
 pub struct FfmpegLimiter {

@@ -1,6 +1,6 @@
+use crate::localization::{Language, translate};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
-use crate::localization::{Language, translate};
 
 /// Статус перевірки CLI-інструменту.
 #[derive(Clone, PartialEq)]
@@ -93,7 +93,12 @@ impl ToolChecks {
         );
     }
 
-    fn check(name: &'static str, version_flag: &'static str, status: Arc<Mutex<ToolStatus>>, ctx: egui::Context) {
+    fn check(
+        name: &'static str,
+        version_flag: &'static str,
+        status: Arc<Mutex<ToolStatus>>,
+        ctx: egui::Context,
+    ) {
         std::thread::spawn(move || {
             let mut cmd = crate::bundle::new_cli_command(name);
             let result = cmd.arg(version_flag).output();
@@ -123,15 +128,21 @@ impl ToolChecks {
     ) {
         std::thread::spawn(move || {
             let path = crate::bundle::ffmpeg_path();
-            let result = std::process::Command::new(&path)
-                .arg("-version")
-                .output();
+            let result = std::process::Command::new(&path).arg("-version").output();
 
             let installed = matches!(&result, Ok(out) if out.status.success());
 
             if installed {
-                let ver = result.ok()
-                    .map(|out| String::from_utf8_lossy(&out.stdout).lines().next().unwrap_or("").trim().to_string())
+                let ver = result
+                    .ok()
+                    .map(|out| {
+                        String::from_utf8_lossy(&out.stdout)
+                            .lines()
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string()
+                    })
                     .unwrap_or_default();
                 *ffmpeg_status.lock().unwrap() = ToolStatus::Installed(ver);
                 ctx.request_repaint();
@@ -140,7 +151,8 @@ impl ToolChecks {
 
             // Не знайдено — починаємо авто-завантаження
             *ffmpeg_status.lock().unwrap() = ToolStatus::NotInstalled;
-            *ffmpeg_download.lock().unwrap() = FfmpegDownload::Downloading("підготовка...".to_string());
+            *ffmpeg_download.lock().unwrap() =
+                FfmpegDownload::Downloading("підготовка...".to_string());
             ctx.request_repaint();
 
             let dl = Arc::clone(&ffmpeg_download);
@@ -197,7 +209,8 @@ impl ToolChecks {
 
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             {
-                *whisperx_download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
+                *whisperx_download.lock().unwrap() =
+                    BinaryDownload::Downloading("підготовка...".to_string());
                 ctx.request_repaint();
 
                 let dl = Arc::clone(&whisperx_download);
@@ -247,7 +260,8 @@ impl ToolChecks {
 
             // Не знайдено — починаємо авто-завантаження
             *whisper_status.lock().unwrap() = ToolStatus::NotInstalled;
-            *whisper_download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
+            *whisper_download.lock().unwrap() =
+                BinaryDownload::Downloading("підготовка...".to_string());
             ctx.request_repaint();
 
             let dl = Arc::clone(&whisper_download);
@@ -315,23 +329,65 @@ pub fn draw_welcome_dialog(
             let whisperx_status = checks.whisperx.lock().unwrap().clone();
             let whisperx_download = checks.whisperx_download.lock().unwrap().clone();
 
-            draw_tool_row(ui, "Gemini CLI", &gemini_status, translate(language, "welcome_gemini_desc"), language);
+            draw_tool_row(
+                ui,
+                "Gemini CLI",
+                &gemini_status,
+                translate(language, "welcome_gemini_desc"),
+                language,
+            );
             ui.add_space(6.0);
-            draw_tool_row(ui, "Claude Code", &claude_status, translate(language, "welcome_claude_desc"), language);
+            draw_tool_row(
+                ui,
+                "Claude Code",
+                &claude_status,
+                translate(language, "welcome_claude_desc"),
+                language,
+            );
             ui.add_space(6.0);
-            draw_tool_row(ui, "Codex CLI", &codex_status, translate(language, "welcome_codex_desc"), language);
+            draw_tool_row(
+                ui,
+                "Codex CLI",
+                &codex_status,
+                translate(language, "welcome_codex_desc"),
+                language,
+            );
             ui.add_space(6.0);
-            draw_download_row(ui, "FFmpeg", &ffmpeg_status, &ffmpeg_download, translate(language, "welcome_ffmpeg_desc"), language);
+            draw_download_row(
+                ui,
+                "FFmpeg",
+                &ffmpeg_status,
+                &ffmpeg_download,
+                translate(language, "welcome_ffmpeg_desc"),
+                language,
+            );
             ui.add_space(6.0);
-            draw_download_row(ui, "Whisper", &whisper_status, &whisper_download, translate(language, "welcome_whisper_desc"), language);
+            draw_download_row(
+                ui,
+                "Whisper",
+                &whisper_status,
+                &whisper_download,
+                translate(language, "welcome_whisper_desc"),
+                language,
+            );
             ui.add_space(6.0);
-            draw_download_row(ui, "WhisperX", &whisperx_status, &whisperx_download, translate(language, "welcome_whisperx_desc"), language);
+            draw_download_row(
+                ui,
+                "WhisperX",
+                &whisperx_status,
+                &whisperx_download,
+                translate(language, "welcome_whisperx_desc"),
+                language,
+            );
             ui.add_space(6.0);
 
             let whisper_amd_download = checks.whisper_amd_download.lock().unwrap().clone();
             draw_whisper_amd_row(
-                ui, language, &whisper_amd_download,
-                Arc::clone(&checks.whisper_amd_download), ctx,
+                ui,
+                language,
+                &whisper_amd_download,
+                Arc::clone(&checks.whisper_amd_download),
+                ctx,
             );
 
             ui.add_space(10.0);
@@ -339,12 +395,18 @@ pub fn draw_welcome_dialog(
             ui.horizontal(|ui| {
                 ui.checkbox(dont_show, translate(language, "welcome_dont_show"));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(translate(language, "welcome_close_btn")).clicked() {
+                    if ui
+                        .button(translate(language, "welcome_close_btn"))
+                        .clicked()
+                    {
                         *open = false;
                         closed = true;
                     }
                     ui.add_space(4.0);
-                    if ui.button(translate(language, "welcome_recheck_btn")).clicked() {
+                    if ui
+                        .button(translate(language, "welcome_recheck_btn"))
+                        .clicked()
+                    {
                         checks.restart(ctx.clone());
                     }
                 });
@@ -365,12 +427,24 @@ fn draw_tool_row(
         ui.set_min_height(30.0);
 
         match status {
-            ToolStatus::Checking => { ui.spinner(); }
+            ToolStatus::Checking => {
+                ui.spinner();
+            }
             ToolStatus::Installed(_) => {
-                ui.label(egui::RichText::new("✓").color(egui::Color32::from_rgb(46, 204, 113)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✓")
+                        .color(egui::Color32::from_rgb(46, 204, 113))
+                        .size(16.0)
+                        .strong(),
+                );
             }
             ToolStatus::NotInstalled => {
-                ui.label(egui::RichText::new("✗").color(egui::Color32::from_rgb(231, 76, 60)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✗")
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(16.0)
+                        .strong(),
+                );
             }
         }
 
@@ -379,13 +453,25 @@ fn draw_tool_row(
                 ui.label(egui::RichText::new(name).strong());
                 match status {
                     ToolStatus::Installed(ver) => {
-                        ui.label(egui::RichText::new(ver).color(egui::Color32::from_rgb(46, 204, 113)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(ver)
+                                .color(egui::Color32::from_rgb(46, 204, 113))
+                                .size(11.0),
+                        );
                     }
                     ToolStatus::NotInstalled => {
-                        ui.label(egui::RichText::new(translate(language, "welcome_not_installed")).color(egui::Color32::from_rgb(231, 76, 60)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(translate(language, "welcome_not_installed"))
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(11.0),
+                        );
                     }
                     ToolStatus::Checking => {
-                        ui.label(egui::RichText::new(translate(language, "welcome_checking")).weak().size(11.0));
+                        ui.label(
+                            egui::RichText::new(translate(language, "welcome_checking"))
+                                .weak()
+                                .size(11.0),
+                        );
                     }
                 }
             });
@@ -409,15 +495,31 @@ fn draw_whisper_amd_row(
 
         // Іконка статусу
         match download {
-            BinaryDownload::Downloading(_) => { ui.spinner(); }
+            BinaryDownload::Downloading(_) => {
+                ui.spinner();
+            }
             _ if is_installed => {
-                ui.label(egui::RichText::new("✓").color(egui::Color32::from_rgb(46, 204, 113)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✓")
+                        .color(egui::Color32::from_rgb(46, 204, 113))
+                        .size(16.0)
+                        .strong(),
+                );
             }
             BinaryDownload::Failed(_) => {
-                ui.label(egui::RichText::new("✗").color(egui::Color32::from_rgb(231, 76, 60)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✗")
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(16.0)
+                        .strong(),
+                );
             }
             _ => {
-                ui.label(egui::RichText::new("○").color(egui::Color32::GRAY).size(16.0));
+                ui.label(
+                    egui::RichText::new("○")
+                        .color(egui::Color32::GRAY)
+                        .size(16.0),
+                );
             }
         }
 
@@ -427,21 +529,44 @@ fn draw_whisper_amd_row(
 
                 match download {
                     BinaryDownload::Downloading(label) => {
-                        ui.label(egui::RichText::new(label).color(egui::Color32::from_rgb(255, 200, 0)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(label)
+                                .color(egui::Color32::from_rgb(255, 200, 0))
+                                .size(11.0),
+                        );
                     }
                     BinaryDownload::Failed(err) => {
-                        ui.label(egui::RichText::new(err).color(egui::Color32::from_rgb(231, 76, 60)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(err)
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(11.0),
+                        );
                     }
                     _ if is_installed => {
-                        ui.label(egui::RichText::new("встановлено").color(egui::Color32::from_rgb(46, 204, 113)).size(11.0));
+                        ui.label(
+                            egui::RichText::new("встановлено")
+                                .color(egui::Color32::from_rgb(46, 204, 113))
+                                .size(11.0),
+                        );
                     }
                     _ => {
-                        ui.label(egui::RichText::new(translate(language, "welcome_whisper_amd_optional")).weak().size(11.0));
+                        ui.label(
+                            egui::RichText::new(translate(
+                                language,
+                                "welcome_whisper_amd_optional",
+                            ))
+                            .weak()
+                            .size(11.0),
+                        );
                     }
                 }
             });
 
-            ui.label(egui::RichText::new(translate(language, "welcome_whisper_amd_desc")).weak().size(11.0));
+            ui.label(
+                egui::RichText::new(translate(language, "welcome_whisper_amd_desc"))
+                    .weak()
+                    .size(11.0),
+            );
 
             // Кнопка встановлення або повтору — тільки на Windows, якщо не встановлено
             #[cfg(target_os = "windows")]
@@ -449,13 +574,19 @@ fn draw_whisper_amd_row(
                 match download {
                     BinaryDownload::Idle | BinaryDownload::Done => {
                         ui.add_space(2.0);
-                        if ui.small_button(translate(language, "welcome_whisper_amd_install_btn")).clicked() {
+                        if ui
+                            .small_button(translate(language, "welcome_whisper_amd_install_btn"))
+                            .clicked()
+                        {
                             start_whisper_amd_download(_download_arc, _ctx.clone());
                         }
                     }
                     BinaryDownload::Failed(_) => {
                         ui.add_space(2.0);
-                        if ui.small_button(translate(language, "welcome_recheck_btn")).clicked() {
+                        if ui
+                            .small_button(translate(language, "welcome_recheck_btn"))
+                            .clicked()
+                        {
                             start_whisper_amd_download(_download_arc, _ctx.clone());
                         }
                     }
@@ -503,19 +634,34 @@ fn draw_download_row(
 
         match (status, download) {
             (ToolStatus::Installed(_), _) => {
-                ui.label(egui::RichText::new("✓").color(egui::Color32::from_rgb(46, 204, 113)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✓")
+                        .color(egui::Color32::from_rgb(46, 204, 113))
+                        .size(16.0)
+                        .strong(),
+                );
             }
             (_, BinaryDownload::Downloading(_)) => {
                 ui.spinner();
             }
             (_, BinaryDownload::Failed(_)) => {
-                ui.label(egui::RichText::new("✗").color(egui::Color32::from_rgb(231, 76, 60)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✗")
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(16.0)
+                        .strong(),
+                );
             }
             (ToolStatus::Checking, _) => {
                 ui.spinner();
             }
             _ => {
-                ui.label(egui::RichText::new("✗").color(egui::Color32::from_rgb(231, 76, 60)).size(16.0).strong());
+                ui.label(
+                    egui::RichText::new("✗")
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(16.0)
+                        .strong(),
+                );
             }
         }
 
@@ -525,22 +671,46 @@ fn draw_download_row(
 
                 match (status, download) {
                     (ToolStatus::Installed(ver), _) => {
-                        ui.label(egui::RichText::new(ver).color(egui::Color32::from_rgb(46, 204, 113)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(ver)
+                                .color(egui::Color32::from_rgb(46, 204, 113))
+                                .size(11.0),
+                        );
                     }
                     (_, BinaryDownload::Downloading(label)) => {
-                        ui.label(egui::RichText::new(label).color(egui::Color32::from_rgb(255, 200, 0)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(label)
+                                .color(egui::Color32::from_rgb(255, 200, 0))
+                                .size(11.0),
+                        );
                     }
                     (_, BinaryDownload::Done) => {
-                        ui.label(egui::RichText::new(translate(language, "welcome_checking")).weak().size(11.0));
+                        ui.label(
+                            egui::RichText::new(translate(language, "welcome_checking"))
+                                .weak()
+                                .size(11.0),
+                        );
                     }
                     (_, BinaryDownload::Failed(err)) => {
-                        ui.label(egui::RichText::new(err).color(egui::Color32::from_rgb(231, 76, 60)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(err)
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(11.0),
+                        );
                     }
                     (ToolStatus::Checking, _) => {
-                        ui.label(egui::RichText::new(translate(language, "welcome_checking")).weak().size(11.0));
+                        ui.label(
+                            egui::RichText::new(translate(language, "welcome_checking"))
+                                .weak()
+                                .size(11.0),
+                        );
                     }
                     _ => {
-                        ui.label(egui::RichText::new(translate(language, "welcome_not_installed")).color(egui::Color32::from_rgb(231, 76, 60)).size(11.0));
+                        ui.label(
+                            egui::RichText::new(translate(language, "welcome_not_installed"))
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(11.0),
+                        );
                     }
                 }
             });

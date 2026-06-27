@@ -53,23 +53,23 @@ pub fn animate_single_image(
             } else {
                 saved_prompt
             };
-            crate::logger::log_job(
-                job_id,
-                &job_name,
-                &format!("Animate {}: запуск image-to-video", file_name),
-            );
-
             let (anim_provider, api_result) = crate::api::googler::animate_image_with_priority(
                 &googler_key,
                 &data_uri,
                 &prompt,
                 &priority,
+                |provider| {
+                    crate::logger::log_job(
+                        job_id,
+                        &job_name,
+                        &format!(
+                            "Animate {}: старт — {}",
+                            file_name,
+                            crate::api::googler::video_provider_model_name(provider)
+                        ),
+                    );
+                },
             )?;
-            crate::logger::log_job(
-                job_id,
-                &job_name,
-                &format!("Animate {}: провайдер — {}", file_name, anim_provider),
-            );
 
             // Зберігаємо відео поряд з оригінальним зображенням (.mp4)
             let video_path = file_path.with_extension("mp4");
@@ -408,10 +408,17 @@ pub fn upscale_video_if_needed(
     crate::logger::log_job(
         job_id,
         job_name,
-        &format!("Обробка відео (апскейл: {}, роздільна здатність: {}, кроп: 107% (дефолт){}, якість: {})...",
-            enabled, resolution,
-            if is_omni { " + omni watermark crop 10%" } else { "" },
-            quality),
+        &format!(
+            "Обробка відео (апскейл: {}, роздільна здатність: {}, кроп: 107% (дефолт){}, якість: {})...",
+            enabled,
+            resolution,
+            if is_omni {
+                " + omni watermark crop 10%"
+            } else {
+                ""
+            },
+            quality
+        ),
     );
 
     // Створюємо шлях для тимчасового файлу
@@ -470,11 +477,7 @@ pub fn upscale_video_if_needed(
                     if subparts.len() == 2 {
                         let num: f64 = subparts[0].trim().parse().unwrap_or(30.0);
                         let den: f64 = subparts[1].trim().parse().unwrap_or(1.0);
-                        if den > 0.0 {
-                            num / den
-                        } else {
-                            30.0
-                        }
+                        if den > 0.0 { num / den } else { 30.0 }
                     } else {
                         30.0
                     }

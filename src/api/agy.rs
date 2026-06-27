@@ -27,7 +27,9 @@ impl AgyLimiter {
         let mut active = self.active.lock().unwrap();
         loop {
             let max = *self.max_threads.lock().unwrap();
-            if *active < max { break; }
+            if *active < max {
+                break;
+            }
             active = self.condvar.wait(active).unwrap();
         }
         *active += 1;
@@ -36,7 +38,9 @@ impl AgyLimiter {
 
     fn release(&self) {
         let mut active = self.active.lock().unwrap();
-        if *active > 0 { *active -= 1; }
+        if *active > 0 {
+            *active -= 1;
+        }
         self.condvar.notify_one();
     }
 
@@ -73,12 +77,17 @@ pub fn call_agy_new_session_streaming(
         }
     };
 
-    log(&format!("Starting AGY CLI. Model: {}, session: {}", model, session_id));
+    log(&format!(
+        "Starting AGY CLI. Model: {}, session: {}",
+        model, session_id
+    ));
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command — cmd /C ламає великі аргументи на Windows.
     let mut cmd = crate::bundle::new_direct_cli_command("agy");
-    cmd.arg("--model").arg(model)
-        .arg("-p").arg(user_content)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("-p")
+        .arg(user_content)
         .arg("--dangerously-skip-permissions")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -88,7 +97,10 @@ pub fn call_agy_new_session_streaming(
     }
 
     let output = cmd.output().map_err(|e| {
-        format!("Failed to launch agy CLI: {}. Make sure agy is installed and in PATH.", e)
+        format!(
+            "Failed to launch agy CLI: {}. Make sure agy is installed and in PATH.",
+            e
+        )
     })?;
 
     let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -99,7 +111,11 @@ pub fn call_agy_new_session_streaming(
         on_chunk(&response);
         Ok((response, session_id.to_string()))
     } else {
-        let err = format!("AGY CLI error (exit {:?}): {}", output.status.code(), stderr);
+        let err = format!(
+            "AGY CLI error (exit {:?}): {}",
+            output.status.code(),
+            stderr
+        );
         log(&err);
         Err(err)
     }
@@ -125,8 +141,10 @@ pub fn call_agy_resume(
     log("Resuming AGY CLI session (--continue).");
 
     let mut cmd = crate::bundle::new_direct_cli_command("agy");
-    cmd.arg("--model").arg(model)
-        .arg("-p").arg(message)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("-p")
+        .arg(message)
         .arg("--continue")
         .arg("--dangerously-skip-permissions")
         .stdout(Stdio::piped())
@@ -136,7 +154,9 @@ pub fn call_agy_resume(
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(|e| format!("Failed to launch agy CLI: {}", e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to launch agy CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -144,7 +164,11 @@ pub fn call_agy_resume(
         Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(format!("AGY CLI error (exit {:?}): {}", output.status.code(), stderr))
+        Err(format!(
+            "AGY CLI error (exit {:?}): {}",
+            output.status.code(),
+            stderr
+        ))
     }
 }
 
@@ -168,8 +192,10 @@ pub fn call_agy_cli(
     log(&format!("AGY CLI call. Model: {}", model));
 
     let mut cmd = crate::bundle::new_direct_cli_command("agy");
-    cmd.arg("--model").arg(model)
-        .arg("-p").arg(user_content)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("-p")
+        .arg(user_content)
         .arg("--dangerously-skip-permissions")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -178,7 +204,9 @@ pub fn call_agy_cli(
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(|e| format!("Failed to launch agy CLI: {}", e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to launch agy CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -186,6 +214,10 @@ pub fn call_agy_cli(
         Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(format!("AGY CLI error (exit {:?}): {}", output.status.code(), stderr))
+        Err(format!(
+            "AGY CLI error (exit {:?}): {}",
+            output.status.code(),
+            stderr
+        ))
     }
 }

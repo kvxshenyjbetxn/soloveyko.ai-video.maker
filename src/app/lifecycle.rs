@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use super::{Tab, VideoMakerApp};
-use crate::gui::settings::storage::{load_settings, AppSettings};
+use crate::gui::settings::storage::{AppSettings, load_settings};
 use crate::localization::Language;
 use crate::theme::AppTheme;
 

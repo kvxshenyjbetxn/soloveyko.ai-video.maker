@@ -41,7 +41,6 @@ impl VideoPlayer {
             self.frames.extend(pending.drain(..));
         }
     }
-
 }
 
 // ─── Витягування для мініатюри (перший кадр) ────────────────────────────────
@@ -112,11 +111,17 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
         let frame_bytes = (out_w * out_h * 4) as usize;
 
         let mut ffmpeg_cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
-        ffmpeg_cmd.arg("-i").arg(&path)
-            .arg("-vf").arg(&scale_filter)
-            .arg("-f").arg("rawvideo")
-            .arg("-pix_fmt").arg("rgba")
-            .arg("-loglevel").arg("error")
+        ffmpeg_cmd
+            .arg("-i")
+            .arg(&path)
+            .arg("-vf")
+            .arg(&scale_filter)
+            .arg("-f")
+            .arg("rawvideo")
+            .arg("-pix_fmt")
+            .arg("rgba")
+            .arg("-loglevel")
+            .arg("error")
             .arg("-")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null());
@@ -169,20 +174,32 @@ pub fn start_fullscreen_extraction(player: &VideoPlayer, path: PathBuf, ctx: egu
 /// Повертає (width, height) для масштабування відео до `target_w` (парна висота).
 fn get_video_dimensions(path: &Path, target_w: u32) -> Option<(u32, u32)> {
     let mut ffprobe_cmd = std::process::Command::new(crate::bundle::ffprobe_path());
-    ffprobe_cmd.args(["-v", "quiet", "-select_streams", "v:0",
-           "-show_entries", "stream=width,height",
-           "-of", "csv=p=0"])
+    ffprobe_cmd
+        .args([
+            "-v",
+            "quiet",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+        ])
         .arg(path);
     crate::bundle::set_no_window(&mut ffprobe_cmd);
     let output = ffprobe_cmd.output().ok()?;
 
     let s = String::from_utf8_lossy(&output.stdout);
     let parts: Vec<&str> = s.trim().split(',').collect();
-    if parts.len() < 2 { return None; }
+    if parts.len() < 2 {
+        return None;
+    }
 
     let w: u32 = parts[0].trim().parse().ok()?;
     let h: u32 = parts[1].trim().parse().ok()?;
-    if w == 0 || h == 0 { return None; }
+    if w == 0 || h == 0 {
+        return None;
+    }
 
     let scale = target_w as f32 / w as f32;
     let out_h = ((h as f32 * scale) as u32).max(2) & !1; // парне
@@ -199,12 +216,19 @@ fn extract_single_frame_pipe(
     let frame_bytes = (out_w * out_h * 4) as usize;
 
     let mut ffmpeg_frame_cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
-    ffmpeg_frame_cmd.arg("-i").arg(path)
-        .arg("-vf").arg(format!("scale={}:{}", out_w, out_h))
-        .arg("-frames:v").arg("1")
-        .arg("-f").arg("rawvideo")
-        .arg("-pix_fmt").arg("rgba")
-        .arg("-loglevel").arg("error")
+    ffmpeg_frame_cmd
+        .arg("-i")
+        .arg(path)
+        .arg("-vf")
+        .arg(format!("scale={}:{}", out_w, out_h))
+        .arg("-frames:v")
+        .arg("1")
+        .arg("-f")
+        .arg("rawvideo")
+        .arg("-pix_fmt")
+        .arg("rgba")
+        .arg("-loglevel")
+        .arg("error")
         .arg("-")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null());
@@ -237,8 +261,7 @@ fn extract_frames_file(
     path.hash(&mut h);
     let hash = h.finish();
 
-    let tmp_dir = std::env::temp_dir()
-        .join(format!("soloveyko_vid_hover_{:x}", hash));
+    let tmp_dir = std::env::temp_dir().join(format!("soloveyko_vid_hover_{:x}", hash));
     let _ = std::fs::create_dir_all(&tmp_dir);
 
     // Очищаємо попередні кадри
@@ -252,11 +275,15 @@ fn extract_frames_file(
     let scale_filter = format!("fps={},scale={}:-2", fps, width);
 
     let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
-    cmd.arg("-i").arg(path)
-       .arg("-vf").arg(&scale_filter)
-       .arg("-q:v").arg("3")
-       .arg("-y")
-       .arg("-loglevel").arg("error");
+    cmd.arg("-i")
+        .arg(path)
+        .arg("-vf")
+        .arg(&scale_filter)
+        .arg("-q:v")
+        .arg("3")
+        .arg("-y")
+        .arg("-loglevel")
+        .arg("error");
 
     if let Some(n) = max_frames {
         cmd.arg("-frames:v").arg(n.to_string());
@@ -290,7 +317,11 @@ fn extract_frames_file(
         })
         .collect();
 
-    if frames.is_empty() { None } else { Some(frames) }
+    if frames.is_empty() {
+        None
+    } else {
+        Some(frames)
+    }
 }
 
 // ─── UI ─────────────────────────────────────────────────────────────────────
@@ -319,7 +350,8 @@ pub fn draw_video_player(ctx: &egui::Context, player: &mut VideoPlayer) -> bool 
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             let bg_resp = ui.allocate_rect(screen, egui::Sense::click());
-            ui.painter().rect_filled(screen, 0.0, egui::Color32::from_black_alpha(240));
+            ui.painter()
+                .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(240));
 
             if player.frames.is_empty() {
                 // Ще немає жодного кадру — spinner
@@ -335,10 +367,12 @@ pub fn draw_video_player(ctx: &egui::Context, player: &mut VideoPlayer) -> bool 
                     let scale = (max_w / sz.x).min(max_h / sz.y);
                     let disp = sz * scale;
                     let center_y = screen.top() + (screen.height() - ctrl_h) / 2.0;
-                    let img_rect = egui::Rect::from_center_size(
-                        egui::pos2(screen.center().x, center_y), disp,
+                    let img_rect =
+                        egui::Rect::from_center_size(egui::pos2(screen.center().x, center_y), disp);
+                    ui.put(
+                        img_rect,
+                        egui::Image::from_texture(frame).fit_to_exact_size(disp),
                     );
-                    ui.put(img_rect, egui::Image::from_texture(frame).fit_to_exact_size(disp));
                 }
 
                 // Індикатор завантаження у правому верхньому куті поруч із X
@@ -358,7 +392,8 @@ pub fn draw_video_player(ctx: &egui::Context, player: &mut VideoPlayer) -> bool 
                     egui::pos2(screen.left() + 40.0, bar_y),
                     egui::vec2(screen.width() - 80.0, 4.0),
                 );
-                ui.painter().rect_filled(bar_rect, 2.0, egui::Color32::from_gray(70));
+                ui.painter()
+                    .rect_filled(bar_rect, 2.0, egui::Color32::from_gray(70));
                 let progress = if !player.frames.is_empty() {
                     player.current_frame as f32 / player.frames.len() as f32
                 } else {
@@ -388,19 +423,32 @@ pub fn draw_video_player(ctx: &egui::Context, player: &mut VideoPlayer) -> bool 
                 // Play/Pause
                 let play_c = egui::pos2(screen.center().x, bar_y + 26.0);
                 let play_rect = egui::Rect::from_center_size(play_c, egui::vec2(32.0, 32.0));
-                let play_resp = ui.interact(play_rect, egui::Id::new("vp_play"), egui::Sense::click());
-                let btn_col = if play_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(200) };
+                let play_resp =
+                    ui.interact(play_rect, egui::Id::new("vp_play"), egui::Sense::click());
+                let btn_col = if play_resp.hovered() {
+                    egui::Color32::WHITE
+                } else {
+                    egui::Color32::from_gray(200)
+                };
 
                 if player.playing {
                     let bw = 4.0;
                     let bh = 14.0;
                     ui.painter().rect_filled(
-                        egui::Rect::from_center_size(play_c + egui::vec2(-bw * 1.2, 0.0), egui::vec2(bw, bh)),
-                        1.0, btn_col,
+                        egui::Rect::from_center_size(
+                            play_c + egui::vec2(-bw * 1.2, 0.0),
+                            egui::vec2(bw, bh),
+                        ),
+                        1.0,
+                        btn_col,
                     );
                     ui.painter().rect_filled(
-                        egui::Rect::from_center_size(play_c + egui::vec2(bw * 1.2, 0.0), egui::vec2(bw, bh)),
-                        1.0, btn_col,
+                        egui::Rect::from_center_size(
+                            play_c + egui::vec2(bw * 1.2, 0.0),
+                            egui::vec2(bw, bh),
+                        ),
+                        1.0,
+                        btn_col,
                     );
                 } else {
                     let s = 9.0_f32;
@@ -430,8 +478,13 @@ pub fn draw_video_player(ctx: &egui::Context, player: &mut VideoPlayer) -> bool 
             // Кнопка ✕ завжди доступна
             let close_c = egui::pos2(screen.right() - 22.0, screen.top() + 22.0);
             let close_rect = egui::Rect::from_center_size(close_c, egui::vec2(36.0, 36.0));
-            let close_resp = ui.interact(close_rect, egui::Id::new("vp_close"), egui::Sense::click());
-            let cc = if close_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
+            let close_resp =
+                ui.interact(close_rect, egui::Id::new("vp_close"), egui::Sense::click());
+            let cc = if close_resp.hovered() {
+                egui::Color32::WHITE
+            } else {
+                egui::Color32::from_gray(160)
+            };
             let r = 8.0;
             ui.painter().line_segment(
                 [close_c + egui::vec2(-r, -r), close_c + egui::vec2(r, r)],

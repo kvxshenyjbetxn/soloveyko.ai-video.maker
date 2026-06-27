@@ -1,4 +1,4 @@
-use crate::localization::{translate, Language};
+use crate::localization::{Language, translate};
 use eframe::egui;
 
 /// Стан одного вікна контролю перекладу (зберігається per-job).

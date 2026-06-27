@@ -3,13 +3,13 @@
 
 mod api;
 mod app;
-mod core;
 mod bundle;
+mod core;
 mod gui;
-mod queue;
-mod theme;
 mod localization;
 mod logger;
+mod queue;
+mod theme;
 
 use app::VideoMakerApp;
 use eframe::egui;
@@ -22,7 +22,11 @@ fn load_icon() -> egui::IconData {
         .expect("Не вдалося завантажити іконку")
         .to_rgba8();
     let (width, height) = img.dimensions();
-    egui::IconData { rgba: img.into_raw(), width, height }
+    egui::IconData {
+        rgba: img.into_raw(),
+        width,
+        height,
+    }
 }
 
 fn renderer_backend() -> eframe::Renderer {
@@ -36,9 +40,9 @@ fn main() -> eframe::Result {
     // Конфігуруємо параметри вікна нашого додатку
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1366.0, 768.0])         // Розмір вікна за замовчуванням (1366х768)
-            .with_min_inner_size([800.0, 600.0])       // Встановлюємо мінімальний розмір вікна для зручності
-            .with_title(format!("Soloveyko.AI-Video.Maker.v{}", APP_VERSION))   // Заголовок вікна програми
+            .with_inner_size([1366.0, 768.0]) // Розмір вікна за замовчуванням (1366х768)
+            .with_min_inner_size([800.0, 600.0]) // Встановлюємо мінімальний розмір вікна для зручності
+            .with_title(format!("Soloveyko.AI-Video.Maker.v{}", APP_VERSION)) // Заголовок вікна програми
             .with_icon(std::sync::Arc::new(load_icon())),
         // За замовчуванням лишаємо стабільний glow-бекенд.
         // Експериментальний wgpu можна увімкнути через SOLOVEYKO_RENDERER=wgpu.

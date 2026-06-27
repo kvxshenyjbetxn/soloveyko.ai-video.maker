@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use eframe::egui::{Pos2, Rect};
+use std::path::PathBuf;
 
 pub const PREVIEW_FPS: f32 = 30.0;
 /// Кількість GPU-текстур у RAM/GPU LRU.
@@ -122,7 +122,10 @@ pub struct PreviewRenderSettings {
 
 impl Default for PreviewRenderSettings {
     fn default() -> Self {
-        Self { quality: PreviewQuality::Balanced, fps: PREVIEW_FPS }
+        Self {
+            quality: PreviewQuality::Balanced,
+            fps: PREVIEW_FPS,
+        }
     }
 }
 
@@ -312,6 +315,11 @@ pub struct MontageEditorActions {
 
 impl Default for MontageEditorActions {
     fn default() -> Self {
-        Self { animate_paths: vec![], regen_action: None, open_stock_picker: None, preview_render_changed: None }
+        Self {
+            animate_paths: vec![],
+            regen_action: None,
+            open_stock_picker: None,
+            preview_render_changed: None,
+        }
     }
 }

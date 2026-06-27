@@ -119,7 +119,9 @@ fn format_codex_json_event(
                 "command_execution" => {
                     // Показуємо команду одразу при старті — до завершення виконання
                     let cmd = item.get("command").and_then(|c| c.as_str()).unwrap_or("");
-                    if cmd.is_empty() { return None; }
+                    if cmd.is_empty() {
+                        return None;
+                    }
                     // Відрізаємо шлях до оболонки ("pwsh.exe" -Command 'xxx' → xxx)
                     let display = extract_shell_command(cmd);
                     Some(format!("[Bash] $ {}\n", display))
@@ -148,24 +150,38 @@ fn format_codex_json_event(
                     let mut parts = Vec::new();
                     for change in changes {
                         let path = change.get("path").and_then(|p| p.as_str()).unwrap_or("");
-                        let kind = change.get("kind").and_then(|k| k.as_str()).unwrap_or("modify");
+                        let kind = change
+                            .get("kind")
+                            .and_then(|k| k.as_str())
+                            .unwrap_or("modify");
                         let filename = std::path::Path::new(path)
                             .file_name()
                             .and_then(|f| f.to_str())
                             .unwrap_or(path);
                         parts.push(format!("[->] {} ({})", filename, kind));
                     }
-                    if parts.is_empty() { None } else { Some(format!("{}\n", parts.join("\n"))) }
+                    if parts.is_empty() {
+                        None
+                    } else {
+                        Some(format!("{}\n", parts.join("\n")))
+                    }
                 }
                 "command_execution" => {
                     // Показуємо перший рядок виводу як результат команди
-                    let output = item.get("aggregated_output")
+                    let output = item
+                        .get("aggregated_output")
                         .or_else(|| item.get("output"))
                         .and_then(|o| o.as_str())
                         .unwrap_or("");
                     let first = output.trim().lines().next().unwrap_or("").trim();
-                    if first.is_empty() { return None; }
-                    let preview = if first.len() > 150 { format!("{}...", &first[..150]) } else { first.to_string() };
+                    if first.is_empty() {
+                        return None;
+                    }
+                    let preview = if first.len() > 150 {
+                        format!("{}...", &first[..150])
+                    } else {
+                        first.to_string()
+                    };
                     Some(format!("[->] {}\n", preview))
                 }
                 _ => None,
@@ -173,11 +189,20 @@ fn format_codex_json_event(
         }
         "turn.completed" => {
             if let Some(usage) = v.get("usage") {
-                let in_tok  = usage.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0);
-                let out_tok = usage.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0);
-                *acc_in  += in_tok;
+                let in_tok = usage
+                    .get("input_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0);
+                let out_tok = usage
+                    .get("output_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0);
+                *acc_in += in_tok;
                 *acc_out += out_tok;
-                Some(format!("\n[STATS]{:.1}|{}|{}|{:.6}|{}\n", 0.0_f64, acc_in, acc_out, 0.0_f64, 1u64))
+                Some(format!(
+                    "\n[STATS]{:.1}|{}|{}|{:.6}|{}\n",
+                    0.0_f64, acc_in, acc_out, 0.0_f64, 1u64
+                ))
             } else {
                 None
             }
@@ -196,8 +221,13 @@ fn extract_shell_command(cmd: &str) -> &str {
         if let Some(pos) = cmd.find(prefix) {
             let start = pos + prefix.len();
             let quote = prefix.chars().last().unwrap();
-            let end = cmd[start..].rfind(quote).map(|p| start + p).unwrap_or(cmd.len());
-            if end > start { return &cmd[start..end]; }
+            let end = cmd[start..]
+                .rfind(quote)
+                .map(|p| start + p)
+                .unwrap_or(cmd.len());
+            if end > start {
+                return &cmd[start..end];
+            }
         }
     }
     // bash/zsh (macOS/Linux): -c 'xxx' або -c "xxx"
@@ -205,8 +235,13 @@ fn extract_shell_command(cmd: &str) -> &str {
         if let Some(pos) = cmd.find(prefix) {
             let start = pos + prefix.len();
             let quote = prefix.chars().last().unwrap();
-            let end = cmd[start..].rfind(quote).map(|p| start + p).unwrap_or(cmd.len());
-            if end > start { return &cmd[start..end]; }
+            let end = cmd[start..]
+                .rfind(quote)
+                .map(|p| start + p)
+                .unwrap_or(cmd.len());
+            if end > start {
+                return &cmd[start..end];
+            }
         }
     }
     cmd
@@ -231,11 +266,15 @@ pub fn call_codex_new_session_streaming(
         }
     };
 
-    log(&format!("Starting Codex CLI agent session. Model: {}", model));
+    log(&format!(
+        "Starting Codex CLI agent session. Model: {}",
+        model
+    ));
 
     let mut cmd = crate::bundle::new_cli_command("codex");
     cmd.arg("exec")
-        .arg("--model").arg(model)
+        .arg("--model")
+        .arg(model)
         .arg("--dangerously-bypass-approvals-and-sandbox")
         .arg("--json")
         .arg("-")
@@ -247,10 +286,16 @@ pub fn call_codex_new_session_streaming(
         cmd.current_dir(dir);
     }
 
-    log(&format!("Running: codex exec --model {} --json --dangerously-bypass-approvals-and-sandbox -", model));
+    log(&format!(
+        "Running: codex exec --model {} --json --dangerously-bypass-approvals-and-sandbox -",
+        model
+    ));
 
     let mut child = cmd.spawn().map_err(|e| {
-        format!("Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.", e)
+        format!(
+            "Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.",
+            e
+        )
     })?;
 
     if let Some(mut stdin) = child.stdin.take() {
@@ -276,8 +321,12 @@ pub fn call_codex_new_session_streaming(
     let mut buf = [0u8; 512];
 
     loop {
-        let n = stdout.read(&mut buf).map_err(|e| format!("Read error: {}", e))?;
-        if n == 0 { break; }
+        let n = stdout
+            .read(&mut buf)
+            .map_err(|e| format!("Read error: {}", e))?;
+        if n == 0 {
+            break;
+        }
         let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
         line_buf.push_str(&chunk);
 
@@ -285,7 +334,9 @@ pub fn call_codex_new_session_streaming(
             let line = line_buf[..pos].to_string();
             line_buf = line_buf[pos + 1..].to_string();
             let trimmed = line.trim();
-            if trimmed.is_empty() { continue; }
+            if trimmed.is_empty() {
+                continue;
+            }
 
             // Витягуємо thread_id з першої події
             if actual_session_id.is_empty() {
@@ -299,7 +350,9 @@ pub fn call_codex_new_session_streaming(
                 }
             }
 
-            if let Some(text) = format_codex_json_event(trimmed, &mut final_result, &mut acc_in, &mut acc_out) {
+            if let Some(text) =
+                format_codex_json_event(trimmed, &mut final_result, &mut acc_in, &mut acc_out)
+            {
                 on_chunk(&text);
             }
         }
@@ -308,7 +361,9 @@ pub fn call_codex_new_session_streaming(
     // Обробляємо залишок буфера
     let remaining = line_buf.trim().to_string();
     if !remaining.is_empty() {
-        if let Some(text) = format_codex_json_event(&remaining, &mut final_result, &mut acc_in, &mut acc_out) {
+        if let Some(text) =
+            format_codex_json_event(&remaining, &mut final_result, &mut acc_in, &mut acc_out)
+        {
             on_chunk(&text);
         }
     }
@@ -322,7 +377,8 @@ pub fn call_codex_new_session_streaming(
     } else {
         let err_msg = format!(
             "Codex CLI error (exit code: {:?}).\n--- STDERR ---\n{}",
-            exit_status.code(), stderr.trim()
+            exit_status.code(),
+            stderr.trim()
         );
         log(&err_msg);
         Err(format!("Codex CLI error: {}", stderr.trim()))
@@ -353,7 +409,8 @@ pub fn call_codex_resume(
     cmd.arg("exec")
         .arg("resume")
         .arg(session_id)
-        .arg("--model").arg(model)
+        .arg("--model")
+        .arg(model)
         .arg("--dangerously-bypass-approvals-and-sandbox")
         .arg("--json")
         .arg("-")
@@ -365,31 +422,33 @@ pub fn call_codex_resume(
         cmd.current_dir(dir);
     }
 
-    let mut child = cmd.spawn().map_err(|e| {
-        format!("Failed to launch codex CLI resume: {}", e)
-    })?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to launch codex CLI resume: {}", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
         let _ = stdin.write_all(message.as_bytes());
     }
 
-    let output = child.wait_with_output().map_err(|e| {
-        format!("Failed to wait for codex CLI resume: {}", e)
-    })?;
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for codex CLI resume: {}", e))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         log("Codex CLI resume completed.");
-        let response = parse_codex_json_response(&stdout)
-            .unwrap_or_else(|| stdout.trim().to_string());
+        let response =
+            parse_codex_json_response(&stdout).unwrap_or_else(|| stdout.trim().to_string());
         Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         log(&format!(
             "Codex CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            output.status.code(), stderr, stdout
+            output.status.code(),
+            stderr,
+            stdout
         ));
         Err(format!("Codex CLI error: {}", stderr))
     }
@@ -401,7 +460,9 @@ fn parse_codex_json_response(output: &str) -> Option<String> {
     let mut last_text = None;
     for line in output.lines() {
         let trimmed = line.trim();
-        if trimmed.is_empty() { continue; }
+        if trimmed.is_empty() {
+            continue;
+        }
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
             if v.get("type").and_then(|t| t.as_str()) == Some("item.completed") {
                 if let Some(item) = v.get("item") {
@@ -442,9 +503,7 @@ pub fn call_codex(
     let mut cmd = crate::bundle::new_cli_command("codex");
 
     // Запускаємо: codex exec --model <model> - [--dangerously-bypass-approvals-and-sandbox]
-    cmd.arg("exec")
-        .arg("--model")
-        .arg(model);
+    cmd.arg("exec").arg("--model").arg(model);
 
     if allow_tools {
         cmd.arg("--dangerously-bypass-approvals-and-sandbox");
@@ -462,7 +521,10 @@ pub fn call_codex(
     log(&format!("Running: codex exec --model {} -", model));
 
     let mut child = cmd.spawn().map_err(|e| {
-        let err_msg = format!("Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.", e);
+        let err_msg = format!(
+            "Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.",
+            e
+        );
         log(&err_msg);
         err_msg
     })?;
@@ -497,4 +559,3 @@ pub fn call_codex(
         Err(format!("Codex CLI error: {}", stderr))
     }
 }
-

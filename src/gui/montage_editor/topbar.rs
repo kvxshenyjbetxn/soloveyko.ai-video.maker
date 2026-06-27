@@ -1,8 +1,8 @@
-use eframe::egui;
-use egui::{Color32, Layout};
-use crate::localization::{Language, translate};
 use super::state::MontageEditorState;
 use super::types::PreviewQuality;
+use crate::localization::{Language, translate};
+use eframe::egui;
+use egui::{Color32, Layout};
 
 // ─── Топ-бар ─────────────────────────────────────────────────────────────────
 
@@ -22,8 +22,14 @@ pub(super) fn draw_topbar(
         let dm = (total_dur / 60.0) as u32;
         let ds = (total_dur % 60.0) as u32;
         ui.label(
-            egui::RichText::new(format!("{} кліпів | {:02}:{:02}", editor.clips.len(), dm, ds))
-                .weak().size(11.0)
+            egui::RichText::new(format!(
+                "{} кліпів | {:02}:{:02}",
+                editor.clips.len(),
+                dm,
+                ds
+            ))
+            .weak()
+            .size(11.0),
         );
 
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
@@ -33,9 +39,17 @@ pub(super) fn draw_topbar(
                 egui::Button::new(
                     egui::RichText::new(translate(language, "montage_render_capcut"))
                         .strong()
-                        .color(if is_awaiting { Color32::WHITE } else { Color32::GRAY }),
+                        .color(if is_awaiting {
+                            Color32::WHITE
+                        } else {
+                            Color32::GRAY
+                        }),
                 )
-                .fill(if is_awaiting { Color32::from_rgb(41, 128, 185) } else { Color32::from_rgb(30, 30, 35) })
+                .fill(if is_awaiting {
+                    Color32::from_rgb(41, 128, 185)
+                } else {
+                    Color32::from_rgb(30, 30, 35)
+                }),
             );
             if capcut_btn.clicked() {
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
@@ -46,12 +60,20 @@ pub(super) fn draw_topbar(
                 let clip_count = editor.clips.iter().filter(|c| c.track_idx == 0).count();
                 match editor.save_to_timeline() {
                     Ok(_) => crate::logger::log_job(
-                        job_id, &job_name,
-                        &format!("Montage editor: timeline saved ({} clips, path: {}) → CapCut", clip_count, save_path_str),
+                        job_id,
+                        &job_name,
+                        &format!(
+                            "Montage editor: timeline saved ({} clips, path: {}) → CapCut",
+                            clip_count, save_path_str
+                        ),
                     ),
                     Err(e) => crate::logger::log_job(
-                        job_id, &job_name,
-                        &format!("Montage editor: SAVE FAILED: {} (path: {})", e, save_path_str),
+                        job_id,
+                        &job_name,
+                        &format!(
+                            "Montage editor: SAVE FAILED: {} (path: {})",
+                            e, save_path_str
+                        ),
                     ),
                 }
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
@@ -70,9 +92,17 @@ pub(super) fn draw_topbar(
                 egui::Button::new(
                     egui::RichText::new(translate(language, "montage_render_ffmpeg"))
                         .strong()
-                        .color(if is_awaiting { Color32::WHITE } else { Color32::GRAY }),
+                        .color(if is_awaiting {
+                            Color32::WHITE
+                        } else {
+                            Color32::GRAY
+                        }),
                 )
-                .fill(if is_awaiting { Color32::from_rgb(39, 174, 96) } else { Color32::from_rgb(30, 30, 35) })
+                .fill(if is_awaiting {
+                    Color32::from_rgb(39, 174, 96)
+                } else {
+                    Color32::from_rgb(30, 30, 35)
+                }),
             );
             if ffmpeg_btn.clicked() {
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
@@ -83,12 +113,20 @@ pub(super) fn draw_topbar(
                 let clip_count = editor.clips.iter().filter(|c| c.track_idx == 0).count();
                 match editor.save_to_timeline() {
                     Ok(_) => crate::logger::log_job(
-                        job_id, &job_name,
-                        &format!("Montage editor: timeline saved ({} clips, path: {}) → FFmpeg", clip_count, save_path_str),
+                        job_id,
+                        &job_name,
+                        &format!(
+                            "Montage editor: timeline saved ({} clips, path: {}) → FFmpeg",
+                            clip_count, save_path_str
+                        ),
                     ),
                     Err(e) => crate::logger::log_job(
-                        job_id, &job_name,
-                        &format!("Montage editor: SAVE FAILED: {} (path: {})", e, save_path_str),
+                        job_id,
+                        &job_name,
+                        &format!(
+                            "Montage editor: SAVE FAILED: {} (path: {})",
+                            e, save_path_str
+                        ),
                     ),
                 }
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
@@ -108,7 +146,8 @@ pub(super) fn draw_topbar(
             } else {
                 translate(language, "montage_editor_maximize")
             };
-            if ui.button(egui::RichText::new(max_text).size(14.0))
+            if ui
+                .button(egui::RichText::new(max_text).size(14.0))
                 .on_hover_text(max_tooltip)
                 .clicked()
             {
@@ -120,7 +159,8 @@ pub(super) fn draw_topbar(
             // Кнопка перебудови таймлінії (читає зміни агента і перезавантажує редактор)
             if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                 let rebuild_arc = std::sync::Arc::clone(&job.timeline_rebuild_requested);
-                if ui.button(egui::RichText::new("🔄").size(13.0))
+                if ui
+                    .button(egui::RichText::new("🔄").size(13.0))
                     .on_hover_text(translate(language, "agent_chat_rebuild_btn"))
                     .clicked()
                 {
@@ -148,7 +188,11 @@ fn draw_preview_settings(ui: &mut egui::Ui, language: Language, editor: &mut Mon
                 PreviewQuality::High,
                 PreviewQuality::Ultra,
             ] {
-                ui.selectable_value(&mut quality, option, translate(language, option.label_key()));
+                ui.selectable_value(
+                    &mut quality,
+                    option,
+                    translate(language, option.label_key()),
+                );
             }
         });
 

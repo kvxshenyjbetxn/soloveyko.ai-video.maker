@@ -1,7 +1,7 @@
+use crate::api::updater::UpdateInfo;
+use crate::localization::{Language, translate};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
-use crate::localization::{Language, translate};
-use crate::api::updater::UpdateInfo;
 
 /// Відображає модальне вікно з повідомленням про доступне оновлення.
 pub fn draw_update_dialog(
@@ -53,10 +53,7 @@ pub fn draw_update_dialog(
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    if ui
-                        .button(translate(lang, "update_download_btn"))
-                        .clicked()
-                    {
+                    if ui.button(translate(lang, "update_download_btn")).clicked() {
                         crate::api::updater::open_url(&info.download_url);
                     }
                     ui.add_space(8.0);

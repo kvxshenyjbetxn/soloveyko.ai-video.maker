@@ -86,17 +86,24 @@ pub fn call_gemini_new_session_streaming(
         }
     };
 
-    log(&format!("Starting Gemini CLI agent session. Model: {}, session: {}", model, session_id));
+    log(&format!(
+        "Starting Gemini CLI agent session. Model: {}, session: {}",
+        model, session_id
+    ));
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command("gemini")!
     // Див. коментар у claude.rs — та сама причина: cmd /C ламає аргументи на Windows.
     let mut cmd = crate::bundle::new_direct_cli_command("gemini");
-    cmd.arg("--model").arg(model)
-        .arg("--output-format").arg("json")
-        .arg("--prompt").arg(user_content)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("--output-format")
+        .arg("json")
+        .arg("--prompt")
+        .arg(user_content)
         .arg("--yolo")
         .arg("--skip-trust")
-        .arg("--session-id").arg(session_id)
+        .arg("--session-id")
+        .arg(session_id)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -104,9 +111,14 @@ pub fn call_gemini_new_session_streaming(
         cmd.current_dir(dir);
     }
 
-    log(&format!("Running: gemini --model {} --prompt \"[prompt]\" --yolo --session-id {}", model, session_id));
+    log(&format!(
+        "Running: gemini --model {} --prompt \"[prompt]\" --yolo --session-id {}",
+        model, session_id
+    ));
 
-    let mut child = cmd.spawn().map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
 
     let stderr_handle = {
         let stderr = child.stderr.take().unwrap();
@@ -122,8 +134,12 @@ pub fn call_gemini_new_session_streaming(
     let mut buf = [0u8; 512];
 
     loop {
-        let n = stdout.read(&mut buf).map_err(|e| format!("Read error: {}", e))?;
-        if n == 0 { break; }
+        let n = stdout
+            .read(&mut buf)
+            .map_err(|e| format!("Read error: {}", e))?;
+        if n == 0 {
+            break;
+        }
         full_output.push_str(&String::from_utf8_lossy(&buf[..n]));
     }
 
@@ -139,7 +155,9 @@ pub fn call_gemini_new_session_streaming(
     } else {
         let err_msg = format!(
             "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            exit_status.code(), stderr.trim(), full_output.trim()
+            exit_status.code(),
+            stderr.trim(),
+            full_output.trim()
         );
         log(&err_msg);
         Err(format!("Gemini CLI error: {}", stderr.trim()))
@@ -167,20 +185,24 @@ pub fn call_gemini_resume(
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_gemini_new_session_streaming.
     let mut cmd = crate::bundle::new_direct_cli_command("gemini");
-    cmd.arg("--model").arg(model)
-        .arg("--output-format").arg("json")
-        .arg("--prompt").arg(message)
+    cmd.arg("--model")
+        .arg(model)
+        .arg("--output-format")
+        .arg("json")
+        .arg("--prompt")
+        .arg(message)
         .arg("--yolo")
         .arg("--skip-trust")
-        .arg("--resume").arg(session_id);
+        .arg("--resume")
+        .arg(session_id);
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(|e| {
-        format!("Failed to launch gemini CLI: {}", e)
-    })?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -193,7 +215,9 @@ pub fn call_gemini_resume(
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let err_msg = format!(
             "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
-            output.status.code(), stderr, stdout
+            output.status.code(),
+            stderr,
+            stdout
         );
         log(&err_msg);
         Err(format!("Gemini CLI error: {}", stderr))
@@ -220,7 +244,10 @@ pub fn call_gemini_cli(
         }
     };
 
-    log(&format!("Starting Gemini CLI translation. Model: {}", model));
+    log(&format!(
+        "Starting Gemini CLI translation. Model: {}",
+        model
+    ));
 
     // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_gemini_new_session_streaming.
     let mut cmd = crate::bundle::new_direct_cli_command("gemini");
@@ -246,7 +273,10 @@ pub fn call_gemini_cli(
     ));
 
     let output = cmd.output().map_err(|e| {
-        let err_msg = format!("Failed to launch gemini CLI: {}. Make sure gemini CLI is installed and added to PATH.", e);
+        let err_msg = format!(
+            "Failed to launch gemini CLI: {}. Make sure gemini CLI is installed and added to PATH.",
+            e
+        );
         log(&err_msg);
         err_msg
     })?;

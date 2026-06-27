@@ -1,5 +1,5 @@
+use super::{StockPhoto, StockProvider, StockVideo};
 use serde::Deserialize;
-use super::{StockPhoto, StockVideo, StockProvider};
 
 pub struct PixabayProvider;
 
@@ -55,9 +55,16 @@ struct PixabayVideoSize {
 // ─── Реалізація трейту ────────────────────────────────────────────────────────
 
 impl StockProvider for PixabayProvider {
-    fn name(&self) -> &str { "Pixabay" }
+    fn name(&self) -> &str {
+        "Pixabay"
+    }
 
-    fn search_photos(&self, key: &str, query: &str, per_page: u32) -> Result<Vec<StockPhoto>, String> {
+    fn search_photos(
+        &self,
+        key: &str,
+        query: &str,
+        per_page: u32,
+    ) -> Result<Vec<StockPhoto>, String> {
         let encoded = query.replace(' ', "+");
         let url = format!(
             "https://pixabay.com/api/?key={}&q={}&per_page={}&image_type=photo&orientation=horizontal&safesearch=true",
@@ -75,17 +82,26 @@ impl StockProvider for PixabayProvider {
             .into_json::<ImageResponse>()
             .map_err(|e| format!("Pixabay JSON error: {e}"))?;
 
-        Ok(data.hits.into_iter().map(|img| StockPhoto {
-            id: img.id.to_string(),
-            preview_url: img.webformat_url,
-            original_url: img.large_image_url,
-            width: img.image_width,
-            height: img.image_height,
-            author: img.user,
-        }).collect())
+        Ok(data
+            .hits
+            .into_iter()
+            .map(|img| StockPhoto {
+                id: img.id.to_string(),
+                preview_url: img.webformat_url,
+                original_url: img.large_image_url,
+                width: img.image_width,
+                height: img.image_height,
+                author: img.user,
+            })
+            .collect())
     }
 
-    fn search_videos(&self, key: &str, query: &str, per_page: u32) -> Result<Vec<StockVideo>, String> {
+    fn search_videos(
+        &self,
+        key: &str,
+        query: &str,
+        per_page: u32,
+    ) -> Result<Vec<StockVideo>, String> {
         let encoded = query.replace(' ', "+");
         let url = format!(
             "https://pixabay.com/api/videos/?key={}&q={}&per_page={}&safesearch=true",
@@ -103,25 +119,31 @@ impl StockProvider for PixabayProvider {
             .into_json::<VideoResponse>()
             .map_err(|e| format!("Pixabay JSON error: {e}"))?;
 
-        Ok(data.hits.into_iter().filter_map(|v| {
-            // large (1920x1080) якщо є, інакше medium
-            let best = if !v.videos.large.url.is_empty() {
-                &v.videos.large
-            } else {
-                &v.videos.medium
-            };
-            if best.url.is_empty() { return None; }
+        Ok(data
+            .hits
+            .into_iter()
+            .filter_map(|v| {
+                // large (1920x1080) якщо є, інакше medium
+                let best = if !v.videos.large.url.is_empty() {
+                    &v.videos.large
+                } else {
+                    &v.videos.medium
+                };
+                if best.url.is_empty() {
+                    return None;
+                }
 
-            Some(StockVideo {
-                id: v.id.to_string(),
-                thumbnail_url: best.thumbnail.clone(),
-                duration_secs: v.duration,
-                download_url: best.url.clone(),
-                width: best.width,
-                height: best.height,
-                author: v.user,
+                Some(StockVideo {
+                    id: v.id.to_string(),
+                    thumbnail_url: best.thumbnail.clone(),
+                    duration_secs: v.duration,
+                    download_url: best.url.clone(),
+                    width: best.width,
+                    height: best.height,
+                    author: v.user,
+                })
             })
-        }).collect())
+            .collect())
     }
 }
 

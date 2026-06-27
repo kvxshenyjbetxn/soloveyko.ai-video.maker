@@ -1,8 +1,8 @@
 pub mod general;
 pub mod storage;
 
-use crate::theme::AppTheme;
 use crate::localization::Language;
+use crate::theme::AppTheme;
 use eframe::egui;
 
 /// Малює вкладку налаштувань. Повертає true, якщо змінилось show_welcome.

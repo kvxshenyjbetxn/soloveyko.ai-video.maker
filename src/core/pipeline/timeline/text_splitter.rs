@@ -112,11 +112,7 @@ fn split_by_char_limit(text: &str, limit: usize) -> Vec<String> {
                 .or_else(|| {
                     // Немає пунктуації — шукаємо пробіл (розрив між словами)
                     slice.char_indices().rev().find_map(|(byte_idx, ch)| {
-                        if ch == ' ' {
-                            Some(byte_idx)
-                        } else {
-                            None
-                        }
+                        if ch == ' ' { Some(byte_idx) } else { None }
                     })
                 })
                 .unwrap_or(limit_byte);

@@ -41,23 +41,23 @@ pub fn log_job(job_id: u64, job_name: &str, msg: &str) {
 
 fn log_with_job(job_id: Option<u64>, job_name: Option<String>, msg: &str) {
     let timestamp = get_timestamp();
-    
+
     // Форматуємо для виводу в консоль
     let formatted = if let (Some(id), Some(name)) = (job_id, &job_name) {
         format!("[{}] [Задача #{}: {}] {}", timestamp, id + 1, name, msg)
     } else {
         format!("[{}] {}", timestamp, msg)
     };
-    
+
     println!("{}", formatted);
-    
+
     let entry = LogEntry {
         timestamp,
         job_id,
         job_name,
         message: msg.to_string(),
     };
-    
+
     if let Ok(mut logs) = get_logs_mutex().lock() {
         logs.push(entry);
         // Обмежуємо кількість записів в логу до 1000
@@ -70,13 +70,21 @@ fn log_with_job(job_id: Option<u64>, job_name: Option<String>, msg: &str) {
 /// Отримує відформатований список усіх логів для відображення в інтерфейсі.
 pub fn get_logs() -> Vec<String> {
     if let Ok(logs) = get_logs_mutex().lock() {
-        logs.iter().map(|entry| {
-            if let (Some(id), Some(name)) = (entry.job_id, &entry.job_name) {
-                format!("[{}] [Задача #{}: {}] {}", entry.timestamp, id + 1, name, entry.message)
-            } else {
-                format!("[{}] {}", entry.timestamp, entry.message)
-            }
-        }).collect()
+        logs.iter()
+            .map(|entry| {
+                if let (Some(id), Some(name)) = (entry.job_id, &entry.job_name) {
+                    format!(
+                        "[{}] [Задача #{}: {}] {}",
+                        entry.timestamp,
+                        id + 1,
+                        name,
+                        entry.message
+                    )
+                } else {
+                    format!("[{}] {}", entry.timestamp, entry.message)
+                }
+            })
+            .collect()
     } else {
         Vec::new()
     }

@@ -1,11 +1,12 @@
-use eframe::egui;
 use crate::localization::translate;
-use crate::app::Tab;
+use eframe::egui;
 
 /// Відкриває папку у файловому менеджері ОС.
 /// Якщо папки ще немає — створює її перед відкриттям.
 fn open_folder(path: &str) {
-    if path.is_empty() { return; }
+    if path.is_empty() {
+        return;
+    }
     let _ = std::fs::create_dir_all(path);
     #[cfg(target_os = "windows")]
     {
@@ -27,8 +28,8 @@ fn stage_color(stage: &crate::queue::StageStatus, ui: &egui::Ui) -> egui::Color3
     match stage {
         crate::queue::StageStatus::Pending => ui.visuals().weak_text_color(),
         crate::queue::StageStatus::Running => egui::Color32::from_rgb(255, 200, 0),
-        crate::queue::StageStatus::Done    => egui::Color32::from_rgb(46, 204, 113),
-        crate::queue::StageStatus::Failed  => egui::Color32::from_rgb(231, 76, 60),
+        crate::queue::StageStatus::Done => egui::Color32::from_rgb(46, 204, 113),
+        crate::queue::StageStatus::Failed => egui::Color32::from_rgb(231, 76, 60),
     }
 }
 
@@ -39,10 +40,15 @@ pub fn draw_queue_jobs_list(
     language: crate::localization::Language,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     open_job_logs: &mut std::collections::HashMap<u64, String>,
-    open_job_controls: &mut std::collections::HashMap<u64, crate::gui::pipeline::translation_control::TranslationControlWindowState>,
-    active_tab: &mut Tab,
+    open_job_controls: &mut std::collections::HashMap<
+        u64,
+        crate::gui::pipeline::translation_control::TranslationControlWindowState,
+    >,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
-    open_agent_chats: &mut std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
+    open_agent_chats: &mut std::collections::HashMap<
+        u64,
+        crate::gui::agent_chat_window::AgentChatWindowState,
+    >,
     open_montage_editor: &mut Option<u64>,
 ) {
     egui::ScrollArea::horizontal()
@@ -502,9 +508,9 @@ pub fn draw_queue_jobs_list(
                                 let text = job.translated_text.lock().unwrap().clone().unwrap_or_default();
                                 crate::gui::pipeline::translation_control::TranslationControlWindowState::new_with_text(text)
                             });
-                        } else if status == crate::queue::JobStatus::AwaitingMediaControl {
-                            *active_tab = Tab::Gallery;
                         } else {
+                            // Назва задачі завжди відкриває лог.
+                            // Для media control автоперехід у галерею лишається окремо в sync_control_windows().
                             open_job_logs.entry(job.id).or_insert_with(|| job.name.clone());
                         }
                     }
@@ -522,11 +528,16 @@ pub fn draw_queue_panel(
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
     open_job_logs: &mut std::collections::HashMap<u64, String>,
-    open_job_controls: &mut std::collections::HashMap<u64, crate::gui::pipeline::translation_control::TranslationControlWindowState>,
+    open_job_controls: &mut std::collections::HashMap<
+        u64,
+        crate::gui::pipeline::translation_control::TranslationControlWindowState,
+    >,
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
-    active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
-    open_agent_chats: &mut std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
+    open_agent_chats: &mut std::collections::HashMap<
+        u64,
+        crate::gui::agent_chat_window::AgentChatWindowState,
+    >,
     open_montage_editor: &mut Option<u64>,
     collapsed: &mut bool,
     fullscreen: &mut bool,
@@ -534,7 +545,8 @@ pub fn draw_queue_panel(
     ui.add_space(4.0);
 
     // Загальна вартість всіх OpenRouter запитів у черзі
-    let total_cost: f64 = jobs.iter()
+    let total_cost: f64 = jobs
+        .iter()
         .filter_map(|j| *j.total_cost.lock().unwrap())
         .sum();
 
@@ -556,16 +568,37 @@ pub fn draw_queue_panel(
             let right = cx + 5.0;
             // ▲ коли згорнута (розгорнути), ▼ коли розгорнута (згорнути)
             let points = if *collapsed {
-                vec![egui::pos2(cx, top), egui::pos2(right, bot), egui::pos2(left, bot)]
+                vec![
+                    egui::pos2(cx, top),
+                    egui::pos2(right, bot),
+                    egui::pos2(left, bot),
+                ]
             } else {
-                vec![egui::pos2(left, top), egui::pos2(right, top), egui::pos2(cx, bot)]
+                vec![
+                    egui::pos2(left, top),
+                    egui::pos2(right, top),
+                    egui::pos2(cx, bot),
+                ]
             };
-            ui.painter().add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+            ui.painter().add(egui::Shape::convex_polygon(
+                points,
+                color,
+                egui::Stroke::NONE,
+            ));
         }
-        let tooltip_key = if *collapsed { "queue_expand_tooltip" } else { "queue_collapse_tooltip" };
-        if btn_resp.on_hover_text(translate(language, tooltip_key)).clicked() {
+        let tooltip_key = if *collapsed {
+            "queue_expand_tooltip"
+        } else {
+            "queue_collapse_tooltip"
+        };
+        if btn_resp
+            .on_hover_text(translate(language, tooltip_key))
+            .clicked()
+        {
             *collapsed = !*collapsed;
-            if *collapsed { *fullscreen = false; }
+            if *collapsed {
+                *fullscreen = false;
+            }
         }
 
         // Кнопка fullscreen (4 куточки) — не показуємо якщо згорнута
@@ -586,42 +619,106 @@ pub fn draw_queue_panel(
                 let p = ui.painter();
                 if *fullscreen {
                     // Іконка "exit fullscreen": куточки спрямовані всередину
-                    p.line_segment([egui::pos2(l+1.0, t+5.0), egui::pos2(l+5.0, t+5.0)], stroke);
-                    p.line_segment([egui::pos2(l+5.0, t+5.0), egui::pos2(l+5.0, t+1.0)], stroke);
-                    p.line_segment([egui::pos2(r-1.0, t+5.0), egui::pos2(r-5.0, t+5.0)], stroke);
-                    p.line_segment([egui::pos2(r-5.0, t+5.0), egui::pos2(r-5.0, t+1.0)], stroke);
-                    p.line_segment([egui::pos2(l+1.0, b-5.0), egui::pos2(l+5.0, b-5.0)], stroke);
-                    p.line_segment([egui::pos2(l+5.0, b-5.0), egui::pos2(l+5.0, b-1.0)], stroke);
-                    p.line_segment([egui::pos2(r-1.0, b-5.0), egui::pos2(r-5.0, b-5.0)], stroke);
-                    p.line_segment([egui::pos2(r-5.0, b-5.0), egui::pos2(r-5.0, b-1.0)], stroke);
+                    p.line_segment(
+                        [egui::pos2(l + 1.0, t + 5.0), egui::pos2(l + 5.0, t + 5.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(l + 5.0, t + 5.0), egui::pos2(l + 5.0, t + 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 1.0, t + 5.0), egui::pos2(r - 5.0, t + 5.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 5.0, t + 5.0), egui::pos2(r - 5.0, t + 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(l + 1.0, b - 5.0), egui::pos2(l + 5.0, b - 5.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(l + 5.0, b - 5.0), egui::pos2(l + 5.0, b - 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 1.0, b - 5.0), egui::pos2(r - 5.0, b - 5.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 5.0, b - 5.0), egui::pos2(r - 5.0, b - 1.0)],
+                        stroke,
+                    );
                 } else {
                     // Іконка "fullscreen": куточки спрямовані назовні
-                    p.line_segment([egui::pos2(l+1.0, t+5.0), egui::pos2(l+1.0, t+1.0)], stroke);
-                    p.line_segment([egui::pos2(l+1.0, t+1.0), egui::pos2(l+5.0, t+1.0)], stroke);
-                    p.line_segment([egui::pos2(r-1.0, t+5.0), egui::pos2(r-1.0, t+1.0)], stroke);
-                    p.line_segment([egui::pos2(r-1.0, t+1.0), egui::pos2(r-5.0, t+1.0)], stroke);
-                    p.line_segment([egui::pos2(l+1.0, b-5.0), egui::pos2(l+1.0, b-1.0)], stroke);
-                    p.line_segment([egui::pos2(l+1.0, b-1.0), egui::pos2(l+5.0, b-1.0)], stroke);
-                    p.line_segment([egui::pos2(r-1.0, b-5.0), egui::pos2(r-1.0, b-1.0)], stroke);
-                    p.line_segment([egui::pos2(r-1.0, b-1.0), egui::pos2(r-5.0, b-1.0)], stroke);
+                    p.line_segment(
+                        [egui::pos2(l + 1.0, t + 5.0), egui::pos2(l + 1.0, t + 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(l + 1.0, t + 1.0), egui::pos2(l + 5.0, t + 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 1.0, t + 5.0), egui::pos2(r - 1.0, t + 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 1.0, t + 1.0), egui::pos2(r - 5.0, t + 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(l + 1.0, b - 5.0), egui::pos2(l + 1.0, b - 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(l + 1.0, b - 1.0), egui::pos2(l + 5.0, b - 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 1.0, b - 5.0), egui::pos2(r - 1.0, b - 1.0)],
+                        stroke,
+                    );
+                    p.line_segment(
+                        [egui::pos2(r - 1.0, b - 1.0), egui::pos2(r - 5.0, b - 1.0)],
+                        stroke,
+                    );
                 }
             }
-            let fs_tooltip = if *fullscreen { "queue_fullscreen_exit_tooltip" } else { "queue_fullscreen_tooltip" };
-            if fs_resp.on_hover_text(translate(language, fs_tooltip)).clicked() {
+            let fs_tooltip = if *fullscreen {
+                "queue_fullscreen_exit_tooltip"
+            } else {
+                "queue_fullscreen_tooltip"
+            };
+            if fs_resp
+                .on_hover_text(translate(language, fs_tooltip))
+                .clicked()
+            {
                 *fullscreen = !*fullscreen;
             }
         }
 
-        ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
-        ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
+        ui.label(
+            egui::RichText::new(translate(language, "queue_panel_title"))
+                .strong()
+                .size(13.0),
+        );
+        ui.label(
+            egui::RichText::new(format!("({})", jobs.len()))
+                .weak()
+                .size(11.0),
+        );
 
-        let has_pending = jobs.iter().any(|j| {
-            *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
-        });
+        let has_pending = jobs
+            .iter()
+            .any(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::Pending);
 
         // Перевіряємо, чи всі потрібні моделі завантажені для задач у черзі
         let model_download_state = whisper_model_download.lock().unwrap().clone();
-        let whisper_blocked: Option<String> = jobs.iter()
+        let whisper_blocked: Option<String> = jobs
+            .iter()
             .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::Pending)
             .find(|j| {
                 j.settings.subtitles_enabled
@@ -629,11 +726,20 @@ pub fn draw_queue_panel(
                     && !crate::bundle::whisper_model_exists(&j.settings.whisper_model)
             })
             .map(|j| {
-                let is_downloading = matches!(model_download_state, crate::gui::welcome::BinaryDownload::Downloading(_));
+                let is_downloading = matches!(
+                    model_download_state,
+                    crate::gui::welcome::BinaryDownload::Downloading(_)
+                );
                 if is_downloading {
-                    format!("⏳ Модель Whisper '{}' ще завантажується...", j.settings.whisper_model)
+                    format!(
+                        "⏳ Модель Whisper '{}' ще завантажується...",
+                        j.settings.whisper_model
+                    )
                 } else {
-                    format!("⚠ Модель Whisper '{}' не завантажена. Завантажте її в секції Субтитри.", j.settings.whisper_model)
+                    format!(
+                        "⚠ Модель Whisper '{}' не завантажена. Завантажте її в секції Субтитри.",
+                        j.settings.whisper_model
+                    )
                 }
             });
 
@@ -657,7 +763,9 @@ pub fn draw_queue_panel(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let run_btn = ui.add_enabled(
                 can_run,
-                egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
+                egui::Button::new(
+                    egui::RichText::new(translate(language, "queue_run_btn")).strong(),
+                ),
             );
             if run_btn.clicked() {
                 clicked = true;
@@ -684,20 +792,23 @@ pub fn draw_queue_panel(
 
                 let total_jobs = jobs.len();
                 let overall_progress = if total_jobs > 0 {
-                    let sum: f32 = jobs.iter().map(|j| {
-                        let status = j.status.lock().unwrap().clone();
-                        match status {
-                            crate::queue::JobStatus::Done => 1.0,
-                            crate::queue::JobStatus::Running
-                            | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingAgentControl => {
-                                let (prog, _, _) = j.calculate_progress();
-                                prog
+                    let sum: f32 = jobs
+                        .iter()
+                        .map(|j| {
+                            let status = j.status.lock().unwrap().clone();
+                            match status {
+                                crate::queue::JobStatus::Done => 1.0,
+                                crate::queue::JobStatus::Running
+                                | crate::queue::JobStatus::AwaitingControl
+                                | crate::queue::JobStatus::AwaitingMediaControl
+                                | crate::queue::JobStatus::AwaitingAgentControl => {
+                                    let (prog, _, _) = j.calculate_progress();
+                                    prog
+                                }
+                                _ => 0.0,
                             }
-                            _ => 0.0,
-                        }
-                    }).sum();
+                        })
+                        .sum();
                     sum / total_jobs as f32
                 } else {
                     0.0
@@ -722,14 +833,17 @@ pub fn draw_queue_panel(
                 } else {
                     None
                 };
-                let cost_reserve = cost_text_opt.as_deref().map(|text| {
-                    let galley = ui.painter().layout_no_wrap(
-                        text.to_string(),
-                        egui::FontId::proportional(11.0),
-                        egui::Color32::WHITE,
-                    );
-                    galley.size().x + ui.spacing().item_spacing.x + 4.0
-                }).unwrap_or(0.0);
+                let cost_reserve = cost_text_opt
+                    .as_deref()
+                    .map(|text| {
+                        let galley = ui.painter().layout_no_wrap(
+                            text.to_string(),
+                            egui::FontId::proportional(11.0),
+                            egui::Color32::WHITE,
+                        );
+                        galley.size().x + ui.spacing().item_spacing.x + 4.0
+                    })
+                    .unwrap_or(0.0);
 
                 let bar_width = (ui.available_width() - 8.0 - cost_reserve).max(20.0);
                 if bar_width > 20.0 {
@@ -827,12 +941,22 @@ pub fn draw_queue_panel(
     }
 
     egui::Frame::none()
-        .inner_margin(egui::Margin { left: 0.0, right: 0.0, top: 10.0, bottom: 8.0 })
+        .inner_margin(egui::Margin {
+            left: 0.0,
+            right: 0.0,
+            top: 10.0,
+            bottom: 8.0,
+        })
         .show(ui, |ui| {
             draw_queue_jobs_list(
-                ui, language, jobs,
-                open_job_logs, open_job_controls,
-                active_tab, retry_request, open_agent_chats, open_montage_editor,
+                ui,
+                language,
+                jobs,
+                open_job_logs,
+                open_job_controls,
+                retry_request,
+                open_agent_chats,
+                open_montage_editor,
             );
         });
 }

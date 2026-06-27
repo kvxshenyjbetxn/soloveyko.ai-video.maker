@@ -215,7 +215,9 @@ pub fn run_montage(
                                 },
                             );
                         }
-                        log_fn("timeline.json: старий формат виявлено — фон/overlay переставлено автоматично");
+                        log_fn(
+                            "timeline.json: старий формат виявлено — фон/overlay переставлено автоматично",
+                        );
                     }
                 }
 
@@ -293,7 +295,11 @@ pub fn run_montage(
                 }
                 log_fn(&format!(
                     "timeline.json: {} segments → {} clips, {} overlay tracks, {} extra audios, total={:.2}s",
-                    seg_count, clips.len(), overlay_tracks.len(), extra_audios.len(), total_dur,
+                    seg_count,
+                    clips.len(),
+                    overlay_tracks.len(),
+                    extra_audios.len(),
+                    total_dur,
                 ));
             } else {
                 log_fn("timeline.json: PARSE ERROR — invalid JSON format");
@@ -788,8 +794,10 @@ pub fn run_montage(
                 media_file_count + 1 + trigger_input_paths.len() + overlay_input_paths.len();
             overlay_input_paths.push((media_path_str.clone(), is_vid));
 
-            log_fn(&format!("Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s fade_in={:.2} fade_out={:.2}",
-                seg.start_secs, seg.end_secs, fade_in_dur, fade_out_dur));
+            log_fn(&format!(
+                "Overlay: {media_path_str} [{w}x{h} @ ({x},{y})] t={:.2}s-{:.2}s fade_in={:.2} fade_out={:.2}",
+                seg.start_secs, seg.end_secs, fade_in_dur, fade_out_dur
+            ));
 
             overlay_items.push(OverlayItem {
                 input_idx,

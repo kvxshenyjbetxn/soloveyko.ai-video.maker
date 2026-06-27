@@ -83,7 +83,8 @@ impl<'a> Drop for EdgeTTSPermit<'a> {
 /// Допоміжна функція для парсингу параметрів темпу, тональності та гучності в ціле число i32.
 /// Очищає рядок від не-цифрових символів (крім знаків '+' та '-') і повертає число.
 fn parse_param(s: &str) -> i32 {
-    let cleaned: String = s.chars()
+    let cleaned: String = s
+        .chars()
         .filter(|c| c.is_ascii_digit() || *c == '-' || *c == '+')
         .collect();
     cleaned.parse::<i32>().unwrap_or(0)
@@ -93,11 +94,13 @@ fn parse_param(s: &str) -> i32 {
 /// Перетворює "Microsoft Dmitry Online (Natural) - Russian (Russia)" на "Dmitry (Russian, ru-RU)"
 fn clean_friendly_name(friendly_name: &str, locale: &str) -> String {
     // Прибираємо "Microsoft " на початку
-    let clean_pref = friendly_name.strip_prefix("Microsoft ").unwrap_or(friendly_name);
-    
+    let clean_pref = friendly_name
+        .strip_prefix("Microsoft ")
+        .unwrap_or(friendly_name);
+
     // Розділяємо за допомогою " - "
     let parts: Vec<&str> = clean_pref.split(" - ").collect();
-    
+
     let voice_name = if !parts.is_empty() {
         let first_part = parts[0];
         // Прибираємо " Online..." або " Neural..." якщо вони є
@@ -145,7 +148,8 @@ pub fn fetch_voices(
                     .into_iter()
                     .map(|v| {
                         let locale = v.locale.clone().unwrap_or_else(|| "en-US".to_string());
-                        let raw_friendly = v.friendly_name.clone().unwrap_or_else(|| v.name.clone());
+                        let raw_friendly =
+                            v.friendly_name.clone().unwrap_or_else(|| v.name.clone());
                         let friendly_name = clean_friendly_name(&raw_friendly, &locale);
                         EdgeTTSVoice {
                             name: v.name.clone(),
@@ -177,8 +181,8 @@ pub fn synthesize(
     output_path: &str,
 ) -> Result<(), String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    use msedge_tts::tts::client::connect;
     use msedge_tts::tts::SpeechConfig;
+    use msedge_tts::tts::client::connect;
     use std::io::Write;
 
     // Конфігуруємо запис відповідно до вимог msedge-tts
