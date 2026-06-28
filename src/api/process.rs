@@ -140,8 +140,11 @@ pub fn kill_all_processes() {
 fn prepare_command_for_tracking(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
 
+    // Всі tracked-процеси у нас фонові: вони не повинні відкривати консоль,
+    // але мають жити у власній process-group для коректного taskkill /T.
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-    cmd.creation_flags(CREATE_NEW_PROCESS_GROUP);
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
 }
 
 #[cfg(unix)]
@@ -156,9 +159,13 @@ fn prepare_command_for_tracking(_cmd: &mut Command) {}
 
 #[cfg(windows)]
 fn kill_process_tree(pid: u32) {
-    let _ = Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .status();
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut cmd = Command::new("taskkill");
+    cmd.creation_flags(CREATE_NO_WINDOW)
+        .args(["/PID", &pid.to_string(), "/T", "/F"]);
+    let _ = cmd.status();
 }
 
 #[cfg(unix)]
