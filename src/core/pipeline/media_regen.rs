@@ -443,7 +443,7 @@ pub fn upscale_video_if_needed(
         ])
         .arg(&temp_path);
     crate::bundle::set_no_window(&mut ffprobe_proc);
-    let ffprobe_out = ffprobe_proc.output();
+    let ffprobe_out = crate::api::process::output_tracked(&mut ffprobe_proc, Some(job_id));
 
     let mut width = 1280;
     let mut height = 720;
@@ -590,7 +590,7 @@ pub fn upscale_video_if_needed(
     let mut ffmpeg_upscale_proc = std::process::Command::new(&ffmpeg_cmd);
     ffmpeg_upscale_proc.args(&args);
     crate::bundle::set_no_window(&mut ffmpeg_upscale_proc);
-    let child = ffmpeg_upscale_proc.output();
+    let child = crate::api::process::output_tracked(&mut ffmpeg_upscale_proc, Some(job_id));
 
     let restore_original = || {
         if temp_path.exists() {

@@ -39,6 +39,8 @@ pub fn retry_from_stage(
     use crate::queue::RetryStage::*;
     use crate::queue::StageStatus::Pending as SPending;
 
+    crate::queue::reset_job_runtime(job_id);
+
     match stage {
         // Повний перезапуск з перекладу
         Translation => {
@@ -101,6 +103,11 @@ pub fn retry_from_stage(
             std::thread::spawn(move || {
                 *status.lock().unwrap() = crate::queue::JobStatus::Running;
                 ctx.request_repaint();
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
 
                 crate::logger::log_job(
                     job_id,
@@ -117,7 +124,13 @@ pub fn retry_from_stage(
                     Arc::clone(&audio_duration),
                     ctx.clone(),
                 ) {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -145,7 +158,7 @@ pub fn retry_from_stage(
                                 &format!("Prompt Only base timeline error: {}", e),
                             );
                             *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                            super::set_job_error_status(&status, e);
                             ctx.request_repaint();
                             return;
                         }
@@ -175,7 +188,7 @@ pub fn retry_from_stage(
                             &format!("Agent timeline error: {}", e),
                         );
                         *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        super::set_job_error_status(&status, e);
                         ctx.request_repaint();
                         return;
                     }
@@ -210,7 +223,13 @@ pub fn retry_from_stage(
                     }
 
                     if let Err(e) = video_result {
-                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        super::set_job_error_status(&status, e);
+                        ctx.request_repaint();
+                        return;
+                    }
+
+                    if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                        super::set_job_error_status(&status, e);
                         ctx.request_repaint();
                         return;
                     }
@@ -230,7 +249,13 @@ pub fn retry_from_stage(
                     &capcut_mode_override,
                     &ctx,
                 ) {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -254,6 +279,11 @@ pub fn retry_from_stage(
             std::thread::spawn(move || {
                 *status.lock().unwrap() = crate::queue::JobStatus::Running;
                 ctx.request_repaint();
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
 
                 let is_agent_mode = !settings.skip_agent_on_resume
                     && settings.video_enabled
@@ -277,7 +307,7 @@ pub fn retry_from_stage(
                                 &format!("Prompt Only base timeline error: {}", e),
                             );
                             *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                            super::set_job_error_status(&status, e);
                             ctx.request_repaint();
                             return;
                         }
@@ -306,7 +336,7 @@ pub fn retry_from_stage(
                             &format!("Agent timeline error: {}", e),
                         );
                         *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        super::set_job_error_status(&status, e);
                         ctx.request_repaint();
                         return;
                     }
@@ -361,6 +391,11 @@ pub fn retry_from_stage(
                             resumed = cvar.wait(resumed).unwrap();
                         }
                         *resumed = false;
+                        if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                            super::set_job_error_status(&status, e);
+                            ctx.request_repaint();
+                            return;
+                        }
                         crate::logger::log_job(
                             job_id,
                             &job_name,
@@ -372,7 +407,13 @@ pub fn retry_from_stage(
                 }
 
                 if let Err(e) = video_result {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -391,7 +432,13 @@ pub fn retry_from_stage(
                     &capcut_mode_override,
                     &ctx,
                 ) {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -412,12 +459,23 @@ pub fn retry_from_stage(
             std::thread::spawn(move || {
                 *status.lock().unwrap() = crate::queue::JobStatus::Running;
                 ctx.request_repaint();
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
 
                 crate::logger::log_job(job_id, &job_name, "Retry: subtitles...");
                 if let Err(e) =
                     run_subtitles_only(&settings, job_id, &job_name, &subtitles_stage, &ctx)
                 {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -445,7 +503,7 @@ pub fn retry_from_stage(
                                 &format!("Prompt Only base timeline error: {}", e),
                             );
                             *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                            super::set_job_error_status(&status, e);
                             ctx.request_repaint();
                             return;
                         }
@@ -475,7 +533,7 @@ pub fn retry_from_stage(
                             &format!("Agent timeline error: {}", e),
                         );
                         *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        super::set_job_error_status(&status, e);
                         ctx.request_repaint();
                         return;
                     }
@@ -510,7 +568,13 @@ pub fn retry_from_stage(
                     }
 
                     if let Err(e) = video_result {
-                        *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                        super::set_job_error_status(&status, e);
+                        ctx.request_repaint();
+                        return;
+                    }
+
+                    if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                        super::set_job_error_status(&status, e);
                         ctx.request_repaint();
                         return;
                     }
@@ -530,7 +594,13 @@ pub fn retry_from_stage(
                     &capcut_mode_override,
                     &ctx,
                 ) {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -550,6 +620,11 @@ pub fn retry_from_stage(
             std::thread::spawn(move || {
                 *status.lock().unwrap() = crate::queue::JobStatus::Running;
                 ctx.request_repaint();
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
 
                 crate::logger::log_job(job_id, &job_name, "Retry: montage...");
                 if let Err(e) = run_final_stages(
@@ -566,7 +641,13 @@ pub fn retry_from_stage(
                     &capcut_mode_override,
                     &ctx,
                 ) {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    super::set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = super::ensure_job_not_cancelled(job_id) {
+                    super::set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }

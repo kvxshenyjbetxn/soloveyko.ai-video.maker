@@ -47,7 +47,9 @@ fn run_voicebot_voiceover(
     );
 
     loop {
+        super::super::ensure_job_not_cancelled(job_id)?;
         std::thread::sleep(std::time::Duration::from_secs(5));
+        super::super::ensure_job_not_cancelled(job_id)?;
 
         let task_status = crate::api::voicebot::get_task_status(voicebot_key, task_id)?;
 
@@ -156,7 +158,9 @@ fn run_edge_tts_voiceover(
             // Отримуємо дозвіл від лімітера потоків
             let _permit = crate::api::edgetts::EdgeTTSLimiter::get().acquire();
 
-            if first_error_clone.lock().unwrap().is_some() {
+            if first_error_clone.lock().unwrap().is_some()
+                || crate::queue::is_job_cancelled(job_id)
+            {
                 return;
             }
 
@@ -194,7 +198,9 @@ fn run_edge_tts_voiceover(
                     std::thread::sleep(backoffs[attempt - 1]);
                 }
 
-                if first_error_clone.lock().unwrap().is_some() {
+                if first_error_clone.lock().unwrap().is_some()
+                    || crate::queue::is_job_cancelled(job_id)
+                {
                     return;
                 }
 
@@ -272,6 +278,8 @@ fn run_edge_tts_voiceover(
         let _ = handle.join();
     }
 
+    super::super::ensure_job_not_cancelled(job_id)?;
+
     // Перевіряємо, чи були якісь помилки в фонових процесах
     if let Some(err_msg) = first_error.lock().unwrap().clone() {
         return Err(err_msg);
@@ -284,7 +292,7 @@ fn run_edge_tts_voiceover(
             job_name,
             "[EdgeTTS] Merging voiceover chunks via FFmpeg...",
         );
-        match merge_audio_ffmpeg(&chunk_paths, &final_output_path) {
+        match merge_audio_ffmpeg(job_id, &chunk_paths, &final_output_path) {
             Ok(_) => {
                 crate::logger::log_job(
                     job_id,
@@ -385,7 +393,7 @@ fn split_text_by_chunks(text: &str, max_chars: usize) -> Vec<String> {
 }
 
 /// Об'єднання аудіофайлів через FFmpeg за допомогою concat demuxer.
-fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(), String> {
+fn merge_audio_ffmpeg(job_id: u64, chunk_paths: &[PathBuf], output_path: &Path) -> Result<(), String> {
     let parent_dir = output_path
         .parent()
         .ok_or("Cannot get parent directory of output path")?;
@@ -423,7 +431,7 @@ fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(),
         output_path.file_name().unwrap().to_str().unwrap(),
     ]);
     crate::bundle::set_no_window(&mut ffmpeg_proc);
-    let output = ffmpeg_proc.output();
+    let output = crate::api::process::output_tracked(&mut ffmpeg_proc, Some(job_id));
 
     let _ = std::fs::remove_file(concat_list_path);
 

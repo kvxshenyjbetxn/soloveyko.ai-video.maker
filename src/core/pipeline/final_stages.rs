@@ -65,6 +65,8 @@ pub(super) fn run_final_stages(
         }
         *resumed = false;
 
+        super::ensure_job_not_cancelled(job_id)?;
+
         crate::logger::log_job(
             job_id,
             job_name,
@@ -76,6 +78,7 @@ pub(super) fn run_final_stages(
 
     // Монтаж (FFmpeg або CapCut)
     if settings.montage_enabled {
+        super::ensure_job_not_cancelled(job_id)?;
         crate::logger::log_job(job_id, job_name, "Starting montage stage...");
         *montage_stage.lock().unwrap() = crate::queue::StageStatus::Running;
         ctx.request_repaint();
@@ -105,6 +108,7 @@ pub(super) fn run_final_stages(
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
             ) {
                 Ok(_) => {
+                    super::ensure_job_not_cancelled(job_id)?;
                     crate::logger::log_job(job_id, job_name, "CapCut project generated.");
                     *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                 }
@@ -122,6 +126,7 @@ pub(super) fn run_final_stages(
         let ctx_montage = ctx.clone();
 
         match crate::core::pipeline::montage::run_montage(
+            job_id,
             save_dir,
             job_name,
             audio_dur,
@@ -146,6 +151,7 @@ pub(super) fn run_final_stages(
             },
         ) {
             Ok(size) => {
+                super::ensure_job_not_cancelled(job_id)?;
                 *montage_file_size.lock().unwrap() = Some(size);
                 crate::logger::log_job(job_id, job_name, "Montage complete.");
                 *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;

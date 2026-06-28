@@ -105,7 +105,9 @@ pub fn draw_montage_editor_window(
         .map(|job| {
             !matches!(
                 &*job.status.lock().unwrap(),
-                crate::queue::JobStatus::Done | crate::queue::JobStatus::Failed(_)
+                crate::queue::JobStatus::Done
+                    | crate::queue::JobStatus::Cancelled
+                    | crate::queue::JobStatus::Failed(_)
             )
         })
         .unwrap_or(false);

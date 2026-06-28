@@ -119,7 +119,8 @@ pub fn call_claude_code_new_session_streaming(
         model, session_id
     ));
 
-    let mut child = cmd.spawn().map_err(|e| {
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         format!(
             "Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.",
             e
@@ -413,8 +414,8 @@ pub fn call_claude_code_resume(
         cmd.current_dir(dir);
     }
 
-    let output = cmd
-        .output()
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch claude CLI: {}", e))?;
 
     if output.status.success() {
@@ -502,7 +503,8 @@ pub fn call_claude_code(
         model
     ));
 
-    let output = cmd.output().map_err(|e| {
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         let err_msg = format!(
             "Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.",
             e

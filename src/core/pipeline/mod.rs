@@ -87,6 +87,27 @@ pub(super) fn prepare_prompt_only_segments(
     )
 }
 
+/// Перевіряє, чи користувач вже натиснув «скасувати задачу».
+pub(super) fn ensure_job_not_cancelled(job_id: u64) -> Result<(), String> {
+    if crate::queue::is_job_cancelled(job_id) {
+        Err(crate::queue::cancelled_error())
+    } else {
+        Ok(())
+    }
+}
+
+/// Виставляє кінцевий статус задачі: Cancelled або Failed.
+pub(super) fn set_job_error_status(
+    status: &Arc<Mutex<crate::queue::JobStatus>>,
+    error: String,
+) {
+    if crate::queue::is_cancelled_error(&error) {
+        *status.lock().unwrap() = crate::queue::JobStatus::Cancelled;
+    } else {
+        *status.lock().unwrap() = crate::queue::JobStatus::Failed(error);
+    }
+}
+
 /// Виконує весь пайплайн у фоновому потоці.
 /// Послідовно: Переклад → [Озвучка+Субтитри || Відеоряд] → Timeline → Монтаж.
 /// Озвучка+Субтитри та Відеоряд виконуються паралельно між собою.
@@ -115,10 +136,17 @@ pub fn run_pipeline(
     capcut_mode_override: Arc<Mutex<Option<bool>>>,
     ctx: egui::Context,
 ) {
+    crate::queue::reset_job_runtime(job_id);
+
     std::thread::spawn(move || {
         crate::logger::log_job(job_id, &job_name, "Job started.");
         *status.lock().unwrap() = crate::queue::JobStatus::Running;
         ctx.request_repaint();
+        if let Err(e) = ensure_job_not_cancelled(job_id) {
+            set_job_error_status(&status, e);
+            ctx.request_repaint();
+            return;
+        }
 
         // Гарантуємо існування кінцевої папки з самого початку обробки
         if let Err(e) = std::fs::create_dir_all(&settings.save_path) {
@@ -187,10 +215,16 @@ pub fn run_pipeline(
                 Err(e) => {
                     crate::logger::log_job(job_id, &job_name, &format!("Translation error: {}", e));
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
+            }
+
+            if let Err(e) = ensure_job_not_cancelled(job_id) {
+                set_job_error_status(&status, e);
+                ctx.request_repaint();
+                return;
             }
         } else if settings.translation_enabled && has_translation {
             // Якщо переклад уже виконано і ми продовжуємо після контролю
@@ -225,7 +259,12 @@ pub fn run_pipeline(
                     Arc::clone(&audio_duration),
                     ctx.clone(),
                 ) {
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    set_job_error_status(&status, e);
+                    ctx.request_repaint();
+                    return;
+                }
+                if let Err(e) = ensure_job_not_cancelled(job_id) {
+                    set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -248,7 +287,7 @@ pub fn run_pipeline(
                         &format!("Prompt Only base timeline error: {}", e),
                     );
                     *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    set_job_error_status(&status, e);
                     ctx.request_repaint();
                     return;
                 }
@@ -270,7 +309,13 @@ pub fn run_pipeline(
             ) {
                 crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
                 *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                set_job_error_status(&status, e);
+                ctx.request_repaint();
+                return;
+            }
+
+            if let Err(e) = ensure_job_not_cancelled(job_id) {
+                set_job_error_status(&status, e);
                 ctx.request_repaint();
                 return;
             }
@@ -287,7 +332,12 @@ pub fn run_pipeline(
                 Arc::clone(&total_cost),
                 ctx.clone(),
             ) {
-                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                set_job_error_status(&status, e);
+                ctx.request_repaint();
+                return;
+            }
+            if let Err(e) = ensure_job_not_cancelled(job_id) {
+                set_job_error_status(&status, e);
                 ctx.request_repaint();
                 return;
             }
@@ -389,6 +439,12 @@ pub fn run_pipeline(
                     }
                     *resumed = false;
 
+                    if let Err(e) = ensure_job_not_cancelled(job_id) {
+                        set_job_error_status(&status, e);
+                        ctx.request_repaint();
+                        return;
+                    }
+
                     crate::logger::log_job(
                         job_id,
                         &job_name,
@@ -407,12 +463,17 @@ pub fn run_pipeline(
 
             // Перевіряємо помилки обох гілок
             if let Some(Err(e)) = av_result {
-                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                set_job_error_status(&status, e);
                 ctx.request_repaint();
                 return;
             }
             if let Some(Err(e)) = video_result {
-                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                set_job_error_status(&status, e);
+                ctx.request_repaint();
+                return;
+            }
+            if let Err(e) = ensure_job_not_cancelled(job_id) {
+                set_job_error_status(&status, e);
                 ctx.request_repaint();
                 return;
             }
@@ -503,6 +564,12 @@ pub fn run_pipeline(
             }
             *resumed = false;
 
+            if let Err(e) = ensure_job_not_cancelled(job_id) {
+                set_job_error_status(&status, e);
+                ctx.request_repaint();
+                return;
+            }
+
             crate::logger::log_job(
                 job_id,
                 &job_name,
@@ -557,8 +624,7 @@ pub fn run_pipeline(
                     Err(e) => {
                         crate::logger::log_job(job_id, &job_name, &format!("CapCut failed: {}", e));
                         *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                        *status.lock().unwrap() =
-                            crate::queue::JobStatus::Failed(format!("CapCut: {}", e));
+                        set_job_error_status(&status, format!("CapCut: {}", e));
                         ctx.request_repaint();
                         return;
                     }
@@ -570,6 +636,7 @@ pub fn run_pipeline(
                 let ctx_montage = ctx.clone();
 
                 match crate::core::pipeline::montage::run_montage(
+                    job_id,
                     save_dir,
                     &job_name,
                     audio_dur,
@@ -605,14 +672,19 @@ pub fn run_pipeline(
                             &format!("Montage failed: {}", e),
                         );
                         *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                        *status.lock().unwrap() =
-                            crate::queue::JobStatus::Failed(format!("Montage: {}", e));
+                        set_job_error_status(&status, format!("Montage: {}", e));
                         ctx.request_repaint();
                         return;
                     }
                 }
             }
             ctx.request_repaint();
+        }
+
+        if let Err(e) = ensure_job_not_cancelled(job_id) {
+            set_job_error_status(&status, e);
+            ctx.request_repaint();
+            return;
         }
 
         crate::logger::log_job(job_id, &job_name, "Job completed successfully.");

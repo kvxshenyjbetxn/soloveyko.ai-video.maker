@@ -27,12 +27,20 @@ impl VideoMakerApp {
                     &mut self.open_job_controls,
                     &self.whisper_model_download,
                     &mut self.retry_request,
+                    &mut self.queue_cancel_confirm_job,
                     &mut self.open_agent_chats,
                     &mut self.montage_editor_open_job,
                     &mut self.queue_panel_collapsed,
                     &mut self.queue_panel_fullscreen,
                 );
             });
+
+            if self.jobs.is_empty() {
+                self.job_counter = 0;
+                self.queue_panel_collapsed = false;
+                self.queue_panel_fullscreen = false;
+                self.queue_cancel_confirm_job = None;
+            }
         }
     }
 
@@ -54,10 +62,18 @@ impl VideoMakerApp {
                         &mut self.open_job_logs,
                         &mut self.open_job_controls,
                         &mut self.retry_request,
+                        &mut self.queue_cancel_confirm_job,
                         &mut self.open_agent_chats,
                         &mut self.montage_editor_open_job,
                     );
                 });
+
+            if self.jobs.is_empty() {
+                self.job_counter = 0;
+                self.queue_panel_collapsed = false;
+                self.queue_panel_fullscreen = false;
+                self.queue_cancel_confirm_job = None;
+            }
             return true;
         }
 

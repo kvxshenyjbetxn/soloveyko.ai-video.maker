@@ -121,6 +121,7 @@ pub(super) fn run_agent_timeline(
         },
     );
 
+    super::ensure_job_not_cancelled(job_id)?;
     save_agent_chat_to_file(save_dir, &agent_chat.lock().unwrap());
 
     match &agent_result {
@@ -216,6 +217,7 @@ pub(super) fn run_agent_timeline(
                 resumed = cvar.wait(resumed).unwrap();
             }
             *resumed = false;
+            super::ensure_job_not_cancelled(job_id)?;
 
             crate::logger::log_job(job_id, job_name, "Продовжуємо перевірку segments.json...");
             *status.lock().unwrap() = crate::queue::JobStatus::Running;

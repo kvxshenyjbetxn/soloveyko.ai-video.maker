@@ -8,6 +8,7 @@ pub mod gemini;
 pub mod googler;
 pub mod openrouter;
 pub mod pi;
+pub mod process;
 pub mod stock;
 pub mod updater;
 pub mod voicebot;

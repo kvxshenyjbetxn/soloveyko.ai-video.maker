@@ -98,7 +98,7 @@ fn run_whisperx(
     let mut whisperx_proc = std::process::Command::new(&whisperx_cmd);
     whisperx_proc.args(&args);
     crate::bundle::set_no_window(&mut whisperx_proc);
-    match whisperx_proc.output() {
+    match crate::api::process::output_tracked(&mut whisperx_proc, Some(job_id)) {
         Ok(out) if out.status.success() => {
             // Зчитуємо subtitle.json і генеруємо subtitle.srt з max_line_width
             match std::fs::read_to_string(&output_json) {
@@ -409,7 +409,7 @@ fn run_whisper_amd(
     let mut whisper_amd_proc = std::process::Command::new(&whisper_amd_cmd);
     whisper_amd_proc.args(&args);
     crate::bundle::set_no_window(&mut whisper_amd_proc);
-    match whisper_amd_proc.output() {
+    match crate::api::process::output_tracked(&mut whisper_amd_proc, Some(job_id)) {
         Ok(out) if out.status.success() => {
             let srt_path = save_dir.join("subtitle.srt");
 
@@ -492,6 +492,8 @@ pub(super) fn run_subtitles_only(
         } else {
             &settings.subtitles_service
         };
+
+    super::ensure_job_not_cancelled(job_id)?;
 
     if effective_service == "WhisperX" {
         run_whisperx(settings, job_id, job_name, subtitles_stage, ctx)?;
@@ -606,7 +608,7 @@ pub(super) fn run_subtitles_only(
         let mut whisper_proc = std::process::Command::new(&whisper_cmd);
         whisper_proc.args(&args);
         crate::bundle::set_no_window(&mut whisper_proc);
-        match whisper_proc.output() {
+        match crate::api::process::output_tracked(&mut whisper_proc, Some(job_id)) {
             Ok(out) if out.status.success() => {
                 // На Windows переносимо результат з temp-папки назад у save_dir
                 #[cfg(target_os = "windows")]
@@ -718,6 +720,7 @@ pub(super) fn run_subtitles_only(
         }
     }
 
+    super::ensure_job_not_cancelled(job_id)?;
     Ok(())
 }
 
@@ -776,7 +779,7 @@ pub(super) fn run_av_branch(
                         wav_path.to_str().unwrap_or("voice.wav"),
                     ]);
                     crate::bundle::set_no_window(&mut ffmpeg_proc);
-                    let result = ffmpeg_proc.output();
+                    let result = crate::api::process::output_tracked(&mut ffmpeg_proc, Some(job_id));
 
                     match result {
                         Ok(out) if out.status.success() => {
@@ -815,6 +818,7 @@ pub(super) fn run_av_branch(
                     *audio_duration.lock().unwrap() = Some(dur);
                 }
 
+                super::ensure_job_not_cancelled(job_id)?;
                 *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                 ctx.request_repaint();
             }

@@ -1,4 +1,6 @@
-use std::sync::{Arc, Condvar, Mutex};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 /// Статус виконання задачі пайплайну.
 #[derive(Clone, PartialEq)]
@@ -13,7 +15,72 @@ pub enum JobStatus {
     /// Очікує підтвердження агентного кроку від користувача
     AwaitingAgentControl,
     Done,
+    Cancelled,
     Failed(String),
+}
+
+impl JobStatus {
+    /// Чи вважається задача активною для кнопок керування чергою.
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self,
+            Self::Running
+                | Self::AwaitingControl
+                | Self::AwaitingMediaControl
+                | Self::AwaitingMontageControl
+                | Self::AwaitingAgentControl
+        )
+    }
+}
+
+const JOB_CANCELLED_MESSAGE: &str = "Task cancelled by user.";
+
+fn cancel_registry() -> &'static Mutex<HashMap<u64, Arc<AtomicBool>>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<u64, Arc<AtomicBool>>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Готує runtime-стан задачі перед запуском або повтором.
+pub fn reset_job_runtime(job_id: u64) {
+    let mut registry = cancel_registry().lock().unwrap();
+    let flag = registry
+        .entry(job_id)
+        .or_insert_with(|| Arc::new(AtomicBool::new(false)));
+    flag.store(false, Ordering::SeqCst);
+}
+
+/// Виставляє прапорець повного скасування задачі.
+pub fn request_job_cancel(job_id: u64) {
+    let mut registry = cancel_registry().lock().unwrap();
+    let flag = registry
+        .entry(job_id)
+        .or_insert_with(|| Arc::new(AtomicBool::new(false)));
+    flag.store(true, Ordering::SeqCst);
+}
+
+/// Повертає true, якщо задача була скасована користувачем.
+pub fn is_job_cancelled(job_id: u64) -> bool {
+    cancel_registry()
+        .lock()
+        .unwrap()
+        .get(&job_id)
+        .map(|flag| flag.load(Ordering::SeqCst))
+        .unwrap_or(false)
+}
+
+/// Забирає runtime-стан задачі, коли вона повністю більше не потрібна.
+pub fn forget_job_runtime(job_id: u64) {
+    cancel_registry().lock().unwrap().remove(&job_id);
+}
+
+/// Текст помилки, який використовується для кооперативного скасування задачі.
+pub fn cancelled_error() -> String {
+    JOB_CANCELLED_MESSAGE.to_string()
+}
+
+/// Допомагає відрізнити звичайну помилку від ручного скасування.
+pub fn is_cancelled_error(error: &str) -> bool {
+    error.contains(JOB_CANCELLED_MESSAGE)
 }
 
 /// Одне повідомлення в чаті з агентом.
@@ -220,6 +287,7 @@ pub struct PipelineJob {
 
 impl PipelineJob {
     pub fn new(id: u64, name: String, settings: JobSettings) -> Self {
+        reset_job_runtime(id);
         Self {
             id,
             name,

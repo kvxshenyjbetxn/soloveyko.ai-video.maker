@@ -330,6 +330,7 @@ pub(super) fn run_video_branch(
     total_cost: Arc<Mutex<Option<f64>>>,
     ctx: egui::Context,
 ) -> Result<(), String> {
+    super::ensure_job_not_cancelled(job_id)?;
     if !settings.video_enabled {
         return Ok(());
     }
@@ -580,6 +581,7 @@ pub(super) fn run_video_branch(
                 crate::logger::log_job(job_id, &job_name, "LLM prompt thread panicked.");
             }
         }
+        super::ensure_job_not_cancelled(job_id)?;
     } else {
         // Без ЛЛМ — в агентному режимі text йде напряму, інакше підстановка в video_prompt
         for (i, segment) in segments.iter().enumerate() {
@@ -604,6 +606,7 @@ pub(super) fn run_video_branch(
             ctx.request_repaint();
         }
     }
+    super::ensure_job_not_cancelled(job_id)?;
     crate::logger::log_job(
         job_id,
         &job_name,
@@ -660,6 +663,11 @@ pub(super) fn run_video_branch(
 
         let handle = std::thread::spawn(move || -> (usize, Result<(), String>) {
             sem.acquire();
+
+            if crate::queue::is_job_cancelled(job_id_c) {
+                sem.release();
+                return (i, Err(crate::queue::cancelled_error()));
+            }
 
             // Режим догенерації: якщо файл вже є — пропускаємо
             if skip_existing && media_file_exists_by_index(&media_dir, i + 1) {
@@ -725,6 +733,10 @@ pub(super) fn run_video_branch(
             };
 
             sem.release();
+
+            if crate::queue::is_job_cancelled(job_id_c) {
+                return (i, Err(crate::queue::cancelled_error()));
+            }
 
             match result {
                 Err(e) => (i, Err(e)),
@@ -800,6 +812,8 @@ pub(super) fn run_video_branch(
             _ => {}
         }
     }
+
+    super::ensure_job_not_cancelled(job_id)?;
 
     if errors.is_empty() {
         crate::logger::log_job(

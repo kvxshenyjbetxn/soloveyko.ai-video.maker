@@ -20,6 +20,7 @@ pub fn find_voice_file(save_dir: &Path) -> Option<PathBuf> {
 /// щоб cumulative offset відповідав абсолютним start_secs із timeline і синхронізація
 /// з аудіо не розходилась.
 pub fn run_montage(
+    job_id: u64,
     save_dir: &Path,
     task_name: &str,
     audio_duration_hint: Option<f64>,
@@ -1108,8 +1109,7 @@ pub fn run_montage(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::bundle::set_no_window(&mut ffmpeg_proc);
-    let mut child = ffmpeg_proc
-        .spawn()
+    let mut child = crate::api::process::spawn_tracked(&mut ffmpeg_proc, Some(job_id))
         .map_err(|e| format!("FFmpeg launch error: {e}"))?;
 
     // Читаємо stderr у окремому потоці, щоб не заблокувати буфер

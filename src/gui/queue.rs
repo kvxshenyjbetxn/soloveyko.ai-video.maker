@@ -24,12 +24,133 @@ fn format_file_size(bytes: u64) -> String {
     format!("{:.2} GB", bytes as f64 / 1_000_000_000.0)
 }
 
+/// Малює компактну кнопку повного скасування через painter.
+fn draw_cancel_job_button(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
+    let size = egui::vec2(18.0, 18.0);
+    let sense = if enabled {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, response) = ui.allocate_exact_size(size, sense);
+
+    let fill = if !enabled {
+        egui::Color32::from_gray(45)
+    } else if response.hovered() {
+        egui::Color32::from_rgb(170, 45, 45)
+    } else {
+        egui::Color32::from_rgb(120, 36, 36)
+    };
+    let stroke = if enabled {
+        egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 210, 210))
+    } else {
+        egui::Stroke::new(1.0, egui::Color32::from_gray(90))
+    };
+    let icon = if enabled {
+        egui::Color32::from_rgb(255, 240, 240)
+    } else {
+        egui::Color32::from_gray(130)
+    };
+
+    let painter = ui.painter();
+    painter.rect_filled(rect, 4.0, fill);
+    painter.rect_stroke(rect, 4.0, stroke);
+
+    let pad = 5.0;
+    painter.line_segment(
+        [
+            egui::pos2(rect.left() + pad, rect.top() + pad),
+            egui::pos2(rect.right() - pad, rect.bottom() - pad),
+        ],
+        egui::Stroke::new(1.8, icon),
+    );
+    painter.line_segment(
+        [
+            egui::pos2(rect.right() - pad, rect.top() + pad),
+            egui::pos2(rect.left() + pad, rect.bottom() - pad),
+        ],
+        egui::Stroke::new(1.8, icon),
+    );
+
+    response
+}
+
+/// Сигналізує задачі повне скасування та одразу будить усі очікування в пайплайні.
+fn cancel_job(job: &crate::queue::PipelineJob) {
+    crate::queue::request_job_cancel(job.id);
+    crate::logger::log_job(
+        job.id,
+        &job.name,
+        "Cancellation requested by user. Terminating child processes...",
+    );
+    crate::api::process::kill_job_processes(job.id);
+
+    for resume in [
+        &job.media_control_resume,
+        &job.montage_control_resume,
+        &job.agent_control_resume,
+    ] {
+        let (lock, cvar) = &**resume;
+        *lock.lock().unwrap() = true;
+        cvar.notify_all();
+    }
+
+    if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
+        if *job.translation_stage.lock().unwrap() == crate::queue::StageStatus::Running {
+            *job.translation_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        }
+        if *job.voiceover_stage.lock().unwrap() == crate::queue::StageStatus::Running {
+            *job.voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        }
+        if *job.video_stage.lock().unwrap() == crate::queue::StageStatus::Running {
+            *job.video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        }
+        if *job.subtitles_stage.lock().unwrap() == crate::queue::StageStatus::Running {
+            *job.subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        }
+        if *job.montage_stage.lock().unwrap() == crate::queue::StageStatus::Running {
+            *job.montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        }
+    }
+
+    *job.status.lock().unwrap() = crate::queue::JobStatus::Cancelled;
+}
+
 fn stage_color(stage: &crate::queue::StageStatus, ui: &egui::Ui) -> egui::Color32 {
     match stage {
         crate::queue::StageStatus::Pending => ui.visuals().weak_text_color(),
         crate::queue::StageStatus::Running => egui::Color32::from_rgb(255, 200, 0),
         crate::queue::StageStatus::Done => egui::Color32::from_rgb(46, 204, 113),
         crate::queue::StageStatus::Failed => egui::Color32::from_rgb(231, 76, 60),
+    }
+}
+
+/// Повністю прибирає задачу з UI-черги після підтвердженого скасування.
+fn remove_job_from_queue(
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    open_job_logs: &mut std::collections::HashMap<u64, String>,
+    open_job_controls: &mut std::collections::HashMap<
+        u64,
+        crate::gui::pipeline::translation_control::TranslationControlWindowState,
+    >,
+    open_agent_chats: &mut std::collections::HashMap<
+        u64,
+        crate::gui::agent_chat_window::AgentChatWindowState,
+    >,
+    open_montage_editor: &mut Option<u64>,
+    job_id: u64,
+) {
+    if let Some(idx) = jobs.iter().position(|job| job.id == job_id) {
+        cancel_job(&jobs[idx]);
+        jobs.remove(idx);
+    }
+
+    crate::queue::forget_job_runtime(job_id);
+    open_job_logs.remove(&job_id);
+    open_job_controls.remove(&job_id);
+    open_agent_chats.remove(&job_id);
+    if *open_montage_editor == Some(job_id) {
+        *open_montage_editor = None;
     }
 }
 
@@ -45,6 +166,7 @@ pub fn draw_queue_jobs_list(
         crate::gui::pipeline::translation_control::TranslationControlWindowState,
     >,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
+    cancel_confirm_job: &mut Option<u64>,
     open_agent_chats: &mut std::collections::HashMap<
         u64,
         crate::gui::agent_chat_window::AgentChatWindowState,
@@ -108,6 +230,10 @@ pub fn draw_queue_jobs_list(
                             translate(language, "queue_status_done").to_string(),
                             egui::Color32::from_rgb(46, 204, 113),
                         ),
+                        crate::queue::JobStatus::Cancelled => (
+                            translate(language, "queue_status_cancelled").to_string(),
+                            egui::Color32::from_rgb(127, 140, 141),
+                        ),
                         crate::queue::JobStatus::Failed(_) => (
                             translate(language, "queue_status_failed").to_string(),
                             egui::Color32::from_rgb(231, 76, 60),
@@ -115,13 +241,12 @@ pub fn draw_queue_jobs_list(
                     };
 
                     // Визначаємо чи задача може бути повторена (не виконується зараз)
-                    let can_retry = !matches!(
+                    let can_retry = !status.is_active();
+                    let can_cancel = !matches!(
                         status,
-                        crate::queue::JobStatus::Running
-                            | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl
-                            | crate::queue::JobStatus::AwaitingMontageControl
-                            | crate::queue::JobStatus::AwaitingAgentControl
+                        crate::queue::JobStatus::Done
+                            | crate::queue::JobStatus::Cancelled
+                            | crate::queue::JobStatus::Failed(_)
                     );
 
                     let group_frame = egui::Frame::group(ui.style())
@@ -145,6 +270,12 @@ pub fn draw_queue_jobs_list(
                                 );
                                 if retry_btn.on_hover_text(translate(language, "job_retry_tooltip")).clicked() {
                                     *retry_request = Some((job.id, crate::queue::RetryStage::Translation));
+                                    retry_clicked = true;
+                                }
+
+                                let cancel_btn = draw_cancel_job_button(ui, can_cancel);
+                                if cancel_btn.on_hover_text(translate(language, "job_cancel_tooltip")).clicked() {
+                                    *cancel_confirm_job = Some(job.id);
                                     retry_clicked = true;
                                 }
 
@@ -519,6 +650,66 @@ pub fn draw_queue_jobs_list(
                 }
             });
         });
+
+    if let Some(job_id) = *cancel_confirm_job {
+        let job_name = jobs
+            .iter()
+            .find(|job| job.id == job_id)
+            .map(|job| job.name.clone());
+
+        if let Some(job_name) = job_name {
+            let mut confirm = false;
+            let mut close = false;
+
+            egui::Window::new(translate(language, "queue_cancel_dialog_title"))
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .collapsible(false)
+                .resizable(false)
+                .show(ui.ctx(), |ui| {
+                    ui.set_min_width(360.0);
+                    ui.label(translate(language, "queue_cancel_dialog_text"));
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new(job_name).strong());
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        let keep_btn = ui.button(translate(language, "queue_cancel_dialog_keep_btn"));
+                        if keep_btn.clicked() {
+                            close = true;
+                        }
+
+                        let stop_btn = ui.add(
+                            egui::Button::new(
+                                egui::RichText::new(translate(language, "queue_cancel_dialog_confirm_btn"))
+                                    .strong(),
+                            )
+                            .fill(egui::Color32::from_rgb(150, 42, 42)),
+                        );
+                        if stop_btn.clicked() {
+                            confirm = true;
+                            close = true;
+                        }
+                    });
+                });
+
+            if confirm {
+                remove_job_from_queue(
+                    jobs,
+                    open_job_logs,
+                    open_job_controls,
+                    open_agent_chats,
+                    open_montage_editor,
+                    job_id,
+                );
+            }
+
+            if close {
+                *cancel_confirm_job = None;
+            }
+        } else {
+            *cancel_confirm_job = None;
+        }
+    }
 }
 
 /// Малює нижню панель черги задач пайплайну.
@@ -534,6 +725,7 @@ pub fn draw_queue_panel(
     >,
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
+    cancel_confirm_job: &mut Option<u64>,
     open_agent_chats: &mut std::collections::HashMap<
         u64,
         crate::gui::agent_chat_window::AgentChatWindowState,
@@ -745,17 +937,9 @@ pub fn draw_queue_panel(
 
         let can_run = has_pending && whisper_blocked.is_none();
 
-        let has_active = jobs.iter().any(|j| {
-            let s = j.status.lock().unwrap().clone();
-            matches!(
-                s,
-                crate::queue::JobStatus::Running
-                    | crate::queue::JobStatus::AwaitingControl
-                    | crate::queue::JobStatus::AwaitingMediaControl
-                    | crate::queue::JobStatus::AwaitingMontageControl
-                    | crate::queue::JobStatus::AwaitingAgentControl
-            )
-        });
+        let has_active = jobs
+            .iter()
+            .any(|j| j.status.lock().unwrap().is_active());
         let can_clear = !jobs.is_empty() && !has_active;
 
         let mut clicked = false;
@@ -798,10 +982,7 @@ pub fn draw_queue_panel(
                             let status = j.status.lock().unwrap().clone();
                             match status {
                                 crate::queue::JobStatus::Done => 1.0,
-                                crate::queue::JobStatus::Running
-                                | crate::queue::JobStatus::AwaitingControl
-                                | crate::queue::JobStatus::AwaitingMediaControl
-                                | crate::queue::JobStatus::AwaitingAgentControl => {
+                                s if s.is_active() => {
                                     let (prog, _, _) = j.calculate_progress();
                                     prog
                                 }
@@ -866,7 +1047,15 @@ pub fn draw_queue_panel(
         });
 
         if clear_clicked {
+            for job in jobs.iter() {
+                crate::queue::forget_job_runtime(job.id);
+            }
             jobs.clear();
+            open_job_logs.clear();
+            open_job_controls.clear();
+            open_agent_chats.clear();
+            *open_montage_editor = None;
+            *cancel_confirm_job = None;
             *job_counter = 0;
         }
 
@@ -955,6 +1144,7 @@ pub fn draw_queue_panel(
                 open_job_logs,
                 open_job_controls,
                 retry_request,
+                cancel_confirm_job,
                 open_agent_chats,
                 open_montage_editor,
             );

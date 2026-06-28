@@ -275,6 +275,8 @@ pub struct VideoMakerApp {
     pub queue_error: Option<String>,
     /// Запит на повтор конкретного етапу задачі: (job_id, stage)
     pub retry_request: Option<(u64, crate::queue::RetryStage)>,
+    /// ID задачі, для якої показано діалог підтвердження повної зупинки.
+    pub queue_cancel_confirm_job: Option<u64>,
     /// Відкриті вікна логів задач: job_id → job_name.
     pub open_job_logs: std::collections::HashMap<u64, String>,
     /// Відкриті вікна контролю перекладу: job_id → стан вікна.

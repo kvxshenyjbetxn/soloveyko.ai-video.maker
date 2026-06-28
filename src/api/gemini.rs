@@ -116,8 +116,8 @@ pub fn call_gemini_new_session_streaming(
         model, session_id
     ));
 
-    let mut child = cmd
-        .spawn()
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
 
     let stderr_handle = {
@@ -200,8 +200,8 @@ pub fn call_gemini_resume(
         cmd.current_dir(dir);
     }
 
-    let output = cmd
-        .output()
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
 
     if output.status.success() {
@@ -272,7 +272,8 @@ pub fn call_gemini_cli(
         model
     ));
 
-    let output = cmd.output().map_err(|e| {
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         let err_msg = format!(
             "Failed to launch gemini CLI: {}. Make sure gemini CLI is installed and added to PATH.",
             e

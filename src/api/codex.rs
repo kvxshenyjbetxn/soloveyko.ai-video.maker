@@ -291,7 +291,8 @@ pub fn call_codex_new_session_streaming(
         model
     ));
 
-    let mut child = cmd.spawn().map_err(|e| {
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         format!(
             "Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.",
             e
@@ -422,8 +423,8 @@ pub fn call_codex_resume(
         cmd.current_dir(dir);
     }
 
-    let mut child = cmd
-        .spawn()
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch codex CLI resume: {}", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
@@ -520,7 +521,8 @@ pub fn call_codex(
 
     log(&format!("Running: codex exec --model {} -", model));
 
-    let mut child = cmd.spawn().map_err(|e| {
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         let err_msg = format!(
             "Failed to launch codex CLI: {}. Make sure codex CLI is installed and added to PATH.",
             e

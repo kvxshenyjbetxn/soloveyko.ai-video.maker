@@ -125,7 +125,8 @@ pub fn call_pi_new_session_streaming(
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(|e| {
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         format!(
             "Failed to launch pi CLI: {}. Make sure pi is installed and in PATH.",
             e
@@ -179,8 +180,8 @@ pub fn call_pi_resume(
         cmd.current_dir(dir);
     }
 
-    let output = cmd
-        .output()
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
 
     if output.status.success() {
@@ -228,8 +229,8 @@ pub fn call_pi_cli(
         cmd.current_dir(dir);
     }
 
-    let output = cmd
-        .output()
+    let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
+    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
 
     if output.status.success() {
