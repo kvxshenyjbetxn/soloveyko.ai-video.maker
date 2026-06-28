@@ -26,50 +26,43 @@ fn format_file_size(bytes: u64) -> String {
 
 /// Малює компактну кнопку повного скасування через painter.
 fn draw_cancel_job_button(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
-    let size = egui::vec2(18.0, 18.0);
-    let sense = if enabled {
-        egui::Sense::click()
-    } else {
-        egui::Sense::hover()
-    };
-    let (rect, response) = ui.allocate_exact_size(size, sense);
+    let response = ui.add_enabled(
+        enabled,
+        egui::Button::new(
+            egui::RichText::new("✕")
+                .size(11.0)
+                .color(egui::Color32::TRANSPARENT),
+        )
+        .small(),
+    );
 
-    let fill = if !enabled {
-        egui::Color32::from_gray(45)
-    } else if response.hovered() {
-        egui::Color32::from_rgb(170, 45, 45)
-    } else {
-        egui::Color32::from_rgb(120, 36, 36)
-    };
-    let stroke = if enabled {
-        egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 210, 210))
-    } else {
-        egui::Stroke::new(1.0, egui::Color32::from_gray(90))
-    };
+    let rect = response.rect;
     let icon = if enabled {
-        egui::Color32::from_rgb(255, 240, 240)
+        egui::Color32::from_rgb(220, 90, 90)
     } else {
-        egui::Color32::from_gray(130)
+        ui.visuals().weak_text_color()
     };
 
+    // Малюємо компактний хрестик у меншій квадратній області по центру,
+    // щоб він виглядав як звична іконка, а не займав майже всю кнопку.
+    let side = rect.width().min(rect.height()) * 0.58;
+    let square = egui::Rect::from_center_size(rect.center(), egui::vec2(side, side));
+    let pad = 0.8;
+    let stroke = egui::Stroke::new(1.5, icon);
     let painter = ui.painter();
-    painter.rect_filled(rect, 4.0, fill);
-    painter.rect_stroke(rect, 4.0, stroke);
-
-    let pad = 5.0;
     painter.line_segment(
         [
-            egui::pos2(rect.left() + pad, rect.top() + pad),
-            egui::pos2(rect.right() - pad, rect.bottom() - pad),
+            egui::pos2(square.left() + pad, square.top() + pad),
+            egui::pos2(square.right() - pad, square.bottom() - pad),
         ],
-        egui::Stroke::new(1.8, icon),
+        stroke,
     );
     painter.line_segment(
         [
-            egui::pos2(rect.right() - pad, rect.top() + pad),
-            egui::pos2(rect.left() + pad, rect.bottom() - pad),
+            egui::pos2(square.right() - pad, square.top() + pad),
+            egui::pos2(square.left() + pad, square.bottom() - pad),
         ],
-        egui::Stroke::new(1.8, icon),
+        stroke,
     );
 
     response
