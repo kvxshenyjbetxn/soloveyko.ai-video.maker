@@ -2,26 +2,29 @@ use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
 /// Створює Command для pi CLI.
-/// На Windows pi — npm-пакет (.cmd + node.js), тому запускаємо node напряму зі скриптом.
-/// Це надійніше ніж cmd /C, бо не залежить від PATH у shell-сесії.
+/// На Windows пріоритетно запускаємо саме pi.cmd, як це робить користувач у терміналі.
+/// Це зменшує розбіжності між ручним запуском і запуском з програми.
 fn pi_command() -> std::process::Command {
     #[cfg(target_os = "windows")]
     {
-        // Читаємо pi.cmd → знаходимо node.exe та cli.js → запускаємо напряму
-        if let Some((node_exe, script)) = crate::bundle::find_npm_node_script_windows("pi") {
-            let mut cmd = std::process::Command::new(&node_exe);
-            cmd.arg(&script);
-            crate::bundle::set_no_window(&mut cmd);
-            return cmd;
-        }
-        // Fallback: cmd /C pi.cmd (якщо парсинг не вдався)
+        // 1. Пріоритет: явний pi.cmd з npm-директорії.
+        // Це найближче до звичайного ручного запуску `pi` у консолі.
         if let Some(cmd_path) = crate::bundle::find_npm_cmd_windows("pi") {
             let mut cmd = std::process::Command::new("cmd");
             cmd.args(["/C", &cmd_path]);
             crate::bundle::set_no_window(&mut cmd);
             return cmd;
         }
-        // Останній fallback через PATH
+
+        // 2. Fallback: прямий запуск через node + cli.js.
+        if let Some((node_exe, script)) = crate::bundle::find_npm_node_script_windows("pi") {
+            let mut cmd = std::process::Command::new(&node_exe);
+            cmd.arg(&script);
+            crate::bundle::set_no_window(&mut cmd);
+            return cmd;
+        }
+
+        // 3. Останній fallback через PATH.
         crate::bundle::new_cli_command("pi")
     }
     #[cfg(not(target_os = "windows"))]
