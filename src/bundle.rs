@@ -576,6 +576,27 @@ fn find_binary_via_shell_macos(name: &str) -> Option<String> {
     None
 }
 
+/// Шукає бінарник Pi у директорії standalone Node, яку створює офіційний installer.
+#[cfg(target_os = "macos")]
+fn find_pi_node_installer_binary_macos(name: &str, home: &str) -> Option<String> {
+    let base = std::path::Path::new(home).join(".local/share/pi-node");
+
+    let current = base.join("current").join("bin").join(name);
+    if current.exists() {
+        return Some(current.to_string_lossy().into_owned());
+    }
+
+    let entries = std::fs::read_dir(&base).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path().join("bin").join(name);
+        if path.exists() {
+            return Some(path.to_string_lossy().into_owned());
+        }
+    }
+
+    None
+}
+
 /// Шукає бінарник у типових місцях macOS (PATH з терміналу недоступний у .app).
 #[cfg(target_os = "macos")]
 pub fn find_binary_macos(name: &str) -> String {
@@ -584,6 +605,10 @@ pub fn find_binary_macos(name: &str) -> String {
     }
 
     let home = std::env::var("HOME").unwrap_or_default();
+    if let Some(path) = find_pi_node_installer_binary_macos(name, &home) {
+        return path;
+    }
+
     let candidates = [
         format!("/usr/local/bin/{}", name),
         format!("/opt/homebrew/bin/{}", name),
@@ -612,6 +637,7 @@ pub fn macos_extended_path() -> String {
         "/opt/homebrew/sbin",
         &format!("{}/.local/bin", home),
         &format!("{}/.npm-global/bin", home),
+        &format!("{}/.local/share/pi-node/current/bin", home),
         "/usr/bin",
         "/bin",
         "/usr/sbin",
