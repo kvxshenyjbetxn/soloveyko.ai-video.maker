@@ -355,6 +355,7 @@ pub fn translate_en(key: &str) -> &'static str {
         }
         "welcome_claude_desc" => "Claude Code CLI — use your Claude subscription for text tasks",
         "welcome_codex_desc" => "Codex CLI — use local models and agents for workflow automation",
+        "welcome_pi_desc" => "Pi CLI — agent tasks for editing and creating files",
         "welcome_dont_show" => "Don't show on next launch",
         "welcome_close_btn" => "Got it",
         "welcome_checking" => "checking...",

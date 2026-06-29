@@ -30,6 +30,12 @@ fn pi_command() -> std::process::Command {
     }
 }
 
+/// Створює Command для перевірки наявності Pi CLI у welcome-вікні.
+/// Використовує той самий launch path, що і основні виклики агента.
+pub fn version_command() -> std::process::Command {
+    pi_command()
+}
+
 /// Лімітер одночасних запитів до Pi CLI (семафор)
 pub struct PiLimiter {
     active: Mutex<usize>,

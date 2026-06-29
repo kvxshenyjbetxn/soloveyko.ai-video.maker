@@ -27,6 +27,7 @@ pub struct ToolChecks {
     pub gemini: Arc<Mutex<ToolStatus>>,
     pub claude: Arc<Mutex<ToolStatus>>,
     pub codex: Arc<Mutex<ToolStatus>>,
+    pub pi: Arc<Mutex<ToolStatus>>,
     pub ffmpeg: Arc<Mutex<ToolStatus>>,
     pub ffmpeg_download: Arc<Mutex<BinaryDownload>>,
     pub whisper: Arc<Mutex<ToolStatus>>,
@@ -43,6 +44,7 @@ impl ToolChecks {
             gemini: Arc::new(Mutex::new(ToolStatus::Checking)),
             claude: Arc::new(Mutex::new(ToolStatus::Checking)),
             codex: Arc::new(Mutex::new(ToolStatus::Checking)),
+            pi: Arc::new(Mutex::new(ToolStatus::Checking)),
             ffmpeg: Arc::new(Mutex::new(ToolStatus::Checking)),
             ffmpeg_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
             whisper: Arc::new(Mutex::new(ToolStatus::Checking)),
@@ -58,6 +60,7 @@ impl ToolChecks {
         *self.gemini.lock().unwrap() = ToolStatus::Checking;
         *self.claude.lock().unwrap() = ToolStatus::Checking;
         *self.codex.lock().unwrap() = ToolStatus::Checking;
+        *self.pi.lock().unwrap() = ToolStatus::Checking;
         *self.ffmpeg.lock().unwrap() = ToolStatus::Checking;
         *self.ffmpeg_download.lock().unwrap() = BinaryDownload::Idle;
         *self.whisper.lock().unwrap() = ToolStatus::Checking;
@@ -76,6 +79,7 @@ impl ToolChecks {
         Self::check("gemini", "--version", Arc::clone(&self.gemini), ctx.clone());
         Self::check("claude", "--version", Arc::clone(&self.claude), ctx.clone());
         Self::check("codex", "--version", Arc::clone(&self.codex), ctx.clone());
+        Self::check_pi(Arc::clone(&self.pi), ctx.clone());
         Self::check_ffmpeg(
             Arc::clone(&self.ffmpeg),
             Arc::clone(&self.ffmpeg_download),
@@ -102,6 +106,29 @@ impl ToolChecks {
         std::thread::spawn(move || {
             let mut cmd = crate::bundle::new_cli_command(name);
             let result = cmd.arg(version_flag).output();
+
+            let new_status = match result {
+                Ok(out) if out.status.success() => {
+                    let ver = String::from_utf8_lossy(&out.stdout)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
+                    ToolStatus::Installed(ver)
+                }
+                _ => ToolStatus::NotInstalled,
+            };
+            *status.lock().unwrap() = new_status;
+            ctx.request_repaint();
+        });
+    }
+
+    /// Перевіряє Pi CLI через той самий launch path, що і робочі виклики агента.
+    fn check_pi(status: Arc<Mutex<ToolStatus>>, ctx: egui::Context) {
+        std::thread::spawn(move || {
+            let mut cmd = crate::api::pi::version_command();
+            let result = cmd.arg("--version").output();
 
             let new_status = match result {
                 Ok(out) if out.status.success() => {
@@ -322,6 +349,7 @@ pub fn draw_welcome_dialog(
             let gemini_status = checks.gemini.lock().unwrap().clone();
             let claude_status = checks.claude.lock().unwrap().clone();
             let codex_status = checks.codex.lock().unwrap().clone();
+            let pi_status = checks.pi.lock().unwrap().clone();
             let ffmpeg_status = checks.ffmpeg.lock().unwrap().clone();
             let ffmpeg_download = checks.ffmpeg_download.lock().unwrap().clone();
             let whisper_status = checks.whisper.lock().unwrap().clone();
@@ -350,6 +378,14 @@ pub fn draw_welcome_dialog(
                 "Codex CLI",
                 &codex_status,
                 translate(language, "welcome_codex_desc"),
+                language,
+            );
+            ui.add_space(6.0);
+            draw_tool_row(
+                ui,
+                "Pi CLI",
+                &pi_status,
+                translate(language, "welcome_pi_desc"),
                 language,
             );
             ui.add_space(6.0);

@@ -355,6 +355,7 @@ pub fn translate_ru(key: &str) -> &'static str {
             "Claude Code CLI — для работы с подпиской Claude и текстовых задач"
         }
         "welcome_codex_desc" => "Codex CLI — для работы с моделями и локальных агентных задач",
+        "welcome_pi_desc" => "Pi CLI — для агентных задач редактирования и создания файлов",
         "welcome_dont_show" => "Не показывать при следующем запуске",
         "welcome_close_btn" => "Понятно",
         "welcome_checking" => "проверка...",
