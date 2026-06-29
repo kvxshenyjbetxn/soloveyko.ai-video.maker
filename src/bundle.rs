@@ -535,15 +535,63 @@ pub fn find_npm_node_script_windows(cmd_name: &str) -> Option<(String, String)> 
     Some((node_exe, script_path))
 }
 
+/// Пробує знайти бінарник через login shell користувача.
+/// Це допомагає для nvm/fnm/asdf/volta та інших менеджерів, які змінюють PATH у shell-конфігах.
+#[cfg(target_os = "macos")]
+fn find_binary_via_shell_macos(name: &str) -> Option<String> {
+    let mut shells: Vec<String> = Vec::new();
+
+    if let Ok(shell) = std::env::var("SHELL") {
+        if !shell.is_empty() && std::path::Path::new(&shell).exists() {
+            shells.push(shell);
+        }
+    }
+
+    for fallback in ["/bin/zsh", "/bin/bash", "/bin/sh"] {
+        if std::path::Path::new(fallback).exists() && !shells.iter().any(|s| s == fallback) {
+            shells.push(fallback.to_string());
+        }
+    }
+
+    for shell in shells {
+        let output = std::process::Command::new(&shell)
+            .arg("-lc")
+            .arg(format!(
+                "command -v {} 2>/dev/null || which {} 2>/dev/null",
+                name, name
+            ))
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            continue;
+        }
+
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() && std::path::Path::new(&path).exists() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
 /// Шукає бінарник у типових місцях macOS (PATH з терміналу недоступний у .app).
 #[cfg(target_os = "macos")]
 pub fn find_binary_macos(name: &str) -> String {
+    if let Some(path) = find_binary_via_shell_macos(name) {
+        return path;
+    }
+
     let home = std::env::var("HOME").unwrap_or_default();
     let candidates = [
         format!("/usr/local/bin/{}", name),
         format!("/opt/homebrew/bin/{}", name),
         format!("{}/.local/bin/{}", home, name),
         format!("{}/.npm-global/bin/{}", home, name),
+        format!("{}/.volta/bin/{}", home, name),
+        format!("{}/.yarn/bin/{}", home, name),
+        format!("{}/bin/{}", home, name),
         format!("/usr/bin/{}", name),
     ];
     candidates
