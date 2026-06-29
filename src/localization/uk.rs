@@ -339,7 +339,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "job_retry_tooltip" => "Повторити всю задачу заново",
         "job_cancel_tooltip" => "Повністю зупинити задачу й убити пов'язані процеси",
         "queue_cancel_dialog_title" => "Зупинити задачу?",
-        "queue_cancel_dialog_text" => "Задача буде примусово зупинена, пов'язані процеси буде вбито, а сама задача зникне з черги.",
+        "queue_cancel_dialog_text" => {
+            "Задача буде примусово зупинена, пов'язані процеси буде вбито, а сама задача зникне з черги."
+        }
         "queue_cancel_dialog_keep_btn" => "Ні, залишити",
         "queue_cancel_dialog_confirm_btn" => "Так, зупинити",
         "job_open_folder_tooltip" => "Відкрити папку задачі",

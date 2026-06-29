@@ -666,15 +666,19 @@ pub fn draw_queue_jobs_list(
                     ui.add_space(10.0);
 
                     ui.horizontal(|ui| {
-                        let keep_btn = ui.button(translate(language, "queue_cancel_dialog_keep_btn"));
+                        let keep_btn =
+                            ui.button(translate(language, "queue_cancel_dialog_keep_btn"));
                         if keep_btn.clicked() {
                             close = true;
                         }
 
                         let stop_btn = ui.add(
                             egui::Button::new(
-                                egui::RichText::new(translate(language, "queue_cancel_dialog_confirm_btn"))
-                                    .strong(),
+                                egui::RichText::new(translate(
+                                    language,
+                                    "queue_cancel_dialog_confirm_btn",
+                                ))
+                                .strong(),
                             )
                             .fill(egui::Color32::from_rgb(150, 42, 42)),
                         );
@@ -930,9 +934,7 @@ pub fn draw_queue_panel(
 
         let can_run = has_pending && whisper_blocked.is_none();
 
-        let has_active = jobs
-            .iter()
-            .any(|j| j.status.lock().unwrap().is_active());
+        let has_active = jobs.iter().any(|j| j.status.lock().unwrap().is_active());
         let can_clear = !jobs.is_empty() && !has_active;
 
         let mut clicked = false;

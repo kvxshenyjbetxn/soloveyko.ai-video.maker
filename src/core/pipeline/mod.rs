@@ -97,10 +97,7 @@ pub(super) fn ensure_job_not_cancelled(job_id: u64) -> Result<(), String> {
 }
 
 /// Виставляє кінцевий статус задачі: Cancelled або Failed.
-pub(super) fn set_job_error_status(
-    status: &Arc<Mutex<crate::queue::JobStatus>>,
-    error: String,
-) {
+pub(super) fn set_job_error_status(status: &Arc<Mutex<crate::queue::JobStatus>>, error: String) {
     if crate::queue::is_cancelled_error(&error) {
         *status.lock().unwrap() = crate::queue::JobStatus::Cancelled;
     } else {

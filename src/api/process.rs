@@ -49,9 +49,7 @@ impl ProcessTracker {
         let pids = {
             let mut registry = self.registry.lock().unwrap();
             let pids = registry.by_job.remove(&job_id).unwrap_or_default();
-            registry
-                .all_pids
-                .retain(|tracked| !pids.contains(tracked));
+            registry.all_pids.retain(|tracked| !pids.contains(tracked));
             pids
         };
 
@@ -177,7 +175,9 @@ fn kill_process_tree(pid: u32) {
     let _ = Command::new("kill").args(["-TERM", "--", &group]).status();
     thread::sleep(Duration::from_millis(300));
     let _ = Command::new("kill").args(["-KILL", "--", &group]).status();
-    let _ = Command::new("kill").args(["-KILL", &pid.to_string()]).status();
+    let _ = Command::new("kill")
+        .args(["-KILL", &pid.to_string()])
+        .status();
 }
 
 #[cfg(not(any(unix, windows)))]

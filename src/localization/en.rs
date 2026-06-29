@@ -341,7 +341,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "job_retry_tooltip" => "Retry the entire job from scratch",
         "job_cancel_tooltip" => "Fully stop this job and kill related processes",
         "queue_cancel_dialog_title" => "Stop this job?",
-        "queue_cancel_dialog_text" => "The job will be force-stopped, related processes will be killed, and the job will disappear from the queue.",
+        "queue_cancel_dialog_text" => {
+            "The job will be force-stopped, related processes will be killed, and the job will disappear from the queue."
+        }
         "queue_cancel_dialog_keep_btn" => "No, keep it",
         "queue_cancel_dialog_confirm_btn" => "Yes, stop it",
         "job_open_folder_tooltip" => "Open job folder",

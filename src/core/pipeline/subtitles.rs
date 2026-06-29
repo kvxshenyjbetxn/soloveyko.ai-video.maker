@@ -779,7 +779,8 @@ pub(super) fn run_av_branch(
                         wav_path.to_str().unwrap_or("voice.wav"),
                     ]);
                     crate::bundle::set_no_window(&mut ffmpeg_proc);
-                    let result = crate::api::process::output_tracked(&mut ffmpeg_proc, Some(job_id));
+                    let result =
+                        crate::api::process::output_tracked(&mut ffmpeg_proc, Some(job_id));
 
                     match result {
                         Ok(out) if out.status.success() => {
