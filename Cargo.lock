@@ -3962,7 +3962,7 @@ dependencies = [
 
 [[package]]
 name = "soloveyko-ai-video-maker"
-version = "4.9.2"
+version = "4.9.3"
 dependencies = [
  "base64",
  "chrono",
