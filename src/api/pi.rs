@@ -114,6 +114,8 @@ pub fn call_pi_new_session_streaming(
     let mut cmd = pi_command();
     cmd.arg("--model")
         .arg(model)
+        .arg("--tools")
+        .arg("read,edit,write")
         .arg("--session-id")
         .arg(session_id)
         .arg("-p")
@@ -169,6 +171,8 @@ pub fn call_pi_resume(
     let mut cmd = pi_command();
     cmd.arg("--model")
         .arg(model)
+        .arg("--tools")
+        .arg("read,edit,write")
         .arg("--session-id")
         .arg(session_id)
         .arg("-p")
@@ -220,6 +224,8 @@ pub fn call_pi_cli(
     let mut cmd = pi_command();
     cmd.arg("--model")
         .arg(model)
+        .arg("--tools")
+        .arg("read,edit,write")
         .arg("-p")
         .arg(user_content)
         .stdout(Stdio::piped())
