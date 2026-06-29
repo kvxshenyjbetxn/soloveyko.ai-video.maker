@@ -1,4 +1,5 @@
 use super::media::MediaItem;
+use super::preview_worker::{PreviewFrameKind, PreviewTaskPriority, PreviewWorker};
 use super::types::{ClipKind, PreviewRenderSettings};
 use eframe::egui;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -369,8 +370,8 @@ impl FrameCache {
         }
 
         let fps = settings.fps.max(1.0);
-        let chunk_secs = if playback_active { 18.0 } else { 8.0 };
-        let bucket_secs = if playback_active { 3.0 } else { 5.0 };
+        let chunk_secs = if playback_active { 6.0 } else { 2.5 };
+        let bucket_secs = if playback_active { 2.0 } else { 1.5 };
         let chunk_frames = (chunk_secs * fps).ceil().max(1.0) as u32;
         let bucket_frames = (bucket_secs * fps).ceil().max(1.0) as u32;
         let overlap_frames = if playback_active {
@@ -388,50 +389,20 @@ impl FrameCache {
             return;
         }
 
-        let loading_marker = media
-            .cache_dir
-            .join(format!(".chunk_{chunk_start_idx:06}.loading"));
-        if loading_marker.exists() {
-            return;
-        }
+        let priority = if playback_active {
+            PreviewTaskPriority::PlaybackAhead
+        } else {
+            PreviewTaskPriority::ScrubFallback
+        };
 
-        if std::fs::create_dir_all(&media.cache_dir).is_err() {
-            return;
-        }
-        let _ = std::fs::write(&loading_marker, b"1");
-
-        let media_clone = media.clone();
-        let ctx_clone = ctx.clone();
-        std::thread::spawn(move || {
-            let start_secs = (chunk_start_idx.saturating_sub(1) as f32 / fps).max(0.0);
-            let duration_secs = (chunk_end_idx.saturating_sub(chunk_start_idx) as f32 / fps)
-                .min((media_clone.duration_secs - start_secs).max(0.1));
-            let out_pattern = media_clone.cache_dir.join("%06d.jpg");
-            let mut cmd = std::process::Command::new(crate::bundle::ffmpeg_path());
-            cmd.args([
-                "-y",
-                "-v",
-                "error",
-                "-ss",
-                &format!("{start_secs:.3}"),
-                "-i",
-                media_clone.path.to_string_lossy().as_ref(),
-                "-t",
-                &format!("{duration_secs:.3}"),
-                "-vf",
-                &format!("fps={:.4},scale={}:-2", fps, settings.quality.scrub_width()),
-                "-q:v",
-                settings.quality.ffmpeg_qscale(),
-                "-start_number",
-                &chunk_start_idx.to_string(),
-                out_pattern.to_string_lossy().as_ref(),
-            ]);
-            crate::bundle::set_no_window(&mut cmd);
-
-            let _ = crate::api::ffmpeg::run_tracked(&mut cmd);
-            let _ = std::fs::remove_file(loading_marker);
-            ctx_clone.request_repaint();
-        });
+        PreviewWorker::get().enqueue_chunk(
+            ctx,
+            media.clone(),
+            chunk_start_idx,
+            chunk_end_idx,
+            settings,
+            priority,
+        );
     }
 
     /// Ставить кадр у фонову чергу. UI-потік ніколи не чекає декодування JPEG.
@@ -442,16 +413,47 @@ impl FrameCache {
         frame_idx: u32,
         settings: PreviewRenderSettings,
         quality: FrameQuality,
+        priority: PreviewTaskPriority,
     ) {
         let key = Self::frame_key(media, frame_idx, quality);
         if self.textures.contains_key(&key) || self.loading_keys.contains(&key) {
             return;
         }
-        if self.loading_keys.len() >= settings.max_parallel_frame_loads() {
+
+        let frame_path = Self::frame_path(media, frame_idx, quality);
+        if frame_path.exists() {
+            self.request_cached_frame_async(
+                ctx,
+                media,
+                frame_idx,
+                quality,
+                settings.max_parallel_frame_loads() * 4,
+            );
             return;
         }
 
-        let frame_path = Self::frame_path(media, frame_idx, quality);
+        if matches!(media.kind, ClipKind::Video) {
+            let frame_kind = match quality {
+                FrameQuality::Scrub => PreviewFrameKind::Scrub,
+                FrameQuality::Sharp => PreviewFrameKind::Sharp,
+            };
+            PreviewWorker::get().enqueue_frame(
+                ctx,
+                media.clone(),
+                frame_idx,
+                settings,
+                frame_kind,
+                priority,
+                frame_path,
+                key,
+                self.tx.clone(),
+            );
+            return;
+        }
+
+        if self.loading_keys.len() >= settings.max_parallel_frame_loads() {
+            return;
+        }
 
         self.loading_keys.insert(key.clone());
         let tx = self.tx.clone();
@@ -475,11 +477,7 @@ impl FrameCache {
                 media_clone
                     .extraction_complete
                     .store(true, Ordering::Relaxed);
-                if matches!(quality, FrameQuality::Scrub)
-                    && !matches!(media_clone.kind, ClipKind::Video)
-                {
-                    let _ = std::fs::write(media_clone.cache_dir.join(".complete"), b"1");
-                }
+                let _ = std::fs::write(media_clone.cache_dir.join(".complete"), b"1");
             }
 
             let texture = if ready {
@@ -573,7 +571,8 @@ impl FrameCache {
         {
             return;
         }
-        if matches!(media.kind, ClipKind::Video) {
+        let first_frame_path = Self::frame_path(media, 1, FrameQuality::Scrub);
+        if first_frame_path.exists() {
             self.request_cached_frame_async(
                 ctx,
                 media,
@@ -582,7 +581,14 @@ impl FrameCache {
                 settings.max_parallel_frame_loads() * 4,
             );
         } else {
-            self.request_frame_async(ctx, media, 1, settings, FrameQuality::Scrub);
+            self.request_frame_async(
+                ctx,
+                media,
+                1,
+                settings,
+                FrameQuality::Scrub,
+                PreviewTaskPriority::ScrubFallback,
+            );
         }
     }
 
@@ -607,6 +613,16 @@ impl FrameCache {
         let wants_sequence = is_video && (playback_active || frame_idx > 1);
         self.drain_loaded_frames();
 
+        if is_video {
+            PreviewWorker::get().update_demand(
+                media,
+                frame_idx,
+                playback_active,
+                use_sharp_frame,
+                settings,
+            );
+        }
+
         if wants_sequence {
             self.ensure_scrub_sequence_async(ctx, media, frame_idx, settings, playback_active);
         }
@@ -618,7 +634,14 @@ impl FrameCache {
                 self.remember_last_texture(media, &texture);
                 return Some(texture);
             }
-            self.request_frame_async(ctx, media, frame_idx, settings, FrameQuality::Sharp);
+            self.request_frame_async(
+                ctx,
+                media,
+                frame_idx,
+                settings,
+                FrameQuality::Sharp,
+                PreviewTaskPriority::SharpStill,
+            );
         }
 
         let scrub_key = Self::frame_key(media, frame_idx, FrameQuality::Scrub);
@@ -639,7 +662,18 @@ impl FrameCache {
                 };
                 for i in 1..=prefetch_frames {
                     let next_idx = frame_idx + i * prefetch_step;
-                    self.request_frame_async(ctx, media, next_idx, settings, FrameQuality::Scrub);
+                    self.request_frame_async(
+                        ctx,
+                        media,
+                        next_idx,
+                        settings,
+                        FrameQuality::Scrub,
+                        if playback_active {
+                            PreviewTaskPriority::PlaybackAhead
+                        } else {
+                            PreviewTaskPriority::ScrubFallback
+                        },
+                    );
                 }
             }
             self.remember_last_texture(media, &texture);
@@ -651,18 +685,30 @@ impl FrameCache {
             self.warm_cached_window(ctx, media, frame_idx, settings, playback_active);
             self.request_first_frame_if_needed(ctx, media, frame_idx, settings);
 
-            // Якщо користувач перемотує у довільне місце, робимо точковий fallback-кадр,
-            // але лише поза playback, щоб не смикати ffmpeg десятками процесів.
-            if !playback_active {
-                self.request_frame_async(ctx, media, frame_idx, settings, FrameQuality::Scrub);
-            }
+            // Поточний кадр під playhead завжди має найвищий пріоритет,
+            // навіть якщо паралельно вже гріється chunk для playback/scrub.
+            self.request_frame_async(
+                ctx,
+                media,
+                frame_idx,
+                settings,
+                FrameQuality::Scrub,
+                PreviewTaskPriority::CurrentFrame,
+            );
 
             ctx.request_repaint_after(std::time::Duration::from_secs_f32(
                 1.0 / settings.playback_fps().max(1.0),
             ));
         } else {
             // Cache miss — не декодуємо в UI-потоці. Це прибирає лаги при перетягуванні плейхеду.
-            self.request_frame_async(ctx, media, frame_idx, settings, FrameQuality::Scrub);
+            self.request_frame_async(
+                ctx,
+                media,
+                frame_idx,
+                settings,
+                FrameQuality::Scrub,
+                PreviewTaskPriority::CurrentFrame,
+            );
             self.request_first_frame_if_needed(ctx, media, frame_idx, settings);
             ctx.request_repaint();
         }

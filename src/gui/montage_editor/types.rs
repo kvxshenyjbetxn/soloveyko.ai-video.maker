@@ -179,14 +179,30 @@ impl PreviewRenderSettings {
         }
     }
 
-    /// Ліміт паралельних фонових завантажень кадрів.
-    /// Низька якість = менше фонових ffmpeg-процесів = менше лагів UI.
+    /// Ліміт паралельних фонових завантажень кадрів з диска.
+    /// Окремо від FFmpeg-черги, щоб JPEG-декод не забивав UI.
     pub fn max_parallel_frame_loads(self) -> usize {
         match self.quality {
             PreviewQuality::Performance => 1,
             PreviewQuality::Balanced => 2,
             PreviewQuality::High => 3,
             PreviewQuality::Ultra => 4,
+        }
+    }
+
+    /// Максимум одночасних FFmpeg-процесів саме для preview-черги.
+    /// Паралельно ще діє глобальний FfmpegLimiter, тому фактичний ліміт = мінімум із двох.
+    pub fn preview_ffmpeg_process_limit(self, playback_active: bool) -> usize {
+        match self.quality {
+            PreviewQuality::Performance => 1,
+            PreviewQuality::Balanced => {
+                if playback_active {
+                    2
+                } else {
+                    1
+                }
+            }
+            PreviewQuality::High | PreviewQuality::Ultra => 2,
         }
     }
 

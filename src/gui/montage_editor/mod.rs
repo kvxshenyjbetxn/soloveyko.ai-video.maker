@@ -4,6 +4,7 @@ mod inspector;
 mod media;
 mod media_pool;
 mod preview;
+mod preview_worker;
 mod state;
 mod timeline;
 mod topbar;
