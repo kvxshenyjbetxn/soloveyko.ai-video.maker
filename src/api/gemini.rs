@@ -1,4 +1,4 @@
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Write};
 use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
@@ -99,11 +99,12 @@ pub fn call_gemini_new_session_streaming(
         .arg("--output-format")
         .arg("json")
         .arg("--prompt")
-        .arg(user_content)
+        .arg("")
         .arg("--yolo")
         .arg("--skip-trust")
         .arg("--session-id")
         .arg(session_id)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -119,6 +120,10 @@ pub fn call_gemini_new_session_streaming(
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
     let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(user_content.as_bytes());
+    }
 
     let stderr_handle = {
         let stderr = child.stderr.take().unwrap();
@@ -190,19 +195,30 @@ pub fn call_gemini_resume(
         .arg("--output-format")
         .arg("json")
         .arg("--prompt")
-        .arg(message)
+        .arg("")
         .arg("--yolo")
         .arg("--skip-trust")
         .arg("--resume")
-        .arg(session_id);
+        .arg(session_id)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch gemini CLI: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(message.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for gemini CLI: {}", e))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -259,9 +275,12 @@ pub fn call_gemini_cli(
         .arg("--output-format")
         .arg("json")
         .arg("--prompt")
-        .arg(user_content)
+        .arg("")
         .arg("--yolo")
-        .arg("--skip-trust");
+        .arg("--skip-trust")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
@@ -273,11 +292,21 @@ pub fn call_gemini_cli(
     ));
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         let err_msg = format!(
             "Failed to launch gemini CLI: {}. Make sure gemini CLI is installed and added to PATH.",
             e
         );
+        log(&err_msg);
+        err_msg
+    })?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(user_content.as_bytes());
+    }
+
+    let output = child.wait_with_output().map_err(|e| {
+        let err_msg = format!("Failed to wait for gemini CLI: {}", e);
         log(&err_msg);
         err_msg
     })?;

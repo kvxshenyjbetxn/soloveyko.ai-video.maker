@@ -1,6 +1,45 @@
 use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
+/// Зберігає промт у txt-файл і повертає аргумент `@file` для Pi CLI.
+/// Це обходить ліміт довжини командного рядка на Windows.
+fn write_pi_prompt_file(
+    content: &str,
+    working_dir: Option<&str>,
+    file_tag: &str,
+) -> Result<(std::path::PathBuf, String), String> {
+    let safe_tag: String = file_tag
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let file_name = format!(".pi-prompt-{}.txt", safe_tag);
+
+    if let Some(dir) = working_dir {
+        let dir_path = std::path::Path::new(dir);
+        if dir_path.is_dir() {
+            let path = dir_path.join(&file_name);
+            std::fs::write(&path, content)
+                .map_err(|e| format!("Failed to write Pi prompt file {}: {}", path.display(), e))?;
+            return Ok((path, format!("@{}", file_name)));
+        }
+    }
+
+    let path = std::env::temp_dir().join(&file_name);
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write Pi prompt file {}: {}", path.display(), e))?;
+    Ok((path.clone(), format!("@{}", path.to_string_lossy())))
+}
+
+fn remove_pi_prompt_file(path: &std::path::Path) {
+    let _ = std::fs::remove_file(path);
+}
+
 /// Створює Command для pi CLI.
 /// На Windows пріоритетно запускаємо саме pi.cmd, як це робить користувач у терміналі.
 /// Це зменшує розбіжності між ручним запуском і запуском з програми.
@@ -120,6 +159,8 @@ pub fn call_pi_new_session_streaming(
         model, session_id
     ));
 
+    let (prompt_path, prompt_arg) = write_pi_prompt_file(user_content, working_dir, session_id)?;
+
     let mut cmd = pi_command();
     cmd.arg("--model")
         .arg(model)
@@ -128,7 +169,7 @@ pub fn call_pi_new_session_streaming(
         .arg("--session-id")
         .arg(session_id)
         .arg("-p")
-        .arg(user_content)
+        .arg(&prompt_arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -137,7 +178,9 @@ pub fn call_pi_new_session_streaming(
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
+    let output_result = crate::api::process::output_tracked(&mut cmd, tracked_job_id);
+    remove_pi_prompt_file(&prompt_path);
+    let output = output_result.map_err(|e| {
         format!(
             "Failed to launch pi CLI: {}. Make sure pi is installed and in PATH.",
             e
@@ -177,6 +220,8 @@ pub fn call_pi_resume(
 
     log(&format!("Resuming Pi CLI session: {}", session_id));
 
+    let (prompt_path, prompt_arg) = write_pi_prompt_file(message, working_dir, session_id)?;
+
     let mut cmd = pi_command();
     cmd.arg("--model")
         .arg(model)
@@ -185,7 +230,7 @@ pub fn call_pi_resume(
         .arg("--session-id")
         .arg(session_id)
         .arg("-p")
-        .arg(message)
+        .arg(&prompt_arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -194,8 +239,9 @@ pub fn call_pi_resume(
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
-        .map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
+    let output_result = crate::api::process::output_tracked(&mut cmd, tracked_job_id);
+    remove_pi_prompt_file(&prompt_path);
+    let output = output_result.map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -230,13 +276,15 @@ pub fn call_pi_cli(
 
     log(&format!("Pi CLI call. Model: {}", model));
 
+    let (prompt_path, prompt_arg) = write_pi_prompt_file(user_content, working_dir, "oneshot")?;
+
     let mut cmd = pi_command();
     cmd.arg("--model")
         .arg(model)
         .arg("--tools")
         .arg("read,edit,write")
         .arg("-p")
-        .arg(user_content)
+        .arg(&prompt_arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -245,8 +293,9 @@ pub fn call_pi_cli(
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
-        .map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
+    let output_result = crate::api::process::output_tracked(&mut cmd, tracked_job_id);
+    remove_pi_prompt_file(&prompt_path);
+    let output = output_result.map_err(|e| format!("Failed to launch pi CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();

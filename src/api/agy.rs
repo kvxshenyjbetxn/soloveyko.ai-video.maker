@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
@@ -86,9 +87,9 @@ pub fn call_agy_new_session_streaming(
     let mut cmd = crate::bundle::new_direct_cli_command("agy");
     cmd.arg("--model")
         .arg(model)
-        .arg("-p")
-        .arg(user_content)
+        .arg("--print")
         .arg("--dangerously-skip-permissions")
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -97,12 +98,20 @@ pub fn call_agy_new_session_streaming(
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         format!(
             "Failed to launch agy CLI: {}. Make sure agy is installed and in PATH.",
             e
         )
     })?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(user_content.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for agy CLI: {}", e))?;
 
     let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -144,10 +153,10 @@ pub fn call_agy_resume(
     let mut cmd = crate::bundle::new_direct_cli_command("agy");
     cmd.arg("--model")
         .arg(model)
-        .arg("-p")
-        .arg(message)
+        .arg("--print")
         .arg("--continue")
         .arg("--dangerously-skip-permissions")
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -156,8 +165,16 @@ pub fn call_agy_resume(
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch agy CLI: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(message.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for agy CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -195,9 +212,9 @@ pub fn call_agy_cli(
     let mut cmd = crate::bundle::new_direct_cli_command("agy");
     cmd.arg("--model")
         .arg(model)
-        .arg("-p")
-        .arg(user_content)
+        .arg("--print")
         .arg("--dangerously-skip-permissions")
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -206,8 +223,16 @@ pub fn call_agy_cli(
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch agy CLI: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(user_content.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for agy CLI: {}", e))?;
 
     if output.status.success() {
         let response = String::from_utf8_lossy(&output.stdout).trim().to_string();

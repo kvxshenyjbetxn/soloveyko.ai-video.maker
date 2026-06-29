@@ -1,4 +1,4 @@
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Write};
 use std::process::Stdio;
 use std::sync::{Condvar, Mutex, OnceLock};
 
@@ -98,7 +98,6 @@ pub fn call_claude_code_new_session_streaming(
     cmd.arg("--model")
         .arg(model)
         .arg("-p")
-        .arg(user_content)
         .arg("--allowedTools")
         .arg("Bash,Write,Read")
         .arg("--dangerously-skip-permissions")
@@ -107,6 +106,7 @@ pub fn call_claude_code_new_session_streaming(
         .arg("--verbose")
         .arg("--session-id")
         .arg(session_id)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -126,6 +126,10 @@ pub fn call_claude_code_new_session_streaming(
             e
         )
     })?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(user_content.as_bytes());
+    }
 
     // Stderr читаємо в окремому потоці щоб не було deadlock
     let stderr_handle = {
@@ -400,7 +404,6 @@ pub fn call_claude_code_resume(
     cmd.arg("--model")
         .arg(model)
         .arg("-p")
-        .arg(message)
         .arg("--allowedTools")
         .arg("Bash,Write,Read")
         .arg("--dangerously-skip-permissions")
@@ -408,15 +411,26 @@ pub fn call_claude_code_resume(
         .arg("stream-json")
         .arg("--verbose")
         .arg("--resume")
-        .arg(session_id);
+        .arg(session_id)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
     }
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id)
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id)
         .map_err(|e| format!("Failed to launch claude CLI: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(message.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for claude CLI: {}", e))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -485,8 +499,13 @@ pub fn call_claude_code(
     // ВАЖЛИВО: НЕ замінювати на new_cli_command. Див. коментар у call_claude_code_new_session_streaming.
     let mut cmd = crate::bundle::new_direct_cli_command("claude");
 
-    // Запускаємо: claude --model <model> -p "<prompt>" [--allowedTools Bash,Write,Read]
-    cmd.arg("--model").arg(model).arg("-p").arg(user_content);
+    // Запускаємо: claude --model <model> -p [stdin] [--allowedTools Bash,Write,Read]
+    cmd.arg("--model")
+        .arg(model)
+        .arg("-p")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if allow_tools {
         cmd.arg("--allowedTools")
@@ -504,11 +523,21 @@ pub fn call_claude_code(
     ));
 
     let tracked_job_id = job_info.as_ref().map(|(id, _)| *id);
-    let output = crate::api::process::output_tracked(&mut cmd, tracked_job_id).map_err(|e| {
+    let mut child = crate::api::process::spawn_tracked(&mut cmd, tracked_job_id).map_err(|e| {
         let err_msg = format!(
             "Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.",
             e
         );
+        log(&err_msg);
+        err_msg
+    })?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(user_content.as_bytes());
+    }
+
+    let output = child.wait_with_output().map_err(|e| {
+        let err_msg = format!("Failed to wait for claude CLI: {}", e);
         log(&err_msg);
         err_msg
     })?;
