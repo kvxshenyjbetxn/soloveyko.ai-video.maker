@@ -130,47 +130,41 @@ impl VideoMakerApp {
             return;
         }
 
-        // Якщо задача мала шаблон — беремо з нього основні налаштування.
-        // Але control-прапорці завжди беремо з поточної панелі,
-        // щоб відновлення поважало актуальний вибір користувача.
-        let t = entry
+        // Якщо задача мала шаблон — беремо з нього базові параметри.
+        // Якщо шаблону не було, відновлення повністю спирається на поточну панель пайплайну.
+        let history_template = entry
             .template_name
             .as_deref()
-            .and_then(|name| crate::gui::settings::storage::load_template(name))
-            .unwrap_or_else(|| self.current_pipeline_template());
+            .and_then(|name| crate::gui::settings::storage::load_template(name));
+        let use_panel_settings = history_template.is_none();
+        let t = history_template.unwrap_or_else(|| self.current_pipeline_template());
 
-        // Для задач з history поважаємо початково увімкнені етапи самої задачі.
-        // Це важливо для відновлення старих задач, навіть якщо шаблон або поточна панель
-        // уже були змінені після першого запуску.
-        let has_stage_snapshot = entry.stage_translation
-            || entry.stage_voiceover
-            || entry.stage_video
-            || entry.stage_subtitles
-            || entry.stage_editing;
-        let translation_enabled = if has_stage_snapshot {
-            entry.stage_translation
-        } else {
+        // Для задач без шаблону всі етапи беремо з поточної панелі.
+        // Для задач із шаблоном зберігаємо початковий набір етапів самої задачі.
+        let translation_enabled = if use_panel_settings {
             t.pipeline_translation_enabled
-        };
-        let voiceover_enabled = if has_stage_snapshot {
-            entry.stage_voiceover
         } else {
+            entry.stage_translation
+        };
+        let voiceover_enabled = if use_panel_settings {
             t.pipeline_voiceover_enabled
-        };
-        let video_enabled = if has_stage_snapshot {
-            entry.stage_video
         } else {
+            entry.stage_voiceover
+        };
+        let video_enabled = if use_panel_settings {
             t.pipeline_video_enabled
-        };
-        let subtitles_enabled = if has_stage_snapshot {
-            entry.stage_subtitles
         } else {
+            entry.stage_video
+        };
+        let subtitles_enabled = if use_panel_settings {
             t.pipeline_subtitles_enabled
-        };
-        let montage_enabled = if has_stage_snapshot {
-            entry.stage_editing
         } else {
+            entry.stage_subtitles
+        };
+        let montage_enabled = if use_panel_settings {
             t.pipeline_editing_enabled
+        } else {
+            entry.stage_editing
         };
 
         let settings = crate::queue::JobSettings {
