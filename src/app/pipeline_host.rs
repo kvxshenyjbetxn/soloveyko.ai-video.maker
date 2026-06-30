@@ -130,23 +130,60 @@ impl VideoMakerApp {
             return;
         }
 
-        // Якщо задача мала шаблон — беремо з нього, інакше з поточної панелі
+        // Якщо задача мала шаблон — беремо з нього основні налаштування.
+        // Але control-прапорці завжди беремо з поточної панелі,
+        // щоб відновлення поважало актуальний вибір користувача.
         let t = entry
             .template_name
             .as_deref()
             .and_then(|name| crate::gui::settings::storage::load_template(name))
             .unwrap_or_else(|| self.current_pipeline_template());
+
+        // Для задач з history поважаємо початково увімкнені етапи самої задачі.
+        // Це важливо для відновлення старих задач, навіть якщо шаблон або поточна панель
+        // уже були змінені після першого запуску.
+        let has_stage_snapshot = entry.stage_translation
+            || entry.stage_voiceover
+            || entry.stage_video
+            || entry.stage_subtitles
+            || entry.stage_editing;
+        let translation_enabled = if has_stage_snapshot {
+            entry.stage_translation
+        } else {
+            t.pipeline_translation_enabled
+        };
+        let voiceover_enabled = if has_stage_snapshot {
+            entry.stage_voiceover
+        } else {
+            t.pipeline_voiceover_enabled
+        };
+        let video_enabled = if has_stage_snapshot {
+            entry.stage_video
+        } else {
+            t.pipeline_video_enabled
+        };
+        let subtitles_enabled = if has_stage_snapshot {
+            entry.stage_subtitles
+        } else {
+            t.pipeline_subtitles_enabled
+        };
+        let montage_enabled = if has_stage_snapshot {
+            entry.stage_editing
+        } else {
+            t.pipeline_editing_enabled
+        };
+
         let settings = crate::queue::JobSettings {
             text: entry.text.clone(),
             save_path: actual_path,
-            translation_enabled: t.pipeline_translation_enabled,
-            translation_control_enabled: t.pipeline_translation_control_enabled,
+            translation_enabled,
+            translation_control_enabled: self.pipeline_translation_control_enabled,
             translation_prompt: t.translation_prompt.clone(),
             translation_model: t.translation_model.clone(),
             translation_temperature: t.translation_temperature,
             translation_service: t.translation_service.clone(),
             openrouter_key: t.openrouter_key.clone(),
-            voiceover_enabled: t.pipeline_voiceover_enabled,
+            voiceover_enabled,
             voicebot_key: self.voicebot_key.clone(),
             voiceover_template_uuid: t.voiceover_template_uuid.clone(),
             voiceover_provider: t.voiceover_provider.clone(),
@@ -155,7 +192,7 @@ impl VideoMakerApp {
             edge_tts_pitch: t.edge_tts_pitch.clone(),
             edge_tts_volume: t.edge_tts_volume.clone(),
             voiceover_convert_to_wav: t.voiceover_convert_to_wav,
-            video_enabled: t.pipeline_video_enabled,
+            video_enabled,
             video_service: t.video_service.clone(),
             video_media_type: t.video_media_type.clone(),
             video_prompt: t.video_prompt.clone(),
@@ -186,7 +223,7 @@ impl VideoMakerApp {
             assemblyai_key: t.assemblyai_key.clone(),
             pexels_key: t.pexels_key.clone(),
             pixabay_key: t.pixabay_key.clone(),
-            subtitles_enabled: t.pipeline_subtitles_enabled,
+            subtitles_enabled,
             subtitles_service: t.subtitles_service.clone(),
             whisper_language: t.whisper_language.clone(),
             whisper_model: t.whisper_model.clone(),
@@ -201,7 +238,7 @@ impl VideoMakerApp {
             subtitle_karaoke_bold: t.subtitle_karaoke_bold,
             subtitle_karaoke_scale: t.subtitle_karaoke_scale,
             subtitle_font: t.subtitle_font.clone(),
-            montage_enabled: t.pipeline_editing_enabled,
+            montage_enabled,
             montage_service: t.montage_service.clone(),
             capcut_enabled: t.capcut_enabled,
             capcut_draft_path: t.capcut_draft_path.clone(),
@@ -216,8 +253,8 @@ impl VideoMakerApp {
             montage_image_zoom_scale: t.montage_image_zoom_scale,
             montage_image_shake_enabled: t.montage_image_shake_enabled,
             montage_image_shake_intensity: t.montage_image_shake_intensity,
-            media_control_enabled: t.pipeline_media_control_enabled,
-            montage_control_enabled: t.pipeline_montage_control_enabled,
+            media_control_enabled: self.pipeline_media_control_enabled,
+            montage_control_enabled: self.pipeline_montage_control_enabled,
             overlay_triggers_enabled: t.overlay_triggers_enabled,
             overlay_triggers: t.overlay_triggers.clone(),
             resume_from_stage: None,

@@ -54,6 +54,11 @@ pub(super) fn source_text_for_segments(
     }
 }
 
+/// Чи працює задача у стоковому режимі, де потрібен ручний вибір медіа в редакторі монтажу.
+pub(super) fn uses_stock_montage_control(settings: &crate::queue::JobSettings) -> bool {
+    settings.video_enabled && matches!(settings.video_service.as_str(), "Pexels" | "Pixabay")
+}
+
 /// У режимі Prompt Only програма спочатку сама будує базовий segments.json.
 pub(super) fn prepare_prompt_only_segments(
     job_id: u64,
@@ -234,8 +239,7 @@ pub fn run_pipeline(
         // AV → Агент → Медіа. В звичайному режимі — паралельно.
         let run_av = settings.voiceover_enabled;
         let run_video = settings.video_enabled;
-        let is_pexels = (settings.video_service == "Pexels" || settings.video_service == "Pixabay")
-            && settings.video_enabled;
+        let uses_stock_control = uses_stock_montage_control(&settings);
         let is_agent_mode = run_video && settings.is_agent_service();
 
         if is_agent_mode {
@@ -418,8 +422,9 @@ pub fn run_pipeline(
                     .unwrap_or_else(|_| Err("Video thread panicked".to_string()))
             });
 
-            // Пауза для контролю зображень — AV гілка продовжує виконуватись (не для Pexels)
-            if settings.media_control_enabled && settings.video_enabled && !is_pexels {
+            // Пауза для контролю зображень — AV гілка продовжує виконуватись паралельно.
+            // У стоковому режимі замість цього використовується контроль монтажу.
+            if settings.media_control_enabled && settings.video_enabled && !uses_stock_control {
                 if let Some(Ok(())) = &video_result {
                     crate::logger::log_job(
                         job_id,
@@ -479,8 +484,8 @@ pub fn run_pipeline(
             if settings.video_enabled {
                 let save_dir = std::path::Path::new(&settings.save_path);
 
-                // Pexels/Pixabay: якщо segments.json ще немає (non-agent) — будуємо з SRT, потім патчимо
-                if settings.video_service == "Pexels" || settings.video_service == "Pixabay" {
+                // У стоковому режимі: якщо segments.json ще немає (non-agent) — будуємо з SRT, потім патчимо.
+                if uses_stock_control {
                     if !save_dir.join("segments.json").exists() {
                         let source_text = if settings.translation_enabled {
                             translated_text
@@ -544,8 +549,9 @@ pub fn run_pipeline(
             }
         }
 
-        // Пауза контролю монтажу перед рендером (примусово при Pexels — вибір медіа в редакторі)
-        if settings.montage_control_enabled || is_pexels {
+        // Пауза контролю монтажу перед рендером.
+        // Для стокового режиму вона вмикається автоматично, бо користувач має вручну обрати медіа.
+        if settings.montage_control_enabled || uses_stock_control {
             crate::logger::log_job(
                 job_id,
                 &job_name,
@@ -576,8 +582,8 @@ pub fn run_pipeline(
             ctx.request_repaint();
         }
 
-        // Після підтвердження монтажу призначаємо стокові медіа в timeline (Pexels)
-        if is_pexels {
+        // Після підтвердження монтажу призначаємо стокові медіа в timeline.
+        if uses_stock_control {
             let save_dir = std::path::Path::new(&settings.save_path);
             if let Err(e) = assign_media_to_timeline(save_dir) {
                 crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));

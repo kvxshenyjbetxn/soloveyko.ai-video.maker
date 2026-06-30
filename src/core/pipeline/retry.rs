@@ -6,7 +6,10 @@ use super::agent_timeline::{assign_media_to_timeline, run_agent_timeline};
 use super::final_stages::run_final_stages;
 use super::subtitles::{run_av_branch, run_subtitles_only};
 use super::video::run_video_branch;
-use super::{prepare_prompt_only_segments, run_pipeline, source_text_for_segments};
+use super::{
+    prepare_prompt_only_segments, run_pipeline, source_text_for_segments,
+    uses_stock_montage_control,
+};
 
 /// Повторює пайплайн починаючи з вказаного етапу.
 /// Скидає статуси цього та всіх наступних етапів, потім запускає їх у фоновому потоці.
@@ -288,6 +291,7 @@ pub fn retry_from_stage(
                 let is_agent_mode = !settings.skip_agent_on_resume
                     && settings.video_enabled
                     && settings.is_agent_service();
+                let uses_stock_control = uses_stock_montage_control(&settings);
 
                 // В агентному режимі спочатку запускаємо агента для створення або редагування segments.json
                 if is_agent_mode {
@@ -375,8 +379,9 @@ pub fn retry_from_stage(
                     }
                 }
 
-                // Пауза для контролю зображень
-                if settings.media_control_enabled && settings.video_enabled {
+                // Пауза для контролю зображень.
+                // У стоковому режимі замість цього використовується контроль монтажу.
+                if settings.media_control_enabled && settings.video_enabled && !uses_stock_control {
                     if let Ok(()) = &video_result {
                         crate::logger::log_job(
                             job_id,
