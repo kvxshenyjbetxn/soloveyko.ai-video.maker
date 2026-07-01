@@ -197,6 +197,64 @@ fn clip_fits_track(clip_kind: &ClipKind, track_kind: Option<&TrackKind>) -> bool
     }
 }
 
+fn wrap_placeholder_text(text: &str, max_chars_per_line: usize, max_lines: usize) -> String {
+    if max_chars_per_line == 0 || max_lines == 0 {
+        return String::new();
+    }
+
+    let mut words = text.split_whitespace().peekable();
+    let mut lines = Vec::new();
+
+    while lines.len() < max_lines {
+        let mut line = String::new();
+
+        while let Some(word) = words.peek().copied() {
+            let word_len = word.chars().count();
+            let next_len = if line.is_empty() {
+                word_len
+            } else {
+                line.chars().count() + 1 + word_len
+            };
+
+            if !line.is_empty() && next_len > max_chars_per_line {
+                break;
+            }
+
+            if line.is_empty() && word_len > max_chars_per_line {
+                line = word.chars().take(max_chars_per_line).collect();
+                words.next();
+                break;
+            }
+
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+            words.next();
+        }
+
+        if line.is_empty() {
+            break;
+        }
+
+        lines.push(line);
+        if words.peek().is_none() {
+            break;
+        }
+    }
+
+    if words.peek().is_some() {
+        if let Some(last) = lines.last_mut() {
+            let keep = max_chars_per_line.saturating_sub(1).max(1);
+            let shortened: String = last.chars().take(keep).collect();
+            *last = shortened.trim_end().to_string();
+            last.push('…');
+        }
+    }
+
+    lines.join("\n")
+}
+
 pub(super) fn draw_timeline(
     ui: &mut egui::Ui,
     language: Language,
@@ -777,8 +835,9 @@ pub(super) fn draw_timeline(
                                 Color32::from_rgba_unmultiplied(80, 80, 100, 40),
                             );
                         }
-                        if cw > 28.0 {
-                            let label = format!("+ #{}", seg_idx + 1);
+
+                        let label = format!("+ #{}", seg_idx + 1);
+                        if cw <= 56.0 {
                             painter.text(
                                 clip_rect.center(),
                                 Align2::CENTER_CENTER,
@@ -786,8 +845,32 @@ pub(super) fn draw_timeline(
                                 egui::FontId::proportional(10.0),
                                 Color32::from_rgb(160, 160, 190),
                             );
+                        } else {
+                            painter.text(
+                                Pos2::new(clip_rect.left() + 6.0, clip_rect.top() + 4.0),
+                                Align2::LEFT_TOP,
+                                &label,
+                                egui::FontId::proportional(9.5),
+                                Color32::from_rgb(170, 170, 205),
+                            );
+
+                            let body_max_chars =
+                                (((clip_rect.width() - 12.0) / 5.8).floor() as usize).max(8);
+                            let body_text = wrap_placeholder_text(&clip.name, body_max_chars, 2);
+                            if !body_text.is_empty() {
+                                painter.text(
+                                    Pos2::new(clip_rect.left() + 6.0, clip_rect.top() + 16.0),
+                                    Align2::LEFT_TOP,
+                                    body_text,
+                                    egui::FontId::proportional(9.0),
+                                    Color32::from_rgb(210, 210, 225),
+                                );
+                            }
                         }
-                        let clip_resp = ui.allocate_rect(clip_rect, Sense::click());
+
+                        let clip_resp = ui
+                            .allocate_rect(clip_rect, Sense::click())
+                            .on_hover_text(clip.name.as_str());
                         if clip_resp.clicked() {
                             editor.selected_clip_id = Some(clip.id.clone());
                             editor.pending_open_stock_picker = Some(seg_idx);

@@ -717,6 +717,190 @@ fn resolve_placeholder_media(
     Some((file_path, kind, 0.0))
 }
 
+struct SubtitleWord {
+    text: String,
+    start_secs: f32,
+    end_secs: f32,
+}
+
+struct SubtitleCue {
+    start_secs: f32,
+    end_secs: f32,
+    text: String,
+}
+
+enum PlaceholderSpeechSource {
+    Words(Vec<SubtitleWord>),
+    Cues(Vec<SubtitleCue>),
+}
+
+fn load_placeholder_speech_source(save_path: &Path) -> Option<PlaceholderSpeechSource> {
+    load_subtitle_words(save_path)
+        .map(PlaceholderSpeechSource::Words)
+        .or_else(|| load_subtitle_cues(save_path).map(PlaceholderSpeechSource::Cues))
+}
+
+fn load_subtitle_words(save_path: &Path) -> Option<Vec<SubtitleWord>> {
+    let content = std::fs::read_to_string(save_path.join("subtitle.json")).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let arr = if let Some(arr) = json.get("words").and_then(|w| w.as_array()) {
+        arr.as_slice()
+    } else {
+        json.as_array()?
+    };
+
+    let words: Vec<SubtitleWord> = arr.iter().filter_map(parse_subtitle_word).collect();
+    if words.is_empty() { None } else { Some(words) }
+}
+
+fn parse_subtitle_word(value: &serde_json::Value) -> Option<SubtitleWord> {
+    if let (Some(text), Some(start), Some(end)) = (
+        value.get("word").and_then(|v| v.as_str()),
+        value.get("start").and_then(|v| v.as_f64()),
+        value.get("end").and_then(|v| v.as_f64()),
+    ) {
+        let text = text.trim();
+        if text.is_empty() {
+            return None;
+        }
+        return Some(SubtitleWord {
+            text: text.to_string(),
+            start_secs: start as f32,
+            end_secs: end as f32,
+        });
+    }
+
+    let text = value.get("text").and_then(|v| v.as_str())?.trim();
+    let start_ms = value.get("start").and_then(|v| v.as_u64())?;
+    let end_ms = value.get("end").and_then(|v| v.as_u64())?;
+    if text.is_empty() {
+        return None;
+    }
+
+    Some(SubtitleWord {
+        text: text.to_string(),
+        start_secs: start_ms as f32 / 1000.0,
+        end_secs: end_ms as f32 / 1000.0,
+    })
+}
+
+fn load_subtitle_cues(save_path: &Path) -> Option<Vec<SubtitleCue>> {
+    let content = std::fs::read_to_string(save_path.join("subtitle.srt")).ok()?;
+    let content = content.replace("\r\n", "\n").replace('\r', "\n");
+    let mut cues = Vec::new();
+
+    for block in content.split("\n\n") {
+        let lines: Vec<&str> = block.lines().collect();
+        if lines.len() < 3 {
+            continue;
+        }
+        let Some((start_raw, end_raw)) = lines[1].split_once("-->") else {
+            continue;
+        };
+        let Some(start_secs) = parse_srt_time(start_raw) else {
+            continue;
+        };
+        let Some(end_secs) = parse_srt_time(end_raw) else {
+            continue;
+        };
+        let text = lines[2..]
+            .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if text.is_empty() {
+            continue;
+        }
+        cues.push(SubtitleCue {
+            start_secs,
+            end_secs,
+            text,
+        });
+    }
+
+    if cues.is_empty() { None } else { Some(cues) }
+}
+
+fn parse_srt_time(value: &str) -> Option<f32> {
+    let (time_part, millis_part) = value.trim().split_once(',')?;
+    let mut parts = time_part.split(':');
+    let hours: f32 = parts.next()?.parse().ok()?;
+    let minutes: f32 = parts.next()?.parse().ok()?;
+    let seconds: f32 = parts.next()?.parse().ok()?;
+    let millis: f32 = millis_part.parse::<f32>().ok()? / 1000.0;
+    Some(hours * 3600.0 + minutes * 60.0 + seconds + millis)
+}
+
+fn spoken_text_for_range(
+    speech_source: Option<&PlaceholderSpeechSource>,
+    start_secs: f32,
+    end_secs: f32,
+    fallback_text: &str,
+) -> String {
+    let text = speech_source
+        .and_then(|source| match source {
+            PlaceholderSpeechSource::Words(words) => {
+                collect_words_for_range(words, start_secs, end_secs)
+            }
+            PlaceholderSpeechSource::Cues(cues) => {
+                collect_cues_for_range(cues, start_secs, end_secs)
+            }
+        })
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| fallback_text.trim().to_string());
+
+    if text.is_empty() {
+        format!("Сегмент {:.1}-{:.1}с", start_secs, end_secs)
+    } else {
+        text
+    }
+}
+
+fn collect_words_for_range(
+    words: &[SubtitleWord],
+    start_secs: f32,
+    end_secs: f32,
+) -> Option<String> {
+    let mut text = String::new();
+    for word in words {
+        if word.end_secs <= start_secs || word.start_secs >= end_secs {
+            continue;
+        }
+        push_spoken_fragment(&mut text, &word.text);
+    }
+    if text.is_empty() { None } else { Some(text) }
+}
+
+fn collect_cues_for_range(cues: &[SubtitleCue], start_secs: f32, end_secs: f32) -> Option<String> {
+    let mut text = String::new();
+    for cue in cues {
+        if cue.end_secs <= start_secs || cue.start_secs >= end_secs {
+            continue;
+        }
+        push_spoken_fragment(&mut text, &cue.text);
+    }
+    if text.is_empty() { None } else { Some(text) }
+}
+
+fn push_spoken_fragment(out: &mut String, fragment: &str) {
+    let fragment = fragment.trim();
+    if fragment.is_empty() {
+        return;
+    }
+
+    let first = fragment.chars().next();
+    let needs_space = !out.is_empty()
+        && !matches!(
+            first,
+            Some('.') | Some(',') | Some('!') | Some('?') | Some(':') | Some(';')
+        );
+    if needs_space {
+        out.push(' ');
+    }
+    out.push_str(fragment);
+}
+
 fn build_placeholder_clip(
     seg_idx: usize,
     text: &str,
@@ -728,7 +912,7 @@ fn build_placeholder_clip(
         id: uuid_str(),
         media_id: format!("placeholder_{}", seg_idx),
         path: None,
-        name: text.chars().take(24).collect::<String>(),
+        name: text.trim().to_string(),
         start_secs: start,
         duration: (end - start).max(0.5),
         track_idx,
@@ -786,6 +970,7 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
     // Індекс фонової доріжки: збережений при save_to_timeline. Для старого формату = 0.
     let bg_track_idx = v["background_track_idx"].as_u64().unwrap_or(0) as usize;
     let mut clips = Vec::new();
+    let speech_source = load_placeholder_speech_source(save_path);
 
     // Доріжка 0 з "segments"
     if let Some(segs) = v["segments"].as_array() {
@@ -831,9 +1016,15 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                     } else {
                         let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
                         let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+                        let placeholder_text = spoken_text_for_range(
+                            speech_source.as_ref(),
+                            start,
+                            end,
+                            text.unwrap_or(""),
+                        );
                         clips.push(build_placeholder_clip(
                             i,
-                            text.unwrap_or(""),
+                            &placeholder_text,
                             start,
                             end,
                             bg_track_idx,
@@ -852,7 +1043,15 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                 // Сегмент без медіа (media: null) — плейсхолдер для Stock Picker
                 let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
                 let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
-                clips.push(build_placeholder_clip(i, text, start, end, bg_track_idx));
+                let placeholder_text =
+                    spoken_text_for_range(speech_source.as_ref(), start, end, text);
+                clips.push(build_placeholder_clip(
+                    i,
+                    &placeholder_text,
+                    start,
+                    end,
+                    bg_track_idx,
+                ));
             }
         }
     }
@@ -903,7 +1102,15 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                             }
                             let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
                             let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
-                            clips.push(build_placeholder_clip(i, text, start, end, stock_track));
+                            let placeholder_text =
+                                spoken_text_for_range(speech_source.as_ref(), start, end, text);
+                            clips.push(build_placeholder_clip(
+                                i,
+                                &placeholder_text,
+                                start,
+                                end,
+                                stock_track,
+                            ));
                         }
                     }
                 }
