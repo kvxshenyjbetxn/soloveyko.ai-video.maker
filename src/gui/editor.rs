@@ -60,6 +60,79 @@ fn safe_byte_to_char(text: &str, byte_index: usize) -> usize {
     text[..safe].chars().count()
 }
 
+fn build_segmented_layout_job(
+    ui: &egui::Ui,
+    text_buf: &str,
+    wrap: f32,
+    text_split_mode: &str,
+    text_split_char_limit: usize,
+) -> egui::text::LayoutJob {
+    // Реально розсуваємо сегменти в layout, щоб і текст, і контури
+    // спирались на одну й ту саму геометрію.
+    const SEGMENT_GAP_X: f32 = 10.0;
+
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = wrap;
+
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let fmt = egui::TextFormat {
+        font_id: font.clone(),
+        color: ui.visuals().widgets.inactive.text_color(),
+        line_height: Some(font.size * 1.35 + 10.0),
+        ..Default::default()
+    };
+
+    let split_ranges = crate::core::pipeline::timeline::text_splitter::split_text_preview_ranges(
+        text_buf,
+        text_split_mode,
+        text_split_char_limit,
+    );
+
+    if split_ranges.len() > 1 {
+        let mut cursor = 0usize;
+        for (i, range) in split_ranges.iter().enumerate() {
+            let mut crosses_newline = false;
+            if range.byte_start > cursor {
+                let gap_text = &text_buf[cursor..range.byte_start];
+                crosses_newline = gap_text.contains('\n');
+                job.append(gap_text, 0.0, fmt.clone());
+            }
+
+            // Не додаємо горизонтальний відступ, якщо сегмент починає
+            // новий рядок/абзац після переносу.
+            let leading = if i == 0 || crosses_newline {
+                0.0
+            } else {
+                SEGMENT_GAP_X
+            };
+            job.append(
+                &text_buf[range.byte_start..range.byte_end],
+                leading,
+                fmt.clone(),
+            );
+            cursor = range.byte_end;
+        }
+        if cursor < text_buf.len() {
+            job.append(&text_buf[cursor..], 0.0, fmt.clone());
+        }
+    } else {
+        job.append(text_buf, 0.0, fmt);
+    }
+
+    job
+}
+
+fn layout_segmented_text(
+    ui: &egui::Ui,
+    text_buf: &str,
+    wrap: f32,
+    text_split_mode: &str,
+    text_split_char_limit: usize,
+) -> std::sync::Arc<egui::Galley> {
+    let job = build_segmented_layout_job(ui, text_buf, wrap, text_split_mode, text_split_char_limit);
+    ui.fonts(|f| f.layout_job(job))
+}
+
 fn segment_outline_rects(
     galley: &egui::Galley,
     galley_pos: egui::Pos2,
@@ -349,60 +422,26 @@ pub fn draw_editor(
             const OUTLINE_MARGIN: f32 = 8.0;
             let editor_bounds = ui.available_rect_before_wrap();
 
+            let used_outline_galley: std::cell::RefCell<Option<std::sync::Arc<egui::Galley>>> =
+                std::cell::RefCell::new(None);
+
             let output = if use_outlines {
                 let target_rect = editor_bounds.shrink(OUTLINE_MARGIN);
                 ui.allocate_new_ui(egui::UiBuilder::new().max_rect(target_rect), |ui| {
+                    let used_outline_galley = &used_outline_galley;
                     let mut layouter = |ui: &egui::Ui, text_buf: &str, wrap: f32| {
-                        // Зазор між контурами сегментів: замість намагання
-                        // "видавити" його стисканням рамок (що ризикує зачепити
-                        // текст сусіда), реально розсуваємо сам текст на межах
-                        // сегментів — порожнім місцем перед початком наступного
-                        // сегмента по горизонталі. По вертикалі так само реально
-                        // збільшено міжрядковий інтервал (для всіх рядків — точково
-                        // "тільки між сегментами" неможливо визначити до того, як
-                        // текст розкладеться по рядках), тож сусідні сегменти на
-                        // різних рядках теж отримують помітно більше повітря.
-                        const SEGMENT_GAP_X: f32 = 10.0;
-
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap;
-                        let font = egui::TextStyle::Body.resolve(ui.style());
-                        let fmt = egui::TextFormat {
-                            font_id: font.clone(),
-                            color: ui.visuals().widgets.inactive.text_color(),
-                            line_height: Some(font.size * 1.35 + 10.0),
-                            ..Default::default()
-                        };
-
-                        let split_ranges = crate::core::pipeline::timeline::text_splitter::split_text_preview_ranges(
-                            text_buf, text_split_mode, text_split_char_limit,
+                        let galley = layout_segmented_text(
+                            ui,
+                            text_buf,
+                            wrap,
+                            text_split_mode,
+                            text_split_char_limit,
                         );
-
-                        if split_ranges.len() > 1 {
-                            let mut cursor = 0usize;
-                            for (i, range) in split_ranges.iter().enumerate() {
-                                let mut crosses_newline = false;
-                                if range.byte_start > cursor {
-                                    let gap_text = &text_buf[cursor..range.byte_start];
-                                    crosses_newline = gap_text.contains('\n');
-                                    job.append(gap_text, 0.0, fmt.clone());
-                                }
-                                // Не додаємо горизонтальний відступ, якщо цей
-                                // сегмент починає новий рядок/абзац після
-                                // переносу — інакше абзац виглядає як зсунутий
-                                // вправо "відступ", а не як реальний перенос.
-                                let leading = if i == 0 || crosses_newline { 0.0 } else { SEGMENT_GAP_X };
-                                job.append(&text_buf[range.byte_start..range.byte_end], leading, fmt.clone());
-                                cursor = range.byte_end;
-                            }
-                            if cursor < text_buf.len() {
-                                job.append(&text_buf[cursor..], 0.0, fmt.clone());
-                            }
-                        } else {
-                            job.append(text_buf, 0.0, fmt);
-                        }
-
-                        ui.fonts(|f| f.layout_job(job))
+                        // Зберігаємо саме той galley, який реально використав
+                        // TextEdit. Так контур отримує ідентичну геометрію
+                        // переносів рядків без повторного layout.
+                        used_outline_galley.replace(Some(galley.clone()));
+                        galley
                     };
                     egui::TextEdit::multiline(text)
                         .hint_text(translate(language, "editor_hint"))
@@ -437,17 +476,20 @@ pub fn draw_editor(
                 let outline_ranges: Vec<TextRange> = if active.len() > 1 { active } else { Vec::new() };
 
                 if !outline_ranges.is_empty() {
-                    let painter = ui.painter_at(editor_bounds);
-                    let accent_color = ui.visuals().selection.bg_fill;
-                    let stroke = egui::Stroke::new(1.0, accent_color);
+                    if let Some(outline_galley) = used_outline_galley.into_inner() {
+                        let outline_clip_rect = output.response.rect.intersect(ui.clip_rect());
+                        let painter = ui.painter_at(outline_clip_rect);
+                        let accent_color = ui.visuals().selection.bg_fill;
+                        let stroke = egui::Stroke::new(1.0, accent_color);
 
-                    for rect in segment_outline_rects(
-                        output.galley.as_ref(),
-                        output.galley_pos,
-                        &outline_ranges,
-                        editor_bounds,
-                    ) {
-                        painter.rect_stroke(rect, 0.0, stroke);
+                        for rect in segment_outline_rects(
+                            outline_galley.as_ref(),
+                            output.galley_pos,
+                            &outline_ranges,
+                            outline_clip_rect,
+                        ) {
+                            painter.rect_stroke(rect, 0.0, stroke);
+                        }
                     }
                 }
             }
