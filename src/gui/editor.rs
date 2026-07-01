@@ -234,7 +234,6 @@ pub fn draw_editor(
     let fragments_paragraphs = stats.fragments_paragraphs;
     let fragments_sentences = stats.fragments_sentences;
     let fragments_char_limit = stats.fragments_char_limit;
-    let highlight_ranges = stats.active_split_ranges.clone();
 
     // Статистика
     ui.add_space(8.0);
@@ -354,12 +353,16 @@ pub fn draw_editor(
                 let target_rect = editor_bounds.shrink(OUTLINE_MARGIN);
                 ui.allocate_new_ui(egui::UiBuilder::new().max_rect(target_rect), |ui| {
                     let mut layouter = |ui: &egui::Ui, text_buf: &str, wrap: f32| {
-                        // Горизонтальний зазор між контурами сегментів: замість
-                        // намагання "видавити" його стисканням рамок (що ризикує
-                        // зачепити текст сусіда), реально розсуваємо сам текст на
-                        // межах сегментів — додаємо трохи порожнього місця перед
-                        // початком кожного наступного сегмента.
-                        const SEGMENT_GAP: f32 = 10.0;
+                        // Зазор між контурами сегментів: замість намагання
+                        // "видавити" його стисканням рамок (що ризикує зачепити
+                        // текст сусіда), реально розсуваємо сам текст на межах
+                        // сегментів — порожнім місцем перед початком наступного
+                        // сегмента по горизонталі. По вертикалі так само реально
+                        // збільшено міжрядковий інтервал (для всіх рядків — точково
+                        // "тільки між сегментами" неможливо визначити до того, як
+                        // текст розкладеться по рядках), тож сусідні сегменти на
+                        // різних рядках теж отримують помітно більше повітря.
+                        const SEGMENT_GAP_X: f32 = 10.0;
 
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap;
@@ -367,10 +370,7 @@ pub fn draw_editor(
                         let fmt = egui::TextFormat {
                             font_id: font.clone(),
                             color: ui.visuals().widgets.inactive.text_color(),
-                            // Трохи більший міжрядковий інтервал для читабельності.
-                            // Контур не страждає від цього, бо тримається чорнила
-                            // тексту (mesh_bounds), а не повної висоти рядка.
-                            line_height: Some(font.size * 1.35),
+                            line_height: Some(font.size * 1.35 + 10.0),
                             ..Default::default()
                         };
 
@@ -381,10 +381,17 @@ pub fn draw_editor(
                         if split_ranges.len() > 1 {
                             let mut cursor = 0usize;
                             for (i, range) in split_ranges.iter().enumerate() {
+                                let mut crosses_newline = false;
                                 if range.byte_start > cursor {
-                                    job.append(&text_buf[cursor..range.byte_start], 0.0, fmt.clone());
+                                    let gap_text = &text_buf[cursor..range.byte_start];
+                                    crosses_newline = gap_text.contains('\n');
+                                    job.append(gap_text, 0.0, fmt.clone());
                                 }
-                                let leading = if i == 0 { 0.0 } else { SEGMENT_GAP };
+                                // Не додаємо горизонтальний відступ, якщо цей
+                                // сегмент починає новий рядок/абзац після
+                                // переносу — інакше абзац виглядає як зсунутий
+                                // вправо "відступ", а не як реальний перенос.
+                                let leading = if i == 0 || crosses_newline { 0.0 } else { SEGMENT_GAP_X };
                                 job.append(&text_buf[range.byte_start..range.byte_end], leading, fmt.clone());
                                 cursor = range.byte_end;
                             }
@@ -419,20 +426,15 @@ pub fn draw_editor(
                     .show(ui)
             };
 
-            if use_outlines && !highlight_ranges.is_empty() {
-                let outline_ranges: Vec<TextRange> = {
-                    let new_hash = calculate_hash(text);
-                    if stats.last_text_hash != new_hash {
-                        let active = crate::core::pipeline::timeline::text_splitter::split_text_preview_ranges(
-                            text, text_split_mode, text_split_char_limit,
-                        );
-                        stats.active_split_ranges = if active.len() > 1 { active } else { Vec::new() };
-                        stats.last_text_hash = new_hash;
-                        stats.active_split_ranges.clone()
-                    } else {
-                        highlight_ranges
-                    }
-                };
+            if use_outlines {
+                // Рахуємо діапазони наживо з поточного (вже після редагування
+                // цього кадру) тексту — той самий виклик, що й у layouter'і,
+                // щоб контур завжди відповідав тому, що реально намальовано, а
+                // не відставав на кадр через кеш статистики.
+                let active = crate::core::pipeline::timeline::text_splitter::split_text_preview_ranges(
+                    text, text_split_mode, text_split_char_limit,
+                );
+                let outline_ranges: Vec<TextRange> = if active.len() > 1 { active } else { Vec::new() };
 
                 if !outline_ranges.is_empty() {
                     let painter = ui.painter_at(editor_bounds);
