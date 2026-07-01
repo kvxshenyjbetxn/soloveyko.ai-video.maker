@@ -102,6 +102,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "subtitles" => "Субтитры",
         "editing" => "Монтаж",
         "editor_hint" => "Введите или вставьте сюда текст вашего будущего видеосценария...",
+        "editor_segment_outlines_toggle" => "Контуры сегментов",
         "settings_general" => "Основные",
         "settings_general_title" => "Основные настройки",
         "settings_theme" => "Тема оформления",

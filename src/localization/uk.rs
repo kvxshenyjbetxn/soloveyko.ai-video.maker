@@ -102,6 +102,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "subtitles" => "Субтитри",
         "editing" => "Монтаж",
         "editor_hint" => "Введіть або вставте сюди текст вашого майбутнього відео сценарію...",
+        "editor_segment_outlines_toggle" => "Контури сегментів",
         "settings_general" => "Основні",
         "settings_general_title" => "Основні налаштування",
         "settings_theme" => "Тема оформлення",

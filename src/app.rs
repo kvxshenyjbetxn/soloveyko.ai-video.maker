@@ -436,6 +436,8 @@ pub struct VideoMakerApp {
     pub video_player: Option<crate::gui::gallery::video_player::VideoPlayer>,
     /// Текст промту, який зараз показується у popup-вікні галереї. None = вікно закрите.
     pub gallery_prompt_popup: Option<String>,
+    /// Чи показувати контури сегментів у редакторі сценарію.
+    pub editor_segment_outlines_enabled: bool,
     /// Кешована статистика для текстового редактора сценарію (для оптимізації продуктивності).
     pub editor_stats: crate::gui::editor::EditorStats,
     /// Список задач з историчними налаштуваннями пайплайну.
@@ -503,7 +505,9 @@ impl eframe::App for VideoMakerApp {
                         ui,
                         &mut self.text_input,
                         self.language,
+                        &self.text_split_mode,
                         self.text_split_char_limit,
+                        &mut self.editor_segment_outlines_enabled,
                         &mut self.editor_stats,
                     );
                 }

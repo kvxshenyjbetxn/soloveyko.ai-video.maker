@@ -93,6 +93,8 @@ impl VideoMakerApp {
                 || self.text_split_mode_openrouter
                     != self.last_saved_settings.text_split_mode_openrouter
                 || self.text_split_char_limit != self.last_saved_settings.text_split_char_limit
+                || self.editor_segment_outlines_enabled
+                    != self.last_saved_settings.editor_segment_outlines_enabled
                 || self.translation_service != self.last_saved_settings.translation_service
                 || self.save_path_macos != self.last_saved_settings.save_path_macos
                 || self.save_path_windows != self.last_saved_settings.save_path_windows
@@ -208,6 +210,7 @@ impl VideoMakerApp {
                     text_split_mode: self.text_split_mode.clone(),
                     text_split_mode_openrouter: self.text_split_mode_openrouter.clone(),
                     text_split_char_limit: self.text_split_char_limit,
+                    editor_segment_outlines_enabled: self.editor_segment_outlines_enabled,
                     video_prompt: self.video_prompt.clone(),
                     video_context_enabled: self.video_context_enabled,
                     video_context_mode: self.video_context_mode.clone(),

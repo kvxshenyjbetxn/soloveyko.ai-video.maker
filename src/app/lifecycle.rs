@@ -109,6 +109,7 @@ impl Default for VideoMakerApp {
             text_split_mode: "paragraphs".to_string(),
             text_split_mode_openrouter: "paragraphs".to_string(),
             text_split_char_limit: 500,
+            editor_segment_outlines_enabled: true,
             video_prompt: String::new(),
             video_context_enabled: false,
             video_context_mode: "around".to_string(),
@@ -364,6 +365,7 @@ impl VideoMakerApp {
         let text_split_mode_openrouter = saved.text_split_mode_openrouter.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
+        let editor_segment_outlines_enabled = saved.editor_segment_outlines_enabled;
         let video_context_enabled = saved.video_context_enabled;
         let video_context_mode = saved.video_context_mode.clone();
         let video_context_chars = saved.video_context_chars;
@@ -578,6 +580,7 @@ impl VideoMakerApp {
             text_split_mode,
             text_split_mode_openrouter,
             text_split_char_limit,
+            editor_segment_outlines_enabled,
             video_prompt,
             video_context_enabled,
             video_context_mode,

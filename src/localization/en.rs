@@ -102,6 +102,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "subtitles" => "Subtitles",
         "editing" => "Editing",
         "editor_hint" => "Enter or paste the text of your future video script here...",
+        "editor_segment_outlines_toggle" => "Segment outlines",
         "settings_general" => "General",
         "settings_general_title" => "General Settings",
         "settings_theme" => "Theme",

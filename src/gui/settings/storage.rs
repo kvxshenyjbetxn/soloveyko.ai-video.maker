@@ -127,6 +127,9 @@ fn default_text_split_mode() -> String {
 fn default_text_split_char_limit() -> usize {
     500
 }
+fn default_editor_segment_outlines_enabled() -> bool {
+    true
+}
 fn default_temperature() -> f32 {
     0.7
 }
@@ -398,6 +401,9 @@ pub struct AppSettings {
     /// Ліміт символів для режиму нарізання "char_limit"
     #[serde(default = "default_text_split_char_limit")]
     pub text_split_char_limit: usize,
+    /// Чи показувати контури сегментів у редакторі сценарію
+    #[serde(default = "default_editor_segment_outlines_enabled")]
+    pub editor_segment_outlines_enabled: bool,
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
@@ -668,6 +674,7 @@ impl Default for AppSettings {
             text_split_mode: "paragraphs".to_string(),
             text_split_mode_openrouter: "paragraphs".to_string(),
             text_split_char_limit: 500,
+            editor_segment_outlines_enabled: true,
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
             save_path_macos: String::new(),
