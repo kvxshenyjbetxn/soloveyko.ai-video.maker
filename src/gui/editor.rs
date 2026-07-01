@@ -133,12 +133,17 @@ fn layout_segmented_text(
     ui.fonts(|f| f.layout_job(job))
 }
 
+struct SegmentOutlinePiece {
+    range_idx: usize,
+    rect: egui::Rect,
+}
+
 fn segment_outline_rects(
     galley: &egui::Galley,
     galley_pos: egui::Pos2,
     ranges: &[TextRange],
     clip_rect: egui::Rect,
-) -> Vec<egui::Rect> {
+) -> Vec<SegmentOutlinePiece> {
     const PAD_X: f32 = 3.0;
     const PAD_Y: f32 = 1.0;
 
@@ -251,7 +256,12 @@ fn segment_outline_rects(
         .into_iter()
         .filter_map(|p| {
             let clipped = p.rect.intersect(clip_rect);
-            (clipped.width() > 2.0 && clipped.height() > 2.0).then_some(clipped)
+            (clipped.width() > 2.0 && clipped.height() > 2.0).then_some(
+                SegmentOutlinePiece {
+                    range_idx: p.range_idx,
+                    rect: clipped,
+                },
+            )
         })
         .collect()
 }
@@ -481,14 +491,34 @@ pub fn draw_editor(
                         let painter = ui.painter_at(outline_clip_rect);
                         let accent_color = ui.visuals().selection.bg_fill;
                         let stroke = egui::Stroke::new(1.0, accent_color);
+                        let hover_stroke = egui::Stroke::new(1.5, accent_color);
+                        let hover_fill = egui::Color32::from_rgba_unmultiplied(
+                            accent_color.r(),
+                            accent_color.g(),
+                            accent_color.b(),
+                            32,
+                        );
 
-                        for rect in segment_outline_rects(
+                        let outline_pieces = segment_outline_rects(
                             outline_galley.as_ref(),
                             output.galley_pos,
                             &outline_ranges,
                             outline_clip_rect,
-                        ) {
-                            painter.rect_stroke(rect, 0.0, stroke);
+                        );
+                        let hovered_range_idx = output.response.hover_pos().and_then(|pos| {
+                            outline_pieces
+                                .iter()
+                                .find(|piece| piece.rect.contains(pos))
+                                .map(|piece| piece.range_idx)
+                        });
+
+                        for piece in outline_pieces {
+                            if hovered_range_idx == Some(piece.range_idx) {
+                                painter.rect_filled(piece.rect, 0.0, hover_fill);
+                                painter.rect_stroke(piece.rect, 0.0, hover_stroke);
+                            } else {
+                                painter.rect_stroke(piece.rect, 0.0, stroke);
+                            }
                         }
                     }
                 }
