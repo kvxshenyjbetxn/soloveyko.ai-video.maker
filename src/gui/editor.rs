@@ -66,10 +66,8 @@ fn segment_outline_rects(
     ranges: &[TextRange],
     clip_rect: egui::Rect,
 ) -> Vec<egui::Rect> {
-    const PAD_X: f32 = 1.5;
+    const PAD_X: f32 = 3.0;
     const PAD_Y: f32 = 1.0;
-    const GAP: f32 = 4.0;
-    const MIN_WIDTH: f32 = 3.0;
 
     let galley_text = galley.text();
     let char_ranges: Vec<(usize, usize)> = ranges
@@ -151,36 +149,29 @@ fn segment_outline_rects(
             })
             .or_insert((p.row_idx, p.row_idx));
     }
-    for p in &mut pieces {
-        let (min_row, max_row) = row_bounds[&p.range_idx];
-        let top_pad = if p.row_idx == min_row { PAD_Y } else { 0.0 };
-        let bottom_pad = if p.row_idx == max_row { PAD_Y } else { 0.0 };
-        p.rect = egui::Rect::from_min_max(
-            p.rect.min - egui::vec2(PAD_X, top_pad),
-            p.rect.max + egui::vec2(PAD_X, bottom_pad),
-        );
-    }
+    // Якщо зліва/справа впритул є шматок ІНШОГО сегмента на тому ж рядку, не
+    // додаємо туди PAD_X — інакше обидва боки "з'їдають" один і той самий
+    // пробіл між сегментами і рамки або торкаються, або (при примусовому
+    // збільшенні зазору) заходять у текст сусіда. Без підпору з обох боків
+    // видима прогалина дорівнює всьому природному пробілу між сегментами.
+    for i in 0..pieces.len() {
+        let has_left_neighbor = i > 0
+            && pieces[i - 1].row_idx == pieces[i].row_idx
+            && pieces[i - 1].range_idx != pieces[i].range_idx;
+        let has_right_neighbor = i + 1 < pieces.len()
+            && pieces[i + 1].row_idx == pieces[i].row_idx
+            && pieces[i + 1].range_idx != pieces[i].range_idx;
 
-    // Прогалина між сусідніми сегментами на одному рядку: стискаємо обидва боки
-    // порівну, щоб рамки ніколи не торкались і не перетинались.
-    for i in 0..pieces.len().saturating_sub(1) {
-        if pieces[i].range_idx == pieces[i + 1].range_idx {
-            continue;
-        }
-        let (left, right) = (pieces[i].rect, pieces[i + 1].rect);
-        let same_row_band = left.min.y < right.max.y && left.max.y > right.min.y;
-        if !same_row_band {
-            continue;
-        }
-        let overlap = left.max.x + GAP - right.min.x;
-        if overlap <= 0.0 {
-            continue;
-        }
-        let shrink = (overlap / 2.0)
-            .min((left.width() - MIN_WIDTH).max(0.0))
-            .min((right.width() - MIN_WIDTH).max(0.0));
-        pieces[i].rect.max.x -= shrink;
-        pieces[i + 1].rect.min.x += shrink;
+        let (min_row, max_row) = row_bounds[&pieces[i].range_idx];
+        let top_pad = if pieces[i].row_idx == min_row { PAD_Y } else { 0.0 };
+        let bottom_pad = if pieces[i].row_idx == max_row { PAD_Y } else { 0.0 };
+        let left_pad = if has_left_neighbor { 0.0 } else { PAD_X };
+        let right_pad = if has_right_neighbor { 0.0 } else { PAD_X };
+
+        pieces[i].rect = egui::Rect::from_min_max(
+            pieces[i].rect.min - egui::vec2(left_pad, top_pad),
+            pieces[i].rect.max + egui::vec2(right_pad, bottom_pad),
+        );
     }
 
     pieces
@@ -363,6 +354,13 @@ pub fn draw_editor(
                 let target_rect = editor_bounds.shrink(OUTLINE_MARGIN);
                 ui.allocate_new_ui(egui::UiBuilder::new().max_rect(target_rect), |ui| {
                     let mut layouter = |ui: &egui::Ui, text_buf: &str, wrap: f32| {
+                        // Горизонтальний зазор між контурами сегментів: замість
+                        // намагання "видавити" його стисканням рамок (що ризикує
+                        // зачепити текст сусіда), реально розсуваємо сам текст на
+                        // межах сегментів — додаємо трохи порожнього місця перед
+                        // початком кожного наступного сегмента.
+                        const SEGMENT_GAP: f32 = 10.0;
+
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap;
                         let font = egui::TextStyle::Body.resolve(ui.style());
@@ -375,7 +373,28 @@ pub fn draw_editor(
                             line_height: Some(font.size * 1.35),
                             ..Default::default()
                         };
-                        job.append(text_buf, 0.0, fmt);
+
+                        let split_ranges = crate::core::pipeline::timeline::text_splitter::split_text_preview_ranges(
+                            text_buf, text_split_mode, text_split_char_limit,
+                        );
+
+                        if split_ranges.len() > 1 {
+                            let mut cursor = 0usize;
+                            for (i, range) in split_ranges.iter().enumerate() {
+                                if range.byte_start > cursor {
+                                    job.append(&text_buf[cursor..range.byte_start], 0.0, fmt.clone());
+                                }
+                                let leading = if i == 0 { 0.0 } else { SEGMENT_GAP };
+                                job.append(&text_buf[range.byte_start..range.byte_end], leading, fmt.clone());
+                                cursor = range.byte_end;
+                            }
+                            if cursor < text_buf.len() {
+                                job.append(&text_buf[cursor..], 0.0, fmt.clone());
+                            }
+                        } else {
+                            job.append(text_buf, 0.0, fmt);
+                        }
+
                         ui.fonts(|f| f.layout_job(job))
                     };
                     egui::TextEdit::multiline(text)
