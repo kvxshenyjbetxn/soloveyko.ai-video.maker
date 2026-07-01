@@ -317,102 +317,109 @@ pub fn draw_editor(
     let fragments_paragraphs = stats.fragments_paragraphs;
     let fragments_sentences = stats.fragments_sentences;
     let fragments_char_limit = stats.fragments_char_limit;
+// Статистика лишається як була зліва. Тумблер контуру малюємо окремо,
+// прив'язуючи його до правого краю цього ж рядка, не змінюючи ширину
+// блоку статистики.
+ui.add_space(8.0);
+let stats_row = ui.horizontal_wrapped(|ui| {
+    ui.add_space(12.0);
+    let text_color = ui.visuals().widgets.noninteractive.text_color();
+    let accent_color = ui.visuals().selection.bg_fill;
+    let bullet_color = text_color.linear_multiply(0.3);
 
-    // Статистика
-    ui.add_space(8.0);
-    ui.horizontal_wrapped(|ui| {
-        ui.add_space(12.0);
-        let text_color = ui.visuals().widgets.noninteractive.text_color();
-        let accent_color = ui.visuals().selection.bg_fill;
-        let bullet_color = text_color.linear_multiply(0.3);
+    ui.label(
+        egui::RichText::new(translate(language, "stats_chars"))
+            .size(16.0)
+            .color(text_color),
+    );
+    ui.label(
+        egui::RichText::new(format!(" {}", char_count))
+            .size(16.0)
+            .strong()
+            .color(accent_color),
+    );
+    ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
 
-        ui.label(
-            egui::RichText::new(translate(language, "stats_chars"))
-                .size(16.0)
-                .color(text_color),
-        );
-        ui.label(
-            egui::RichText::new(format!(" {}", char_count))
-                .size(16.0)
-                .strong()
-                .color(accent_color),
-        );
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+    ui.label(
+        egui::RichText::new(translate(language, "stats_paragraphs"))
+            .size(16.0)
+            .color(text_color),
+    );
+    ui.label(
+        egui::RichText::new(format!(" {}", paragraph_count))
+            .size(16.0)
+            .strong()
+            .color(accent_color),
+    );
+    ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
 
-        ui.label(
-            egui::RichText::new(translate(language, "stats_paragraphs"))
-                .size(16.0)
-                .color(text_color),
-        );
-        ui.label(
-            egui::RichText::new(format!(" {}", paragraph_count))
-                .size(16.0)
-                .strong()
-                .color(accent_color),
-        );
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+    ui.label(
+        egui::RichText::new(translate(language, "stats_tokens"))
+            .size(16.0)
+            .color(text_color),
+    );
+    ui.label(
+        egui::RichText::new(format!(" {}", token_count))
+            .size(16.0)
+            .strong()
+            .color(accent_color),
+    );
+    ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
 
-        ui.label(
-            egui::RichText::new(translate(language, "stats_tokens"))
-                .size(16.0)
-                .color(text_color),
-        );
-        ui.label(
-            egui::RichText::new(format!(" {}", token_count))
-                .size(16.0)
-                .strong()
-                .color(accent_color),
-        );
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+    ui.label(
+        egui::RichText::new(translate(language, "stats_fragments_paragraphs"))
+            .size(16.0)
+            .color(text_color),
+    );
+    ui.label(
+        egui::RichText::new(format!(" {}", fragments_paragraphs))
+            .size(16.0)
+            .strong()
+            .color(accent_color),
+    );
+    ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
 
-        ui.label(
-            egui::RichText::new(translate(language, "stats_fragments_paragraphs"))
-                .size(16.0)
-                .color(text_color),
-        );
-        ui.label(
-            egui::RichText::new(format!(" {}", fragments_paragraphs))
-                .size(16.0)
-                .strong()
-                .color(accent_color),
-        );
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+    ui.label(
+        egui::RichText::new(translate(language, "stats_fragments_sentences"))
+            .size(16.0)
+            .color(text_color),
+    );
+    ui.label(
+        egui::RichText::new(format!(" {}", fragments_sentences))
+            .size(16.0)
+            .strong()
+            .color(accent_color),
+    );
+    ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
 
-        ui.label(
-            egui::RichText::new(translate(language, "stats_fragments_sentences"))
-                .size(16.0)
-                .color(text_color),
-        );
-        ui.label(
-            egui::RichText::new(format!(" {}", fragments_sentences))
-                .size(16.0)
-                .strong()
-                .color(accent_color),
-        );
-        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+    ui.label(
+        egui::RichText::new(translate(language, "stats_fragments_chars"))
+            .size(16.0)
+            .color(text_color),
+    );
+    ui.label(
+        egui::RichText::new(format!(" {}", fragments_char_limit))
+            .size(16.0)
+            .strong()
+            .color(accent_color),
+    );
+});
 
-        ui.label(
-            egui::RichText::new(translate(language, "stats_fragments_chars"))
-                .size(16.0)
-                .color(text_color),
-        );
-        ui.label(
-            egui::RichText::new(format!(" {}", fragments_char_limit))
-                .size(16.0)
-                .strong()
-                .color(accent_color),
-        );
-    });
-
-    // Тумблер
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.add_space(12.0);
-        ui.checkbox(
-            segment_outlines_enabled,
-            translate(language, "editor_segment_outlines_toggle"),
-        );
-    });
+let toggle_size = egui::vec2(220.0, stats_row.response.rect.height());
+let toggle_rect = egui::Rect::from_center_size(
+    egui::pos2(
+        ui.max_rect().right() - toggle_size.x * 0.5 - 12.0,
+        stats_row.response.rect.center().y,
+    ),
+    toggle_size,
+);
+ui.put(
+    toggle_rect,
+    egui::Checkbox::new(
+        segment_outlines_enabled,
+        translate(language, "editor_segment_outlines_toggle"),
+    ),
+);
     ui.add_space(4.0);
     ui.separator();
 
