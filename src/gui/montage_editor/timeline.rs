@@ -569,7 +569,6 @@ pub(super) fn draw_timeline(
                             let viewport_rect = ui.max_rect();
                             let overlay_painter = ui.painter_at(viewport_rect);
                             let viewport_scroll_x = editor.timeline_scroll_x.max(0.0);
-                            let mut sticky_ruler_rect = Rect::NOTHING;
 
                             // Фарбуємо весь viewport таймлайну єдиним фоном,
                             // щоб під час скролу не з'являлись чорні незаповнені проміжки.
@@ -579,52 +578,48 @@ pub(super) fn draw_timeline(
                                 Color32::from_rgb(14, 14, 17),
                             );
 
-                            ui.allocate_ui_with_layout(
-                                Vec2::new(scroll_visible_w, ruler_h),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    sticky_ruler_rect = ui.max_rect();
-                                    overlay_painter.rect_filled(
-                                        sticky_ruler_rect,
-                                        0.0,
-                                        Color32::from_rgb(20, 20, 24),
-                                    );
-                                    let visible_start_sec =
-                                        (viewport_scroll_x / zoom).floor().max(0.0) as i32;
-                                    let visible_end_sec =
-                                        ((viewport_scroll_x + sticky_ruler_rect.width()) / zoom)
-                                            .ceil() as i32
-                                            + 1;
-                                    for sec in visible_start_sec..=visible_end_sec {
-                                        let x = sticky_ruler_rect.left()
-                                            + sec as f32 * zoom
-                                            - viewport_scroll_x;
-                                        let major = sec % 5 == 0;
-                                        let tick_h = if major { 12.0 } else { 6.0 };
-                                        overlay_painter.line_segment(
-                                            [
-                                                Pos2::new(
-                                                    x,
-                                                    sticky_ruler_rect.top() + ruler_h - tick_h,
-                                                ),
-                                                Pos2::new(x, sticky_ruler_rect.top() + ruler_h),
-                                            ],
-                                            Stroke::new(1.0, Color32::from_rgb(60, 60, 70)),
-                                        );
-                                        if major {
-                                            let m = (sec / 60) as u32;
-                                            let s = (sec % 60) as u32;
-                                            overlay_painter.text(
-                                                Pos2::new(x, sticky_ruler_rect.top() + 4.0),
-                                                Align2::CENTER_TOP,
-                                                format!("{:02}:{:02}", m, s),
-                                                egui::FontId::proportional(9.0),
-                                                Color32::from_rgb(110, 110, 120),
-                                            );
-                                        }
-                                    }
-                                },
+                            let (sticky_ruler_rect, header_resp) =
+                                ui.allocate_exact_size(
+                                    Vec2::new(scroll_visible_w, ruler_h),
+                                    Sense::click_and_drag(),
+                                );
+                            let header_painter = ui.painter_at(sticky_ruler_rect);
+                            header_painter.rect_filled(
+                                sticky_ruler_rect,
+                                0.0,
+                                Color32::from_rgb(20, 20, 24),
                             );
+                            if header_resp.hovered() || header_resp.dragged() {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                            }
+
+                            let visible_start_sec =
+                                (viewport_scroll_x / zoom).floor().max(0.0) as i32;
+                            let visible_end_sec =
+                                ((viewport_scroll_x + sticky_ruler_rect.width()) / zoom).ceil() as i32 + 1;
+                            for sec in visible_start_sec..=visible_end_sec {
+                                let x = sticky_ruler_rect.left() + sec as f32 * zoom - viewport_scroll_x;
+                                let major = sec % 5 == 0;
+                                let tick_h = if major { 12.0 } else { 6.0 };
+                                header_painter.line_segment(
+                                    [
+                                        Pos2::new(x, sticky_ruler_rect.top() + ruler_h - tick_h),
+                                        Pos2::new(x, sticky_ruler_rect.top() + ruler_h),
+                                    ],
+                                    Stroke::new(1.0, Color32::from_rgb(60, 60, 70)),
+                                );
+                                if major {
+                                    let m = (sec / 60) as u32;
+                                    let s = (sec % 60) as u32;
+                                    header_painter.text(
+                                        Pos2::new(x, sticky_ruler_rect.top() + 4.0),
+                                        Align2::CENTER_TOP,
+                                        format!("{:02}:{:02}", m, s),
+                                        egui::FontId::proportional(9.0),
+                                        Color32::from_rgb(110, 110, 120),
+                                    );
+                                }
+                            }
 
                             ui.allocate_ui_with_layout(
                                 Vec2::new(scroll_visible_w, tracks_view_h),
@@ -1793,22 +1788,18 @@ pub(super) fn draw_timeline(
                                 ));
                             }
 
-                            // Скраб плейхеда кліком по sticky-лінійці.
-                            // Натискання на лінійці починає drag; плейхед рухається поки кнопка затиснута,
-                            // навіть якщо мишка вийшла на кліпи нижче.
+                            // Скраб плейхеда кліком/drag по sticky-лінійці.
+                            // Лінійка сама перехоплює drag, тому жест більше не повинен
+                            // передаватися на переміщення всього вікна редактора.
                             let primary_down = ui.input(|i| i.pointer.primary_down());
-                            if let Some(pos) = mouse_pos {
-                                if sticky_ruler_rect.contains(pos)
-                                    && ui.input(|i| i.pointer.primary_pressed())
-                                {
-                                    editor.playhead_dragging = true;
-                                }
+                            if header_resp.drag_started() || header_resp.clicked() {
+                                editor.playhead_dragging = true;
                             }
                             if !primary_down {
                                 editor.playhead_dragging = false;
                             }
                             if editor.playhead_dragging && primary_down {
-                                if let Some(pos) = mouse_pos {
+                                if let Some(pos) = header_resp.interact_pointer_pos().or(mouse_pos) {
                                     let new_ph = ((pos.x - sticky_ruler_rect.left() + viewport_scroll_x)
                                         / zoom)
                                         .clamp(0.0, total_dur);
