@@ -66,10 +66,10 @@ fn segment_outline_rects(
     ranges: &[TextRange],
     clip_rect: egui::Rect,
 ) -> Vec<egui::Rect> {
-    const PAD_X: f32 = 4.0;
-    const PAD_Y: f32 = 3.0;
-    const GAP_X: f32 = 4.0;
-    const GAP_Y: f32 = 4.0;
+    const PAD_X: f32 = 1.5;
+    const PAD_Y: f32 = 1.0;
+    const GAP: f32 = 4.0;
+    const MIN_WIDTH: f32 = 3.0;
 
     let galley_text = galley.text();
     let char_ranges: Vec<(usize, usize)> = ranges
@@ -85,14 +85,33 @@ fn segment_outline_rects(
         return Vec::new();
     }
 
-    let mut rects = Vec::new();
+    // Один шматок на кожен рядок, яким проходить сегмент. Список природно
+    // впорядкований зліва направо в межах рядка, бо ranges відсортовані за
+    // позицією в тексті, а рядки обходяться згори вниз.
+    struct Piece {
+        range_idx: usize,
+        row_idx: usize,
+        rect: egui::Rect,
+    }
+
+    let mut pieces: Vec<Piece> = Vec::new();
     let mut row_char_start = 0;
 
-    for row in &galley.rows {
+    for (row_idx, row) in galley.rows.iter().enumerate() {
         let row_start = row_char_start;
         let row_end = row_start + row.char_count_excluding_newline();
 
-        for &(seg_start, seg_end) in &char_ranges {
+        // Якщо міжрядковий інтервал збільшено (для читабельності), повна висота
+        // рядка включає зайвий простір знизу. Контур тримаємо тісним до самого
+        // чорнила тексту, тож беремо межі мешу гліфів, а не всю висоту рядка.
+        let ink_bounds = row.visuals.mesh_bounds;
+        let (y_min, y_max) = if ink_bounds.is_finite() && ink_bounds.is_positive() {
+            (ink_bounds.min.y, ink_bounds.max.y)
+        } else {
+            (row.min_y(), row.max_y())
+        };
+
+        for (range_idx, &(seg_start, seg_end)) in char_ranges.iter().enumerate() {
             let overlap_start = seg_start.max(row_start);
             let overlap_end = seg_end.min(row_end);
             if overlap_start >= overlap_end {
@@ -102,23 +121,75 @@ fn segment_outline_rects(
             let start_col = overlap_start - row_start;
             let end_col = overlap_end - row_start;
 
-            let min = galley_pos + egui::vec2(row.x_offset(start_col), row.min_y());
-            let max = galley_pos + egui::vec2(row.x_offset(end_col), row.max_y());
+            let min = galley_pos + egui::vec2(row.x_offset(start_col), y_min);
+            let max = galley_pos + egui::vec2(row.x_offset(end_col), y_max);
 
-            let rect = egui::Rect::from_min_max(min, max)
-                .expand2(egui::vec2(PAD_X, PAD_Y))
-                .shrink2(egui::vec2(GAP_X * 0.5, GAP_Y * 0.5));
-
-            let clipped = rect.intersect(clip_rect);
-            if clipped.width() > 2.0 && clipped.height() > 2.0 {
-                rects.push(clipped);
-            }
+            pieces.push(Piece {
+                range_idx,
+                row_idx,
+                rect: egui::Rect::from_min_max(min, max),
+            });
         }
 
         row_char_start += row.char_count_including_newline();
     }
 
-    rects
+    if pieces.is_empty() {
+        return Vec::new();
+    }
+
+    // Перший/останній рядок кожного сегмента — щоб рамки суміжних рядків одного
+    // сегмента стикались рівно, без вертикального напуску один на одного.
+    let mut row_bounds: std::collections::HashMap<usize, (usize, usize)> =
+        std::collections::HashMap::new();
+    for p in &pieces {
+        row_bounds
+            .entry(p.range_idx)
+            .and_modify(|(min_r, max_r)| {
+                *min_r = (*min_r).min(p.row_idx);
+                *max_r = (*max_r).max(p.row_idx);
+            })
+            .or_insert((p.row_idx, p.row_idx));
+    }
+    for p in &mut pieces {
+        let (min_row, max_row) = row_bounds[&p.range_idx];
+        let top_pad = if p.row_idx == min_row { PAD_Y } else { 0.0 };
+        let bottom_pad = if p.row_idx == max_row { PAD_Y } else { 0.0 };
+        p.rect = egui::Rect::from_min_max(
+            p.rect.min - egui::vec2(PAD_X, top_pad),
+            p.rect.max + egui::vec2(PAD_X, bottom_pad),
+        );
+    }
+
+    // Прогалина між сусідніми сегментами на одному рядку: стискаємо обидва боки
+    // порівну, щоб рамки ніколи не торкались і не перетинались.
+    for i in 0..pieces.len().saturating_sub(1) {
+        if pieces[i].range_idx == pieces[i + 1].range_idx {
+            continue;
+        }
+        let (left, right) = (pieces[i].rect, pieces[i + 1].rect);
+        let same_row_band = left.min.y < right.max.y && left.max.y > right.min.y;
+        if !same_row_band {
+            continue;
+        }
+        let overlap = left.max.x + GAP - right.min.x;
+        if overlap <= 0.0 {
+            continue;
+        }
+        let shrink = (overlap / 2.0)
+            .min((left.width() - MIN_WIDTH).max(0.0))
+            .min((right.width() - MIN_WIDTH).max(0.0));
+        pieces[i].rect.max.x -= shrink;
+        pieces[i + 1].rect.min.x += shrink;
+    }
+
+    pieces
+        .into_iter()
+        .filter_map(|p| {
+            let clipped = p.rect.intersect(clip_rect);
+            (clipped.width() > 2.0 && clipped.height() > 2.0).then_some(clipped)
+        })
+        .collect()
 }
 
 pub fn draw_editor(
@@ -278,17 +349,58 @@ pub fn draw_editor(
         .show(ui, |ui| {
             ui.add_space(8.0);
 
-            let text_edit = egui::TextEdit::multiline(text)
-                .hint_text(translate(language, "editor_hint"))
-                .desired_width(f32::INFINITY)
-                .desired_rows(40)
-                .min_size(ui.available_size())
-                .font(egui::TextStyle::Body)
-                .frame(false);
+            let use_outlines = *segment_outlines_enabled;
 
-            let output = text_edit.show(ui);
+            // В режимі контурів явно резервуємо смугу навколо поля тексту, щоб
+            // контуру сегментів завжди було де намалюватись і вони не обрізались.
+            // editor_bounds — жорстка межа: контур ніколи не малюється за нею,
+            // незалежно від того, наскільки текст (наприклад, довге слово, що не
+            // розривається) міг вилізти за межі своєї обчисленої ширини.
+            const OUTLINE_MARGIN: f32 = 8.0;
+            let editor_bounds = ui.available_rect_before_wrap();
 
-            if *segment_outlines_enabled && !highlight_ranges.is_empty() {
+            let output = if use_outlines {
+                let target_rect = editor_bounds.shrink(OUTLINE_MARGIN);
+                ui.allocate_new_ui(egui::UiBuilder::new().max_rect(target_rect), |ui| {
+                    let mut layouter = |ui: &egui::Ui, text_buf: &str, wrap: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap;
+                        let font = egui::TextStyle::Body.resolve(ui.style());
+                        let fmt = egui::TextFormat {
+                            font_id: font.clone(),
+                            color: ui.visuals().widgets.inactive.text_color(),
+                            // Трохи більший міжрядковий інтервал для читабельності.
+                            // Контур не страждає від цього, бо тримається чорнила
+                            // тексту (mesh_bounds), а не повної висоти рядка.
+                            line_height: Some(font.size * 1.35),
+                            ..Default::default()
+                        };
+                        job.append(text_buf, 0.0, fmt);
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                    egui::TextEdit::multiline(text)
+                        .hint_text(translate(language, "editor_hint"))
+                        .desired_width(target_rect.width())
+                        .desired_rows(40)
+                        .min_size(target_rect.size())
+                        .font(egui::TextStyle::Body)
+                        .layouter(&mut layouter)
+                        .frame(false)
+                        .show(ui)
+                })
+                .inner
+            } else {
+                egui::TextEdit::multiline(text)
+                    .hint_text(translate(language, "editor_hint"))
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(40)
+                    .min_size(ui.available_size())
+                    .font(egui::TextStyle::Body)
+                    .frame(false)
+                    .show(ui)
+            };
+
+            if use_outlines && !highlight_ranges.is_empty() {
                 let outline_ranges: Vec<TextRange> = {
                     let new_hash = calculate_hash(text);
                     if stats.last_text_hash != new_hash {
@@ -304,7 +416,7 @@ pub fn draw_editor(
                 };
 
                 if !outline_ranges.is_empty() {
-                    let painter = ui.painter_at(output.response.rect);
+                    let painter = ui.painter_at(editor_bounds);
                     let accent_color = ui.visuals().selection.bg_fill;
                     let stroke = egui::Stroke::new(1.0, accent_color);
 
@@ -312,9 +424,9 @@ pub fn draw_editor(
                         output.galley.as_ref(),
                         output.galley_pos,
                         &outline_ranges,
-                        output.text_clip_rect,
+                        editor_bounds,
                     ) {
-                        painter.rect_stroke(rect, 6.0, stroke);
+                        painter.rect_stroke(rect, 0.0, stroke);
                     }
                 }
             }
