@@ -244,6 +244,14 @@ pub fn regenerate_single_media(
             )
         };
 
+        // Для відео генеруємо з правильним розширенням (.mp4), аналогічно animate_single_image
+        let mut file_path = file_path;
+        let save_path = if media_type == "video" {
+            file_path.with_extension("mp4")
+        } else {
+            file_path.clone()
+        };
+
         let outcome = match api_result {
             Err(e) => {
                 crate::logger::log_job(
@@ -253,8 +261,13 @@ pub fn regenerate_single_media(
                 );
                 Err(e)
             }
-            Ok((provider_used, data_uri)) => match save_media_bytes(&data_uri, &file_path) {
+            Ok((provider_used, data_uri)) => match save_media_bytes(&data_uri, &save_path) {
                 Ok(()) => {
+                    // Якщо розширення змінилося (.jpg → .mp4) — видаляємо оригінальний файл
+                    if save_path != file_path {
+                        let _ = std::fs::remove_file(&file_path);
+                        file_path = save_path.clone();
+                    }
                     crate::logger::log_job(
                         job_id,
                         &job_name,
@@ -585,7 +598,9 @@ pub fn upscale_video_if_needed(
     args.extend_from_slice(&[
         "-map", "0:v:0", "-map", "0:a?", "-c:a", "aac", "-b:a", "192k",
     ]);
-    args.push(video_path.to_str().unwrap());
+    // Завжди виводимо у тимчасовий .mp4, щоб FFmpeg не плутався з розширенням вихідного файлу
+    let out_temp = video_path.with_extension("upscale_out.mp4");
+    args.push(out_temp.to_str().unwrap());
 
     let mut ffmpeg_upscale_proc = std::process::Command::new(&ffmpeg_cmd);
     ffmpeg_upscale_proc.args(&args);
@@ -608,6 +623,15 @@ pub fn upscale_video_if_needed(
     match child {
         Ok(output) => {
             if output.status.success() {
+                // Перейменовуємо тимчасовий результат в оригінальний шлях
+                if video_path.exists() {
+                    let _ = std::fs::remove_file(video_path);
+                }
+                if let Err(_) = std::fs::rename(&out_temp, video_path) {
+                    // fallback: копіювання + видалення (напр. різні диски)
+                    let _ = std::fs::copy(&out_temp, video_path);
+                    let _ = std::fs::remove_file(&out_temp);
+                }
                 clean_up();
                 crate::logger::log_job(
                     job_id,
@@ -620,12 +644,14 @@ pub fn upscale_video_if_needed(
                 Ok(())
             } else {
                 restore_original();
+                let _ = std::fs::remove_file(&out_temp);
                 let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
                 Err(format!("FFmpeg error: {}", err_msg.trim()))
             }
         }
         Err(e) => {
             restore_original();
+            let _ = std::fs::remove_file(&out_temp);
             Err(format!("Не вдалося запустити FFmpeg: {}", e))
         }
     }
