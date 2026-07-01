@@ -86,6 +86,9 @@ pub struct MontageEditorState {
     pub track_drag: Option<TrackDragState>,
     /// Поточне горизонтальне зміщення скролу таймлінії (для авто-прокрутки за плейхедом)
     pub timeline_scroll_x: f32,
+    /// Поточне вертикальне зміщення скролу таймлінії.
+    /// Потрібне, щоб при великій кількості доріжок вертикальний скрол не скидався щокадру.
+    pub timeline_scroll_y: f32,
     /// true поки користувач тягне плейхед (натиснув на лінійці і ще не відпустив)
     pub playhead_dragging: bool,
     /// Стек для скасування дій (Ctrl+Z)
@@ -274,6 +277,7 @@ impl MontageEditorState {
             split_snap_secs: None,
             track_drag: None,
             timeline_scroll_x: 0.0,
+            timeline_scroll_y: 0.0,
             playhead_dragging: false,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),

@@ -276,6 +276,11 @@ pub(super) fn draw_timeline(
     editor.timeline_track_height = editor
         .timeline_track_height
         .clamp(MIN_TIMELINE_TRACK_HEIGHT, MAX_TIMELINE_TRACK_HEIGHT);
+    let max_timeline_panel_height = (ui.ctx().screen_rect().height() * 0.75).max(220.0);
+    editor.timeline_height = editor
+        .timeline_height
+        .clamp(80.0, max_timeline_panel_height);
+
     let track_h = editor.timeline_track_height;
     let ruler_h = 22.0;
     let label_w = 110.0;
@@ -296,8 +301,8 @@ pub(super) fn draw_timeline(
     ui.painter_at(handle_rect)
         .rect_filled(handle_rect, 0.0, handle_color);
     if handle_resp.dragged() {
-        editor.timeline_height =
-            (editor.timeline_height - handle_resp.drag_delta().y).clamp(80.0, 500.0);
+        editor.timeline_height = (editor.timeline_height - handle_resp.drag_delta().y)
+            .clamp(80.0, max_timeline_panel_height);
     }
 
     // ─── Клавіша S: розріз на плейхеді (працює завжди) ──────────────
@@ -431,14 +436,27 @@ pub(super) fn draw_timeline(
         });
     });
 
-    let avail_h = ui.available_height();
+    let avail_h = ui.available_height().max(0.0);
     let total_rows = editor.num_tracks;
-    let total_tracks_h = ruler_h + (track_h + 2.0) * total_rows as f32;
+    let tracks_total_h = (track_h + 2.0) * total_rows as f32;
+    // Viewport таймлайну складається з фіксованої лінійки зверху та області доріжок нижче.
+    // Скролимо тільки доріжки, щоб хедер не «виїжджав» і не відкривав чорну смугу.
+    let timeline_view_h = (ruler_h + tracks_total_h).min(avail_h);
+    let tracks_view_h = (timeline_view_h - ruler_h).max(0.0);
+    let timeline_can_scroll_vertically = tracks_total_h > tracks_view_h + 0.5;
     let timeline_w = (total_dur + 10.0) * zoom;
 
+    if tracks_view_h <= 1.0 {
+        return;
+    }
+
     // ─── Колесо миші → горизонтальний скрол таймлінії ───────────────────────────
+    // Якщо доріжки не вміщаються по висоті, залишаємо вертикальний скрол природним.
+    // Shift + колесо все одно лишає швидкий горизонтальний скрол.
     if let Some(mouse_pos) = ui.ctx().pointer_hover_pos() {
-        if ui.clip_rect().contains(mouse_pos) {
+        if ui.clip_rect().contains(mouse_pos)
+            && (!timeline_can_scroll_vertically || ui.input(|i| i.modifiers.shift))
+        {
             let scroll_y = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll_y.abs() > 0.1 {
                 ui.ctx().input_mut(|i| {
@@ -454,11 +472,9 @@ pub(super) fn draw_timeline(
     // Візуальна позиція доріжки = track_idx (без зсуву)
     let track_visual = |ti: usize| -> usize { ti };
     // Y-координата візуальної позиції
-    let vis_y =
-        |rect: Rect, vis: usize| -> f32 { rect.top() + ruler_h + (track_h + 2.0) * vis as f32 };
+    let vis_y = |rect: Rect, vis: usize| -> f32 { rect.top() + (track_h + 2.0) * vis as f32 };
 
     ui.horizontal(|ui| {
-        let timeline_view_h = avail_h.min(total_tracks_h).max(96.0);
         let right_panel_w = 36.0;
         let right_panel_gap = 2.0;
 
@@ -494,37 +510,55 @@ pub(super) fn draw_timeline(
                             let panel_rect = ui.max_rect();
                             let painter = ui.painter();
                             painter.rect_filled(panel_rect, 0.0, Color32::from_rgb(18, 18, 22));
-                            painter.rect_filled(
-                                Rect::from_min_size(
-                                    panel_rect.min,
-                                    Vec2::new(right_panel_w, ruler_h),
-                                ),
-                                0.0,
-                                Color32::from_rgb(20, 20, 24),
+
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(right_panel_w, ruler_h),
+                                egui::Layout::top_down(egui::Align::Center),
+                                |ui| {
+                                    let header_rect = ui.max_rect();
+                                    ui.painter().rect_filled(
+                                        header_rect,
+                                        0.0,
+                                        Color32::from_rgb(20, 20, 24),
+                                    );
+                                },
                             );
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(4.0);
-                                let slider_h = (timeline_view_h - 8.0).max(64.0);
-                                let slider_resp = ui
-                                    .add_sized(
-                                        [16.0, slider_h],
-                                        egui::Slider::new(
-                                            &mut editor.timeline_track_height,
-                                            MIN_TIMELINE_TRACK_HEIGHT..=MAX_TIMELINE_TRACK_HEIGHT,
-                                        )
-                                        .vertical()
-                                        .step_by(1.0)
-                                        .show_value(false),
-                                    )
-                                    .on_hover_text(format!(
-                                        "{}: {:.0}px",
-                                        translate(language, "montage_editor_timeline_track_height"),
-                                        editor.timeline_track_height
-                                    ));
-                                if slider_resp.hovered() || slider_resp.dragged() {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
-                                }
-                            });
+
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(right_panel_w, tracks_view_h),
+                                egui::Layout::top_down(egui::Align::Center),
+                                |ui| {
+                                    ui.vertical_centered(|ui| {
+                                        ui.add_space(4.0);
+                                        let slider_h = (tracks_view_h - 8.0).max(0.0);
+                                        if slider_h >= 16.0 {
+                                            let slider_resp = ui
+                                                .add_sized(
+                                                    [16.0, slider_h],
+                                                    egui::Slider::new(
+                                                        &mut editor.timeline_track_height,
+                                                        MIN_TIMELINE_TRACK_HEIGHT
+                                                            ..=MAX_TIMELINE_TRACK_HEIGHT,
+                                                    )
+                                                    .vertical()
+                                                    .step_by(1.0)
+                                                    .show_value(false),
+                                                )
+                                                .on_hover_text(format!(
+                                                    "{}: {:.0}px",
+                                                    translate(
+                                                        language,
+                                                        "montage_editor_timeline_track_height"
+                                                    ),
+                                                    editor.timeline_track_height
+                                                ));
+                                            if slider_resp.hovered() || slider_resp.dragged() {
+                                                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                                            }
+                                        }
+                                    });
+                                },
+                            );
                         },
                     );
                     ui.add_space(right_panel_gap);
@@ -532,50 +566,86 @@ pub(super) fn draw_timeline(
                         Vec2::new(scroll_visible_w, timeline_view_h),
                         egui::Layout::top_down(egui::Align::Min),
                         |ui| {
-                            ScrollArea::both()
-                        .id_salt("editor_timeline_scroll")
-                        .max_height(timeline_view_h)
-                        .auto_shrink([false, true])
-                        .scroll_offset(egui::Vec2::new(editor.timeline_scroll_x, 0.0))
-                        .show(ui, |ui| {
+                            let viewport_rect = ui.max_rect();
+                            let overlay_painter = ui.painter_at(viewport_rect);
+                            let viewport_scroll_x = editor.timeline_scroll_x.max(0.0);
+                            let mut sticky_ruler_rect = Rect::NOTHING;
+
+                            // Фарбуємо весь viewport таймлайну єдиним фоном,
+                            // щоб під час скролу не з'являлись чорні незаповнені проміжки.
+                            overlay_painter.rect_filled(
+                                viewport_rect,
+                                0.0,
+                                Color32::from_rgb(14, 14, 17),
+                            );
+
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(scroll_visible_w, ruler_h),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    sticky_ruler_rect = ui.max_rect();
+                                    overlay_painter.rect_filled(
+                                        sticky_ruler_rect,
+                                        0.0,
+                                        Color32::from_rgb(20, 20, 24),
+                                    );
+                                    let visible_start_sec =
+                                        (viewport_scroll_x / zoom).floor().max(0.0) as i32;
+                                    let visible_end_sec =
+                                        ((viewport_scroll_x + sticky_ruler_rect.width()) / zoom)
+                                            .ceil() as i32
+                                            + 1;
+                                    for sec in visible_start_sec..=visible_end_sec {
+                                        let x = sticky_ruler_rect.left()
+                                            + sec as f32 * zoom
+                                            - viewport_scroll_x;
+                                        let major = sec % 5 == 0;
+                                        let tick_h = if major { 12.0 } else { 6.0 };
+                                        overlay_painter.line_segment(
+                                            [
+                                                Pos2::new(
+                                                    x,
+                                                    sticky_ruler_rect.top() + ruler_h - tick_h,
+                                                ),
+                                                Pos2::new(x, sticky_ruler_rect.top() + ruler_h),
+                                            ],
+                                            Stroke::new(1.0, Color32::from_rgb(60, 60, 70)),
+                                        );
+                                        if major {
+                                            let m = (sec / 60) as u32;
+                                            let s = (sec % 60) as u32;
+                                            overlay_painter.text(
+                                                Pos2::new(x, sticky_ruler_rect.top() + 4.0),
+                                                Align2::CENTER_TOP,
+                                                format!("{:02}:{:02}", m, s),
+                                                egui::FontId::proportional(9.0),
+                                                Color32::from_rgb(110, 110, 120),
+                                            );
+                                        }
+                                    }
+                                },
+                            );
+
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(scroll_visible_w, tracks_view_h),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    ScrollArea::both()
+                                .id_salt("editor_timeline_scroll")
+                                .max_height(tracks_view_h)
+                                .auto_shrink([false, false])
+                                .scroll_offset(egui::Vec2::new(
+                                    editor.timeline_scroll_x,
+                                    editor.timeline_scroll_y,
+                                ))
+                                .show(ui, |ui| {
                             let (rect, resp) = ui.allocate_exact_size(
-                                Vec2::new(timeline_w, total_tracks_h),
+                                Vec2::new(timeline_w, tracks_total_h),
                                 Sense::click_and_drag(),
                             );
                             let painter = ui.painter_at(rect);
 
                             painter.rect_filled(rect, 0.0, Color32::from_rgb(14, 14, 17));
-
-                            let ruler_rect = Rect::from_min_max(
-                                rect.min,
-                                Pos2::new(rect.max.x, rect.min.y + ruler_h),
-                            );
-                            painter.rect_filled(ruler_rect, 0.0, Color32::from_rgb(20, 20, 24));
-
-                            let secs_visible = (timeline_w / zoom) as i32 + 2;
-                            for sec in 0..=secs_visible {
-                                let x = rect.left() + sec as f32 * zoom;
-                                let major = sec % 5 == 0;
-                                let tick_h = if major { 12.0 } else { 6.0 };
-                                painter.line_segment(
-                                    [
-                                        Pos2::new(x, rect.top() + ruler_h - tick_h),
-                                        Pos2::new(x, rect.top() + ruler_h),
-                                    ],
-                                    Stroke::new(1.0, Color32::from_rgb(60, 60, 70)),
-                                );
-                                if major {
-                                    let m = (sec / 60) as u32;
-                                    let s = (sec % 60) as u32;
-                                    painter.text(
-                                        Pos2::new(x, rect.top() + 4.0),
-                                        Align2::CENTER_TOP,
-                                        format!("{:02}:{:02}", m, s),
-                                        egui::FontId::proportional(9.0),
-                                        Color32::from_rgb(110, 110, 120),
-                                    );
-                                }
-                            }
 
                             // Фони доріжок (з інтерлівінгом голосової)
                             for vis in 0..total_rows {
@@ -613,10 +683,9 @@ pub(super) fn draw_timeline(
                             // Глобальний курсор для інструменту розрізу (поверх усіх кліпів)
                             if editor.split_tool_active {
                                 if let Some(pos) = mouse_pos {
-                                    if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                                    if rect.contains(pos) && pos.y >= rect.top() {
                                         let total_rows = editor.num_tracks;
                                         let tracks_bottom = rect.top()
-                                            + ruler_h
                                             + total_rows as f32 * (track_h + 2.0);
                                         if pos.y <= tracks_bottom {
                                             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
@@ -628,9 +697,9 @@ pub(super) fn draw_timeline(
                             // Ghost-preview при drag з медіа-пулу
                             if let Some(ref drag_id) = editor.dragged_media_id.clone() {
                                 if let Some(pos) = mouse_pos {
-                                    if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                                    if rect.contains(pos) && pos.y >= rect.top() {
                                         let click_t = ((pos.x - rect.left()) / zoom).max(0.0);
-                                        let rel_y = pos.y - (rect.top() + ruler_h);
+                                        let rel_y = pos.y - rect.top();
                                         let vis_idx = ((rel_y / (track_h + 2.0)) as usize)
                                             .min(total_rows - 1);
                                         let t_idx = vis_idx;
@@ -703,9 +772,9 @@ pub(super) fn draw_timeline(
                             if ui.input(|i| !i.pointer.any_down()) {
                                 if let Some(drag_id) = editor.dragged_media_id.take() {
                                     if let Some(pos) = mouse_pos {
-                                        if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                                        if rect.contains(pos) && pos.y >= rect.top() {
                                             let t_idx = {
-                                                let rel_y = pos.y - (rect.top() + ruler_h);
+                                                let rel_y = pos.y - rect.top();
                                                 let vis_idx = ((rel_y / (track_h + 2.0)) as usize)
                                                     .min(total_rows - 1);
                                                 vis_idx
@@ -854,7 +923,7 @@ pub(super) fn draw_timeline(
                             }
 
                             // Обробка перетягування кліпів (move / trim)
-                            update_clip_drag(ui.ctx(), editor, rect, ruler_h, track_h, zoom);
+                            update_clip_drag(ui.ctx(), editor, rect, track_h, zoom);
 
                             // Обробка drag смужки прозорості
                             update_opacity_drag(ui, editor);
@@ -863,7 +932,7 @@ pub(super) fn draw_timeline(
                             if editor.split_tool_active {
                                 let threshold = 10.0 / zoom;
                                 editor.split_snap_secs = mouse_pos
-                                    .filter(|p| rect.contains(*p) && p.y >= rect.top() + ruler_h)
+                                    .filter(|p| rect.contains(*p) && p.y >= rect.top())
                                     .and_then(|p| {
                                         find_snap_secs(
                                             (p.x - rect.left()) / zoom,
@@ -1242,7 +1311,7 @@ pub(super) fn draw_timeline(
                                     if !split_done_this_frame && clip_resp.clicked() {
                                         if let Some(pos) = mouse_pos {
                                             if clip_rect.contains(pos)
-                                                && pos.y >= rect.top() + ruler_h
+                                                && pos.y >= rect.top()
                                             {
                                                 // Використовуємо снапнуту позицію якщо є (cross-track snap)
                                                 let click_time = editor
@@ -1669,13 +1738,13 @@ pub(super) fn draw_timeline(
                             // Індикатор лінії розрізу при активному інструменті (поверх кліпів)
                             if editor.split_tool_active {
                                 if let Some(pos) = mouse_pos {
-                                    if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                                    if rect.contains(pos) && pos.y >= rect.top() {
                                         let is_snapped = editor.split_snap_secs.is_some();
                                         let secs = editor
                                             .split_snap_secs
                                             .unwrap_or_else(|| (pos.x - rect.left()) / zoom);
                                         let split_x = rect.left() + secs * zoom;
-                                        let top_y = rect.top() + ruler_h;
+                                        let top_y = rect.top();
                                         let total_rows = editor.num_tracks;
                                         let bottom_y = top_y + total_rows as f32 * (track_h + 2.0);
                                         // Помаранчевий при снапі, червоний без нього
@@ -1704,29 +1773,32 @@ pub(super) fn draw_timeline(
                             }
 
                             // Плейхед
-                            let ph_x = rect.left() + editor.playhead * zoom;
-                            if ph_x >= rect.left() && ph_x <= rect.right() {
-                                painter.line_segment(
-                                    [Pos2::new(ph_x, rect.top()), Pos2::new(ph_x, rect.bottom())],
+                            let ph_x = sticky_ruler_rect.left() + editor.playhead * zoom - viewport_scroll_x;
+                            if ph_x >= viewport_rect.left() && ph_x <= viewport_rect.right() {
+                                overlay_painter.line_segment(
+                                    [
+                                        Pos2::new(ph_x, sticky_ruler_rect.top()),
+                                        Pos2::new(ph_x, rect.bottom()),
+                                    ],
                                     Stroke::new(2.0, Color32::from_rgb(9, 123, 244)),
                                 );
-                                let ph_top = rect.top() + ruler_h;
+                                let ph_top = sticky_ruler_rect.bottom();
                                 let p1 = Pos2::new(ph_x - 6.0, ph_top - 6.0);
                                 let p2 = Pos2::new(ph_x + 6.0, ph_top - 6.0);
                                 let p3 = Pos2::new(ph_x, ph_top);
-                                painter.add(egui::Shape::convex_polygon(
+                                overlay_painter.add(egui::Shape::convex_polygon(
                                     vec![p1, p2, p3],
                                     Color32::from_rgb(9, 123, 244),
                                     Stroke::NONE,
                                 ));
                             }
 
-                            // Скраб плейхеда кліком по лінійці.
+                            // Скраб плейхеда кліком по sticky-лінійці.
                             // Натискання на лінійці починає drag; плейхед рухається поки кнопка затиснута,
                             // навіть якщо мишка вийшла на кліпи нижче.
                             let primary_down = ui.input(|i| i.pointer.primary_down());
                             if let Some(pos) = mouse_pos {
-                                if ruler_rect.contains(pos)
+                                if sticky_ruler_rect.contains(pos)
                                     && ui.input(|i| i.pointer.primary_pressed())
                                 {
                                     editor.playhead_dragging = true;
@@ -1737,8 +1809,9 @@ pub(super) fn draw_timeline(
                             }
                             if editor.playhead_dragging && primary_down {
                                 if let Some(pos) = mouse_pos {
-                                    let new_ph =
-                                        ((pos.x - rect.left()) / zoom).clamp(0.0, total_dur);
+                                    let new_ph = ((pos.x - sticky_ruler_rect.left() + viewport_scroll_x)
+                                        / zoom)
+                                        .clamp(0.0, total_dur);
                                     if (new_ph - editor.playhead).abs() > 0.05 {
                                         editor.active_audios.clear();
                                     }
@@ -1770,7 +1843,7 @@ pub(super) fn draw_timeline(
                                 if let Some(snap_secs) = drag.snap_line_secs {
                                     let snap_x = rect.left() + snap_secs * zoom;
                                     if snap_x >= rect.left() && snap_x <= rect.right() {
-                                        let top_y = rect.top() + ruler_h;
+                                        let top_y = rect.top();
                                         let total_rows = editor.num_tracks;
                                         let bottom_y =
                                             top_y + total_rows as f32 * (track_h + 2.0) + 4.0;
@@ -1792,7 +1865,10 @@ pub(super) fn draw_timeline(
                                     }
                                 }
                             }
-                        })
+                                })
+                                },
+                            )
+                            .inner
                         },
                     )
                     .inner
@@ -1800,11 +1876,12 @@ pub(super) fn draw_timeline(
             )
             .inner;
 
-        // Запам'ятовуємо поточний горизонтальний scroll для авто-прокрутки наступного кадру
+        // Запам'ятовуємо поточний scroll, щоб не скидати позицію при переповненні таймлайну.
         editor.timeline_scroll_x = output.state.offset.x;
+        editor.timeline_scroll_y = output.state.offset.y;
 
         // Sticky лейбли доріжок — малюємо поверх через painter з урахуванням vertical offset
-        let v_off = output.state.offset.y;
+        let v_off = editor.timeline_scroll_y;
         let painter = ui.painter_at(labels_rect);
         painter.rect_filled(labels_rect, 0.0, Color32::from_rgb(18, 18, 22));
         painter.rect_filled(
@@ -1816,8 +1893,8 @@ pub(super) fn draw_timeline(
         let mut video_num = 0usize;
         let mut audio_num = 0usize;
         for vis in 0..total_rows {
-            let track_y = vis_y(labels_rect, vis) - v_off;
-            if track_y + track_h < labels_rect.top() || track_y > labels_rect.bottom() {
+            let track_y = labels_rect.top() + ruler_h + (track_h + 2.0) * vis as f32 - v_off;
+            if track_y + track_h < labels_rect.top() + ruler_h || track_y > labels_rect.bottom() {
                 continue;
             }
             let ti = vis;
@@ -2018,7 +2095,7 @@ pub(super) fn draw_timeline(
         if editor.track_drag.is_some() {
             // Оновлюємо hover_track за Y-позицією курсору
             if let Some(hover_pos) = ui.input(|i| i.pointer.hover_pos()) {
-                let raw = (hover_pos.y - labels_rect.top() - ruler_h + v_off) / (track_h + 2.0);
+                let raw = (hover_pos.y - (labels_rect.top() + ruler_h) + v_off) / (track_h + 2.0);
                 let hover_vis = (raw.max(0.0) as usize).min(total_rows.saturating_sub(1));
                 if let Some(ref mut drag) = editor.track_drag {
                     drag.hover_track = hover_vis;
@@ -2040,7 +2117,7 @@ pub(super) fn draw_timeline(
             if is_valid {
                 let indicator_y =
                     labels_rect.top() + ruler_h + (to_track as f32 + 0.5) * (track_h + 2.0) - v_off;
-                if indicator_y >= labels_rect.top() && indicator_y <= labels_rect.bottom() {
+                if indicator_y >= labels_rect.top() + ruler_h && indicator_y <= labels_rect.bottom() {
                     painter.line_segment(
                         [
                             Pos2::new(labels_rect.left(), indicator_y),
@@ -2165,7 +2242,6 @@ fn update_clip_drag(
     ctx: &egui::Context,
     editor: &mut MontageEditorState,
     rect: Rect,
-    ruler_h: f32,
     track_h: f32,
     zoom: f32,
 ) {
@@ -2209,7 +2285,7 @@ fn update_clip_drag(
         None => return,
     };
 
-    let dy = pos.y - (rect.top() + ruler_h);
+    let dy = pos.y - rect.top();
     let vis_idx = (dy / (track_h + 2.0)).max(0.0) as usize;
     // Конвертуємо візуальну позицію в track_idx
     let hovered_track = vis_idx.min(editor.num_tracks - 1);

@@ -79,6 +79,11 @@ pub fn draw_montage_editor_window(
         None => return MontageEditorActions::default(),
     };
 
+    // Не даємо панелі таймлайну виходити за розумні межі екрана,
+    // але дозволяємо збільшувати її значно вище попереднього ліміту 500px.
+    let max_timeline_height = (ctx.screen_rect().height() * 0.75).max(220.0);
+    editor.timeline_height = editor.timeline_height.clamp(80.0, max_timeline_height);
+
     // Очищаємо накопичені дії попереднього кадру
     editor.pending_animate_paths.clear();
     editor.pending_regen = None;
