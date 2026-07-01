@@ -39,6 +39,8 @@ pub struct MontageEditorState {
     pub preview_render: PreviewRenderSettings,
     /// Висота панелі таймлайну (змінюється drag-handle)
     pub timeline_height: f32,
+    /// Висота одного рядка таймлайну — впливає на кліпи, плейсхолдери і текст.
+    pub timeline_track_height: f32,
     /// Активні аудіо плеєри
     pub active_audios: Vec<PlayingAudio>,
     /// Стан інтерактивного drag-трансформу на превью
@@ -248,7 +250,8 @@ impl MontageEditorState {
             frame_cache: FrameCache::new(preview_render.texture_cache_size()),
             preview_settings: MontagePreviewSettings::default(),
             preview_render,
-            timeline_height: 220.0,
+            timeline_height: 150.0,
+            timeline_track_height: 40.0,
             active_audios: Vec::new(),
             preview_drag: None,
             selected_media_ids: HashSet::new(),

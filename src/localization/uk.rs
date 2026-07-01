@@ -86,6 +86,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_split_at_playhead" => "Розрізати на плейхеді",
         "montage_editor_undo" => "↩ Скасувати",
         "montage_editor_redo" => "↪ Повторити",
+        "montage_editor_timeline_track_height" => "Висота доріжок таймлайна",
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",
