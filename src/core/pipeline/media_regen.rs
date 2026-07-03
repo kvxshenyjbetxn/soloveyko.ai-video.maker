@@ -69,6 +69,7 @@ pub fn animate_single_image(
                         ),
                     );
                 },
+                Some(job_id),
             )?;
 
             // Зберігаємо відео поряд з оригінальним зображенням (.mp4)
@@ -234,6 +235,7 @@ pub fn regenerate_single_media(
                         ),
                     );
                 },
+                Some(job_id),
             )
         } else {
             crate::api::googler::generate_image_with_priority(
@@ -241,6 +243,7 @@ pub fn regenerate_single_media(
                 &prompt,
                 "16:9",
                 &priority,
+                Some(job_id),
             )
         };
 

@@ -725,10 +725,11 @@ pub(super) fn run_video_branch(
                             ),
                         );
                     },
+                    Some(job_id_c),
                 )
                 .map(|(p, d)| (p, d))
             } else {
-                crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority)
+                crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority, Some(job_id_c))
                     .map(|(p, d)| (p, d))
             };
 

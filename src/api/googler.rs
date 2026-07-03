@@ -211,12 +211,20 @@ fn poll_v6_generation(
     key: &str,
     generation_id: &str,
     agent: &ureq::Agent,
+    job_id: Option<u64>,
 ) -> Result<String, String> {
     let url = format!("{}/v6/generations/{}", BASE_URL, generation_id);
     let poll_interval = std::time::Duration::from_secs(3);
 
     for _ in 0..100 {
         std::thread::sleep(poll_interval);
+
+        // Перевіряємо, чи задача не скасована
+        if let Some(id) = job_id {
+            if crate::queue::is_job_cancelled(id) {
+                return Err(crate::queue::cancelled_error());
+            }
+        }
 
         let response = agent
             .get(&url)
@@ -264,6 +272,7 @@ fn start_v6_generation(
     key: &str,
     body: serde_json::Value,
     agent: &ureq::Agent,
+    job_id: Option<u64>,
 ) -> Result<String, String> {
     let url = format!("{}/v6/generations", BASE_URL);
 
@@ -285,7 +294,7 @@ fn start_v6_generation(
         .into_json()
         .map_err(|e| format!("Помилка парсингу відповіді v6: {}", e))?;
 
-    poll_v6_generation(key, &started.id, agent)
+    poll_v6_generation(key, &started.id, agent, job_id)
 }
 
 /// Перевіряє, чи помилка є перевищенням ліміту одночасних запитів.
@@ -451,10 +460,11 @@ fn try_generate_image(
     aspect_ratio: &str,
     provider: &str,
     agent: &ureq::Agent,
+    job_id: Option<u64>,
 ) -> Result<String, String> {
     let _permit = GooglerImageLimiter::get().acquire();
     let body = image_generation_body(provider, prompt, aspect_ratio)?;
-    start_v6_generation(key, body, agent)
+    start_v6_generation(key, body, agent, job_id)
 }
 
 /// Спроба генерації відео через конкретного провайдера.
@@ -464,10 +474,11 @@ fn try_generate_video(
     aspect_ratio: &str,
     provider: &str,
     agent: &ureq::Agent,
+    job_id: Option<u64>,
 ) -> Result<String, String> {
     let _permit = GooglerVideoLimiter::get().acquire();
     let body = video_generation_body(provider, prompt, aspect_ratio)?;
-    start_v6_generation(key, body, agent)
+    start_v6_generation(key, body, agent, job_id)
 }
 
 /// Генерує зображення з перебором провайдерів за пріоритетом.
@@ -478,6 +489,7 @@ pub fn generate_image_with_priority(
     prompt: &str,
     aspect_ratio: &str,
     priority: &[String],
+    job_id: Option<u64>,
 ) -> Result<(String, String), String> {
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
@@ -490,9 +502,21 @@ pub fn generate_image_with_priority(
     for provider in priority {
         let mut failures = 0u32;
         loop {
-            match try_generate_image(key, prompt, aspect_ratio, provider, &agent) {
+            // Перевіряємо скасування перед кожною спробою
+            if let Some(id) = job_id {
+                if crate::queue::is_job_cancelled(id) {
+                    return Err(crate::queue::cancelled_error());
+                }
+            }
+
+            match try_generate_image(key, prompt, aspect_ratio, provider, &agent, job_id) {
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
+                    // Якщо це помилка скасування - повертаємо її одразу
+                    if crate::queue::is_cancelled_error(&e) {
+                        return Err(e);
+                    }
+
                     if is_concurrency_exceeded(&e) {
                         crate::logger::log(&format!(
                             " Зображення [{}] ліміт потоків, чекаю…",
@@ -538,6 +562,7 @@ pub fn animate_image_with_priority<F>(
     prompt: &str,
     priority: &[String],
     mut on_started: F,
+    job_id: Option<u64>,
 ) -> Result<(String, String), String>
 where
     F: FnMut(&str),
@@ -553,15 +578,27 @@ where
     for provider in priority {
         let mut failures = 0u32;
         loop {
+            // Перевіряємо скасування перед кожною спробою
+            if let Some(id) = job_id {
+                if crate::queue::is_job_cancelled(id) {
+                    return Err(crate::queue::cancelled_error());
+                }
+            }
+
             let _permit = GooglerVideoLimiter::get().acquire();
             on_started(provider);
 
             let result = animation_generation_body(provider, image_data_uri, prompt)
-                .and_then(|body| start_v6_generation(key, body, &agent));
+                .and_then(|body| start_v6_generation(key, body, &agent, job_id));
 
             match result {
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
+                    // Якщо це помилка скасування - повертаємо її одразу
+                    if crate::queue::is_cancelled_error(&e) {
+                        return Err(e);
+                    }
+
                     if is_concurrency_exceeded(&e) {
                         crate::logger::log(&format!(
                             " Анімація [{}] ліміт потоків, чекаю…",
@@ -620,6 +657,7 @@ pub fn generate_video_with_priority_logged<F>(
     aspect_ratio: &str,
     priority: &[String],
     on_provider: F,
+    job_id: Option<u64>,
 ) -> Result<(String, String), String>
 where
     F: Fn(&str),
@@ -638,9 +676,21 @@ where
 
         let mut failures = 0u32;
         loop {
-            match try_generate_video(key, prompt, aspect_ratio, provider, &agent) {
+            // Перевіряємо скасування перед кожною спробою
+            if let Some(id) = job_id {
+                if crate::queue::is_job_cancelled(id) {
+                    return Err(crate::queue::cancelled_error());
+                }
+            }
+
+            match try_generate_video(key, prompt, aspect_ratio, provider, &agent, job_id) {
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
+                    // Якщо це помилка скасування - повертаємо її одразу
+                    if crate::queue::is_cancelled_error(&e) {
+                        return Err(e);
+                    }
+
                     if is_concurrency_exceeded(&e) {
                         crate::logger::log(&format!(" Відео [{}] ліміт потоків, чекаю…", provider));
                         std::thread::sleep(DELAY);
@@ -669,7 +719,7 @@ where
         }
     }
 
-    Err("Всі провайдери відео вичерпані".to_string())
+    Err("Всі відео-провайдери вичерпані".to_string())
 }
 
 // ─── Локальні лімітери потоків ───────────────────────────────────────────────
