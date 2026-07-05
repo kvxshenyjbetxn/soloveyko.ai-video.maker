@@ -88,6 +88,7 @@ pub fn draw_montage_editor_window(
     editor.pending_animate_paths.clear();
     editor.pending_regen = None;
     editor.pending_placeholder_regen = None;
+    editor.pending_placeholder_batch_regen.clear();
 
     // Оновлюємо duration_secs/has_audio для медіа, у яких фоновий ffprobe щойно завершився
     {
@@ -433,6 +434,7 @@ pub fn draw_montage_editor_window(
     let animate_paths = std::mem::take(&mut editor.pending_animate_paths);
     let regen_opt = editor.pending_regen.take();
     let placeholder_regen_opt = editor.pending_placeholder_regen.take();
+    let placeholder_batch_regen = std::mem::take(&mut editor.pending_placeholder_batch_regen);
     let open_stock_picker = editor.pending_open_stock_picker.take();
     let preview_render_changed = editor.pending_preview_render.take();
     let regen_action = jobs.iter().find(|j| j.id == job_id).and_then(|job| {
@@ -462,12 +464,31 @@ pub fn draw_montage_editor_window(
         })
     });
 
+    let batch_regen_action = jobs.iter().find(|j| j.id == job_id).and_then(|job| {
+        if placeholder_batch_regen.is_empty() {
+            return None;
+        }
+
+        let targets = placeholder_batch_regen
+            .iter()
+            .map(|seg_idx| {
+                state::placeholder_output_path(
+                    &editor.save_path,
+                    *seg_idx,
+                    &job.settings.video_media_type,
+                )
+            })
+            .collect();
+        Some((targets, job.settings.clone(), job_id, job.name.clone()))
+    });
+
     if !is_open || close_after {
         *open_job = None;
         *state = None;
         return MontageEditorActions {
             animate_paths,
             regen_action,
+            batch_regen_action,
             open_stock_picker: None,
             preview_render_changed,
         };
@@ -544,6 +565,7 @@ pub fn draw_montage_editor_window(
     MontageEditorActions {
         animate_paths,
         regen_action,
+        batch_regen_action,
         open_stock_picker,
         preview_render_changed,
     }

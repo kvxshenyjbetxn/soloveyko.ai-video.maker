@@ -55,6 +55,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_animate" => "Оживить",
         "montage_editor_regen_same" => "Перегенерировать",
         "montage_editor_regen_custom" => "Перегенерировать (настройки)",
+        "montage_editor_regen_placeholders" => "Догенерировать плейсхолдеры",
+        "montage_editor_regen_placeholders_hint" => {
+            "Сгенерировать все сегменты, которые ещё остались плейсхолдерами"
+        }
         "montage_editor_replace_stock" => "🔄 Заменить стоковое медиа",
         "montage_editor_placeholder_title" => "Плейсхолдер сегмента",
         "montage_editor_placeholder_hint" => {
@@ -478,6 +482,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_regen_same_tooltip" => "Перегенерировать с теми же настройками",
         "gallery_regen_custom_tooltip" => "Перегенерировать с другими настройками",
         "gallery_regen_window_title" => "Перегенерация",
+        "gallery_regen_batch_window_title" => "Пакетная перегенерация плейсхолдеров",
         "gallery_regen_media_type_label" => "Тип медиа",
         "gallery_regen_media_type_locked" => {
             "Для нового файла тип медиа фиксируется текущими настройками сегмента."
@@ -485,6 +490,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_regen_priority_image_label" => "Приоритет провайдеров (изображения)",
         "gallery_regen_priority_video_label" => "Приоритет провайдеров (видео)",
         "gallery_regen_prompt_label" => "Промт (пустое = из сохранённого файла)",
+        "gallery_regen_batch_hint" => {
+            "Для каждого плейсхолдера будет использован его сохранённый промт."
+        }
+        "gallery_regen_batch_start_btn" => "Догенерировать",
         "gallery_regen_start_btn" => "Перегенерировать",
         "gallery_regen_loading" => "Генерирую...",
         "gallery_animate_all_btn" => "Анимировать всё",

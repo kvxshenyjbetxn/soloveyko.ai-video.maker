@@ -60,6 +60,7 @@ impl Default for VideoMakerApp {
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             media_regen_target: None,
+            media_regen_batch_targets: vec![],
             media_regen_paths: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
@@ -531,6 +532,7 @@ impl VideoMakerApp {
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             media_regen_target: None,
+            media_regen_batch_targets: vec![],
             media_regen_paths: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),

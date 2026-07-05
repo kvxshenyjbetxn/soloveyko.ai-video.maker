@@ -16,8 +16,8 @@ use eframe::egui;
 
 use self::agent_timeline::{assign_media_to_timeline, run_agent_timeline};
 pub use self::media_regen::{
-    animate_single_image, find_changed_prompts_for_rebuild, regenerate_single_media,
-    upscale_video_if_needed,
+    animate_single_image, find_changed_prompts_for_rebuild, regenerate_multiple_media,
+    regenerate_single_media, upscale_video_if_needed,
 };
 pub use self::retry::retry_from_stage;
 

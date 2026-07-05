@@ -702,14 +702,6 @@ pub(super) fn run_video_branch(
                 return (i, Ok(()));
             }
 
-            if !use_video {
-                crate::logger::log_job(
-                    job_id_c,
-                    &job_name_c,
-                    &format!("Generating image {}/{} ...", i + 1, total),
-                );
-            }
-
             if prompt.trim().is_empty() {
                 crate::logger::log_job(
                     job_id_c,
@@ -746,6 +738,18 @@ pub(super) fn run_video_branch(
                     &prompt,
                     "16:9",
                     &priority,
+                    |provider| {
+                        crate::logger::log_job(
+                            job_id_c,
+                            &job_name_c,
+                            &format!(
+                                "Generating image {}/{} ... (модель: {})",
+                                i + 1,
+                                total,
+                                crate::api::googler::image_provider_model_name(provider)
+                            ),
+                        );
+                    },
                     Some(job_id_c),
                 )
                 .map(|(p, d)| (p, d))

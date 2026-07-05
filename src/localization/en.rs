@@ -55,6 +55,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_animate" => "Animate",
         "montage_editor_regen_same" => "Regenerate",
         "montage_editor_regen_custom" => "Regenerate (custom)",
+        "montage_editor_regen_placeholders" => "Generate placeholders",
+        "montage_editor_regen_placeholders_hint" => {
+            "Generate all segments that are still placeholders"
+        }
         "montage_editor_replace_stock" => "🔄 Replace stock media",
         "montage_editor_placeholder_title" => "Segment Placeholder",
         "montage_editor_placeholder_hint" => {
@@ -480,6 +484,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_regen_same_tooltip" => "Regenerate with the same settings",
         "gallery_regen_custom_tooltip" => "Regenerate with custom settings",
         "gallery_regen_window_title" => "Regenerate",
+        "gallery_regen_batch_window_title" => "Batch placeholder generation",
         "gallery_regen_media_type_label" => "Media type",
         "gallery_regen_media_type_locked" => {
             "For a new file, the media type is locked to the segment's current settings."
@@ -487,6 +492,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_regen_priority_image_label" => "Provider priority (image)",
         "gallery_regen_priority_video_label" => "Provider priority (video)",
         "gallery_regen_prompt_label" => "Prompt (empty = use saved prompt)",
+        "gallery_regen_batch_hint" => "Each placeholder will use its own saved prompt.",
+        "gallery_regen_batch_start_btn" => "Generate",
         "gallery_regen_start_btn" => "Regenerate",
         "gallery_regen_loading" => "Generating...",
         "gallery_animate_all_btn" => "Animate all",

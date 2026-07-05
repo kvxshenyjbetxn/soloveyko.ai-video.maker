@@ -7,6 +7,17 @@ use crate::localization::{Language, translate};
 use eframe::egui;
 use egui::{Align2, Color32, Pos2, Rect, ScrollArea, Sense, Stroke, Vec2};
 use std::collections::HashSet;
+
+fn placeholder_regen_in_progress(
+    save_path: &std::path::Path,
+    seg_idx: usize,
+    regen_paths: &HashSet<PathBuf>,
+) -> bool {
+    let stem = format!("{:04}", seg_idx + 1);
+    ["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm"]
+        .iter()
+        .any(|ext| regen_paths.contains(&save_path.join("media").join(format!("{}.{}", stem, ext))))
+}
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -993,6 +1004,12 @@ pub(super) fn draw_timeline(
                                         );
                                     }
 
+                                    let is_placeholder_regen = placeholder_regen_in_progress(
+                                        &editor.save_path,
+                                        seg_idx,
+                                        regen_paths,
+                                    );
+
                                     let title_font = placeholder_title_font_size(track_h);
                                     let body_font = placeholder_body_font_size(track_h);
                                     let label = format!("+ #{}", seg_idx + 1);
@@ -1043,6 +1060,40 @@ pub(super) fn draw_timeline(
                                                 );
                                             }
                                         }
+                                    }
+
+                                    if is_placeholder_regen {
+                                        painter.rect_filled(
+                                            clip_rect,
+                                            3.0,
+                                            Color32::from_black_alpha(155),
+                                        );
+                                        let t = ui.ctx().input(|i| i.time) as f32;
+                                        let center = clip_rect.center();
+                                        let r = (cw * 0.5)
+                                            .min(clip_rect.height() * 0.38)
+                                            .min(9.0)
+                                            .max(4.0);
+                                        let segs = 20usize;
+                                        for s in 0..segs {
+                                            let a0 = t * std::f32::consts::TAU
+                                                + s as f32 * std::f32::consts::TAU / segs as f32;
+                                            let a1 = a0 + std::f32::consts::TAU / segs as f32;
+                                            let alpha = (s as f32 / segs as f32 * 200.0) as u8 + 30;
+                                            painter.line_segment(
+                                                [
+                                                    center + Vec2::new(a0.cos() * r, a0.sin() * r),
+                                                    center + Vec2::new(a1.cos() * r, a1.sin() * r),
+                                                ],
+                                                Stroke::new(
+                                                    1.8,
+                                                    Color32::from_rgba_unmultiplied(
+                                                        255, 180, 50, alpha,
+                                                    ),
+                                                ),
+                                            );
+                                        }
+                                        ui.ctx().request_repaint();
                                     }
 
                                     let clip_resp = ui

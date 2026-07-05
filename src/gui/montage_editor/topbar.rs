@@ -3,6 +3,7 @@ use super::types::PreviewQuality;
 use crate::localization::{Language, translate};
 use eframe::egui;
 use egui::{Color32, Layout};
+use std::collections::BTreeSet;
 
 // ─── Топ-бар ─────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ pub(super) fn draw_topbar(
     jobs: &[crate::queue::PipelineJob],
 ) -> bool {
     let mut continue_clicked = false;
+    let placeholder_segments = collect_placeholder_segment_indices(editor);
     ui.horizontal(|ui| {
         draw_preview_settings(ui, language, editor);
 
@@ -139,6 +141,25 @@ pub(super) fn draw_topbar(
 
             ui.add_space(8.0);
 
+            if !placeholder_segments.is_empty() {
+                let label = format!(
+                    "✨ {} ({})",
+                    translate(language, "montage_editor_regen_placeholders"),
+                    placeholder_segments.len()
+                );
+                if ui
+                    .button(label)
+                    .on_hover_text(translate(
+                        language,
+                        "montage_editor_regen_placeholders_hint",
+                    ))
+                    .clicked()
+                {
+                    editor.pending_placeholder_batch_regen = placeholder_segments.clone();
+                }
+                ui.add_space(4.0);
+            }
+
             // Кнопка розгортання на весь екран / згортання у вікно
             let max_text = if editor.maximized { "🗗" } else { "🗖" };
             let max_tooltip = if editor.maximized {
@@ -170,6 +191,25 @@ pub(super) fn draw_topbar(
         });
     });
     continue_clicked
+}
+
+fn collect_placeholder_segment_indices(editor: &MontageEditorState) -> Vec<usize> {
+    let mut segments = BTreeSet::new();
+    for clip in &editor.clips {
+        if !clip.is_placeholder {
+            continue;
+        }
+
+        let seg_idx = clip.stock_seg_idx.or_else(|| {
+            clip.media_id
+                .strip_prefix("placeholder_")
+                .and_then(|value| value.parse::<usize>().ok())
+        });
+        if let Some(seg_idx) = seg_idx {
+            segments.insert(seg_idx);
+        }
+    }
+    segments.into_iter().collect()
 }
 
 fn draw_preview_settings(ui: &mut egui::Ui, language: Language, editor: &mut MontageEditorState) {

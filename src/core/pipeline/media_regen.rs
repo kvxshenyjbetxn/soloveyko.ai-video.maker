@@ -206,6 +206,160 @@ fn save_media_bytes(data_uri: &str, file_path: &std::path::Path) -> Result<(), S
     std::fs::write(file_path, &bytes).map_err(|e| format!("Save error: {}", e))
 }
 
+fn regenerate_single_media_sync(
+    mut file_path: std::path::PathBuf,
+    media_type: &str,
+    priority: &[String],
+    googler_key: &str,
+    custom_prompt: Option<&str>,
+    job_id: u64,
+    job_name: &str,
+    path_loading_set: Option<&Arc<Mutex<std::collections::HashSet<std::path::PathBuf>>>>,
+    results_queue: Option<&Arc<Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>>,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: &str,
+    googler_video_upscale_quality: &str,
+) -> Result<(), String> {
+    let requested_path = file_path.clone();
+    let expected_video_path = if media_type == "video" {
+        Some(requested_path.with_extension("mp4"))
+    } else {
+        None
+    };
+    if let Some(set) = path_loading_set {
+        let mut guard = set.lock().unwrap();
+        guard.insert(requested_path.clone());
+        if let Some(ref video_path) = expected_video_path {
+            guard.insert(video_path.clone());
+        }
+    }
+
+    let file_name = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("?")
+        .to_string();
+
+    let prompt = custom_prompt
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| read_prompt_for_file(&file_path));
+
+    let api_result = if media_type == "video" {
+        crate::api::googler::generate_video_with_priority_logged(
+            googler_key,
+            &prompt,
+            "16:9",
+            priority,
+            |provider| {
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    &format!(
+                        "Regen video {}: старт — {}",
+                        file_name,
+                        crate::api::googler::video_provider_model_name(provider)
+                    ),
+                );
+            },
+            Some(job_id),
+        )
+    } else {
+        crate::api::googler::generate_image_with_priority(
+            googler_key,
+            &prompt,
+            "16:9",
+            priority,
+            |provider| {
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    &format!(
+                        "Regen image {}: старт — {}",
+                        file_name,
+                        crate::api::googler::image_provider_model_name(provider)
+                    ),
+                );
+            },
+            Some(job_id),
+        )
+    };
+
+    let save_path = if media_type == "video" {
+        file_path.with_extension("mp4")
+    } else {
+        file_path.clone()
+    };
+
+    let outcome = match api_result {
+        Err(e) => {
+            crate::logger::log_job(
+                job_id,
+                job_name,
+                &format!("Regen {} failed: {}", file_name, e),
+            );
+            Err(e)
+        }
+        Ok((provider_used, data_uri)) => match save_media_bytes(&data_uri, &save_path) {
+            Ok(()) => {
+                if save_path != file_path {
+                    let _ = std::fs::remove_file(&file_path);
+                    file_path = save_path.clone();
+                }
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    &format!("Regen {} done (провайдер: {}).", file_name, provider_used),
+                );
+                if media_type == "video" {
+                    let is_omni = provider_used == "flow_omni_flash";
+                    if let Err(e) = upscale_video_if_needed(
+                        &file_path,
+                        googler_video_upscale_enabled,
+                        googler_video_upscale_resolution,
+                        googler_video_upscale_quality,
+                        is_omni,
+                        job_id,
+                        job_name,
+                    ) {
+                        crate::logger::log_job(
+                            job_id,
+                            job_name,
+                            &format!(
+                                "Помилка апскейлу/кропу перегенерованого відео {}: {}",
+                                file_name, e
+                            ),
+                        );
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => {
+                crate::logger::log_job(
+                    job_id,
+                    job_name,
+                    &format!("Regen {} save error: {}", file_name, e),
+                );
+                Err(e)
+            }
+        },
+    };
+
+    if let Some(q) = results_queue {
+        q.lock().unwrap().push((file_path.clone(), outcome.clone()));
+    }
+    if let Some(set) = path_loading_set {
+        let mut guard = set.lock().unwrap();
+        guard.remove(&requested_path);
+        guard.remove(&file_path);
+        if let Some(ref video_path) = expected_video_path {
+            guard.remove(video_path);
+        }
+    }
+
+    outcome
+}
+
 /// Перегенерує один медіафайл у фоновому потоці.
 /// Якщо custom_prompt = None або порожній — читає збережений промт з prompts.json.
 pub fn regenerate_single_media(
@@ -229,134 +383,79 @@ pub fn regenerate_single_media(
 ) {
     std::thread::spawn(move || {
         *loading.lock().unwrap() = true;
-        if let Some(ref set) = path_loading_set {
-            set.lock().unwrap().insert(file_path.clone());
-        }
-
-        let file_name = file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("?")
-            .to_string();
-
-        let prompt = custom_prompt
-            .filter(|p| !p.is_empty())
-            .unwrap_or_else(|| read_prompt_for_file(&file_path));
-
-        crate::logger::log_job(
+        let outcome = regenerate_single_media_sync(
+            file_path,
+            &media_type,
+            &priority,
+            &googler_key,
+            custom_prompt.as_deref(),
             job_id,
             &job_name,
-            &format!(
-                "Regen {}: {} (prompt: {}...)",
-                media_type,
-                file_name,
-                prompt.chars().take(60).collect::<String>()
-            ),
+            path_loading_set.as_ref(),
+            results_queue.as_ref(),
+            googler_video_upscale_enabled,
+            &googler_video_upscale_resolution,
+            &googler_video_upscale_quality,
         );
-
-        let api_result = if media_type == "video" {
-            crate::api::googler::generate_video_with_priority_logged(
-                &googler_key,
-                &prompt,
-                "16:9",
-                &priority,
-                |provider| {
-                    crate::logger::log_job(
-                        job_id,
-                        &job_name,
-                        &format!(
-                            "Regen {}: модель — {}",
-                            file_name,
-                            crate::api::googler::video_provider_model_name(provider)
-                        ),
-                    );
-                },
-                Some(job_id),
-            )
-        } else {
-            crate::api::googler::generate_image_with_priority(
-                &googler_key,
-                &prompt,
-                "16:9",
-                &priority,
-                Some(job_id),
-            )
-        };
-
-        // Для відео генеруємо з правильним розширенням (.mp4), аналогічно animate_single_image
-        let mut file_path = file_path;
-        let save_path = if media_type == "video" {
-            file_path.with_extension("mp4")
-        } else {
-            file_path.clone()
-        };
-
-        let outcome = match api_result {
-            Err(e) => {
-                crate::logger::log_job(
-                    job_id,
-                    &job_name,
-                    &format!("Regen {} failed: {}", file_name, e),
-                );
-                Err(e)
-            }
-            Ok((provider_used, data_uri)) => match save_media_bytes(&data_uri, &save_path) {
-                Ok(()) => {
-                    // Якщо розширення змінилося (.jpg → .mp4) — видаляємо оригінальний файл
-                    if save_path != file_path {
-                        let _ = std::fs::remove_file(&file_path);
-                        file_path = save_path.clone();
-                    }
-                    crate::logger::log_job(
-                        job_id,
-                        &job_name,
-                        &format!("Regen {} done (провайдер: {}).", file_name, provider_used),
-                    );
-                    if media_type == "video" {
-                        let is_omni = provider_used == "flow_omni_flash";
-                        if let Err(e) = upscale_video_if_needed(
-                            &file_path,
-                            googler_video_upscale_enabled,
-                            &googler_video_upscale_resolution,
-                            &googler_video_upscale_quality,
-                            is_omni,
-                            job_id,
-                            &job_name,
-                        ) {
-                            crate::logger::log_job(
-                                job_id,
-                                &job_name,
-                                &format!(
-                                    "Помилка апскейлу/кропу перегенерованого відео {}: {}",
-                                    file_name, e
-                                ),
-                            );
-                        }
-                    }
-                    Ok(())
-                }
-
-                Err(e) => {
-                    crate::logger::log_job(
-                        job_id,
-                        &job_name,
-                        &format!("Regen {} save error: {}", file_name, e),
-                    );
-                    Err(e)
-                }
-            },
-        };
-
-        if let Some(ref q) = results_queue {
-            q.lock().unwrap().push((file_path.clone(), outcome.clone()));
-        }
         *result_slot.lock().unwrap() = Some(outcome);
         *loading.lock().unwrap() = false;
-        if let Some(ref set) = path_loading_set {
-            set.lock().unwrap().remove(&file_path);
-        }
         ctx.request_repaint();
     });
+}
+
+pub fn regenerate_multiple_media(
+    file_paths: Vec<std::path::PathBuf>,
+    media_type: String,
+    priority: Vec<String>,
+    googler_key: String,
+    job_id: u64,
+    job_name: String,
+    ctx: egui::Context,
+    path_loading_set: Option<Arc<Mutex<std::collections::HashSet<std::path::PathBuf>>>>,
+    results_queue: Option<Arc<Mutex<Vec<(std::path::PathBuf, Result<(), String>)>>>>,
+    googler_video_upscale_enabled: bool,
+    googler_video_upscale_resolution: String,
+    googler_video_upscale_quality: String,
+) {
+    for file_path in file_paths {
+        if let Some(set) = path_loading_set.as_ref() {
+            let mut guard = set.lock().unwrap();
+            guard.insert(file_path.clone());
+            if media_type == "video" {
+                guard.insert(file_path.with_extension("mp4"));
+            }
+        }
+
+        let media_type = media_type.clone();
+        let priority = priority.clone();
+        let googler_key = googler_key.clone();
+        let job_name = job_name.clone();
+        let ctx = ctx.clone();
+        let path_loading_set = path_loading_set.clone();
+        let results_queue = results_queue.clone();
+        let upscale_resolution = googler_video_upscale_resolution.clone();
+        let upscale_quality = googler_video_upscale_quality.clone();
+
+        std::thread::spawn(move || {
+            let _ = regenerate_single_media_sync(
+                file_path,
+                &media_type,
+                &priority,
+                &googler_key,
+                None,
+                job_id,
+                &job_name,
+                path_loading_set.as_ref(),
+                results_queue.as_ref(),
+                googler_video_upscale_enabled,
+                &upscale_resolution,
+                &upscale_quality,
+            );
+            ctx.request_repaint();
+        });
+    }
+
+    ctx.request_repaint();
 }
 
 fn write_json_string_vec(media_dir: &std::path::Path, file_name: &str, values: &[String]) {

@@ -130,6 +130,8 @@ pub struct VideoMakerApp {
     pub media_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
     /// Файл, що зараз перегенеровується у custom regen window.
     pub media_regen_target: Option<std::path::PathBuf>,
+    /// Набір цілей для пакетної догенерації плейсхолдерів.
+    pub media_regen_batch_targets: Vec<std::path::PathBuf>,
     /// Набір шляхів усіх файлів що зараз перегенеровуються (підтримка паралельних).
     pub media_regen_paths:
         std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,

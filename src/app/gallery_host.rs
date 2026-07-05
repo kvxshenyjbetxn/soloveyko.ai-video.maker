@@ -69,6 +69,7 @@ impl VideoMakerApp {
                         if let Some((job_id, job_name, settings)) = job_info {
                             if is_custom {
                                 self.media_regen_target = Some(path.clone());
+                                self.media_regen_batch_targets.clear();
                                 self.media_regen_media_type = settings.video_media_type.clone();
                                 self.media_regen_image_priority =
                                     settings.googler_image_priority.clone();
@@ -132,6 +133,7 @@ impl VideoMakerApp {
         if let Some((file, settings, is_custom, job_id, job_name)) = regen_action {
             if is_custom {
                 self.media_regen_target = Some(file.clone());
+                self.media_regen_batch_targets.clear();
                 self.media_regen_media_type = settings.video_media_type.clone();
                 self.media_regen_image_priority = settings.googler_image_priority.clone();
                 self.media_regen_video_priority = settings.googler_video_priority.clone();
@@ -400,6 +402,7 @@ impl VideoMakerApp {
             self.language,
             &mut self.media_regen_window_open,
             &self.media_regen_target,
+            &mut self.media_regen_batch_targets,
             &mut self.media_regen_media_type,
             &mut self.media_regen_image_priority,
             &mut self.media_regen_video_priority,

@@ -53,6 +53,8 @@ pub struct MontageEditorState {
     pub pending_regen: Option<(PathBuf, bool)>,
     /// Тимчасова дія генерації для плейсхолдера сегмента (segment_idx, is_custom).
     pub pending_placeholder_regen: Option<(usize, bool)>,
+    /// Тимчасовий список сегментів-плейсхолдерів для пакетної догенерації.
+    pub pending_placeholder_batch_regen: Vec<usize>,
     /// Шлях медіа що зараз відкрите у fullscreen preview
     pub pool_preview: Option<PathBuf>,
     /// Кешована текстура для fullscreen preview (шлях, текстура)
@@ -261,6 +263,7 @@ impl MontageEditorState {
             pending_animate_paths: vec![],
             pending_regen: None,
             pending_placeholder_regen: None,
+            pending_placeholder_batch_regen: vec![],
             pool_preview: None,
             pool_preview_texture: None,
             preview_stale_path: None,

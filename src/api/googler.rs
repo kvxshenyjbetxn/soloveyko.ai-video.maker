@@ -267,12 +267,11 @@ fn poll_v6_generation(
     Err("Перевищено час очікування v6 (5 хвилин)".to_string())
 }
 
-/// Запускає generation v6 та чекає фінальний результат.
+/// Запускає generation v6 і повертає id створеної генерації.
 fn start_v6_generation(
     key: &str,
     body: serde_json::Value,
     agent: &ureq::Agent,
-    job_id: Option<u64>,
 ) -> Result<String, String> {
     let url = format!("{}/v6/generations", BASE_URL);
 
@@ -294,7 +293,7 @@ fn start_v6_generation(
         .into_json()
         .map_err(|e| format!("Помилка парсингу відповіді v6: {}", e))?;
 
-    poll_v6_generation(key, &started.id, agent, job_id)
+    Ok(started.id)
 }
 
 /// Перевіряє, чи помилка є перевищенням ліміту одночасних запитів.
@@ -453,44 +452,22 @@ fn animation_generation_body(
     Ok(body)
 }
 
-/// Спроба генерації зображення через конкретного провайдера.
-fn try_generate_image(
-    key: &str,
-    prompt: &str,
-    aspect_ratio: &str,
-    provider: &str,
-    agent: &ureq::Agent,
-    job_id: Option<u64>,
-) -> Result<String, String> {
-    let _permit = GooglerImageLimiter::get().acquire();
-    let body = image_generation_body(provider, prompt, aspect_ratio)?;
-    start_v6_generation(key, body, agent, job_id)
-}
-
-/// Спроба генерації відео через конкретного провайдера.
-fn try_generate_video(
-    key: &str,
-    prompt: &str,
-    aspect_ratio: &str,
-    provider: &str,
-    agent: &ureq::Agent,
-    job_id: Option<u64>,
-) -> Result<String, String> {
-    let _permit = GooglerVideoLimiter::get().acquire();
-    let body = video_generation_body(provider, prompt, aspect_ratio)?;
-    start_v6_generation(key, body, agent, job_id)
-}
-
 /// Генерує зображення з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+/// `on_started` викликається лише тоді, коли запит справді отримав слот у лімітері
+/// і прямо зараз відправляється на генерацію.
 /// Повертає `(provider_name, data_uri)` — щоб caller знав який провайдер переміг.
-pub fn generate_image_with_priority(
+pub fn generate_image_with_priority<F>(
     key: &str,
     prompt: &str,
     aspect_ratio: &str,
     priority: &[String],
+    mut on_started: F,
     job_id: Option<u64>,
-) -> Result<(String, String), String> {
+) -> Result<(String, String), String>
+where
+    F: FnMut(&str),
+{
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -509,7 +486,14 @@ pub fn generate_image_with_priority(
                 }
             }
 
-            match try_generate_image(key, prompt, aspect_ratio, provider, &agent, job_id) {
+            let _permit = GooglerImageLimiter::get().acquire();
+            let result = image_generation_body(provider, prompt, aspect_ratio).and_then(|body| {
+                let generation_id = start_v6_generation(key, body, &agent)?;
+                on_started(provider);
+                poll_v6_generation(key, &generation_id, &agent, job_id)
+            });
+
+            match result {
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
                     // Якщо це помилка скасування - повертаємо її одразу
@@ -518,10 +502,6 @@ pub fn generate_image_with_priority(
                     }
 
                     if is_concurrency_exceeded(&e) {
-                        crate::logger::log(&format!(
-                            " Зображення [{}] ліміт потоків, чекаю…",
-                            provider
-                        ));
                         std::thread::sleep(DELAY);
                     } else if is_hourly_limit_exceeded(&e) {
                         crate::logger::log(&format!(
@@ -588,8 +568,12 @@ where
             let _permit = GooglerVideoLimiter::get().acquire();
             on_started(provider);
 
-            let result = animation_generation_body(provider, image_data_uri, prompt)
-                .and_then(|body| start_v6_generation(key, body, &agent, job_id));
+            let result =
+                animation_generation_body(provider, image_data_uri, prompt).and_then(|body| {
+                    let generation_id = start_v6_generation(key, body, &agent)?;
+                    on_started(provider);
+                    poll_v6_generation(key, &generation_id, &agent, job_id)
+                });
 
             match result {
                 Ok(result) => return Ok((provider.clone(), result)),
@@ -600,10 +584,6 @@ where
                     }
 
                     if is_concurrency_exceeded(&e) {
-                        crate::logger::log(&format!(
-                            " Анімація [{}] ліміт потоків, чекаю…",
-                            provider
-                        ));
                         std::thread::sleep(DELAY);
                     } else if is_hourly_limit_exceeded(&e) {
                         crate::logger::log(&format!(
@@ -633,6 +613,18 @@ where
     Err("Всі відео-провайдери вичерпані для анімації".to_string())
 }
 
+/// Повертає читабельну назву моделі генерації зображень Googler для логів.
+pub fn image_provider_model_name(key: &str) -> &'static str {
+    match key {
+        "flow_IMAGEN_3_5" | "flow_GEM_PIX_2" | "flow_nano_banana_pro" => "Nano Banana Pro (Flow)",
+        "flow_NARWHAL" | "flow_nano_banana_2" => "Nano Banana 2 (Flow)",
+        "flower" => "Flower Image",
+        "grok" => "Grok Image",
+        "openai" => "OpenAI Image",
+        _ => "Unknown",
+    }
+}
+
 /// Повертає читабельну назву відеомоделі Googler для логів.
 pub fn video_provider_model_name(key: &str) -> &'static str {
     match key {
@@ -650,17 +642,18 @@ pub fn video_provider_model_name(key: &str) -> &'static str {
 /// Генерує відео з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
 /// Повертає `(provider_name, data_uri)` — щоб caller знав який провайдер переміг.
-/// Перед кожним новим провайдером викликає `on_provider` для job-логу моделі.
+/// `on_started` викликається лише тоді, коли запит справді отримав слот у лімітері
+/// і прямо зараз відправляється на генерацію.
 pub fn generate_video_with_priority_logged<F>(
     key: &str,
     prompt: &str,
     aspect_ratio: &str,
     priority: &[String],
-    on_provider: F,
+    mut on_started: F,
     job_id: Option<u64>,
 ) -> Result<(String, String), String>
 where
-    F: Fn(&str),
+    F: FnMut(&str),
 {
     const RETRIES: u32 = 2;
     const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
@@ -671,9 +664,6 @@ where
         .build();
 
     for provider in priority {
-        // Лог пишеться один раз на провайдера, щоб було видно активну модель.
-        on_provider(provider);
-
         let mut failures = 0u32;
         loop {
             // Перевіряємо скасування перед кожною спробою
@@ -683,7 +673,14 @@ where
                 }
             }
 
-            match try_generate_video(key, prompt, aspect_ratio, provider, &agent, job_id) {
+            let _permit = GooglerVideoLimiter::get().acquire();
+            let result = video_generation_body(provider, prompt, aspect_ratio).and_then(|body| {
+                let generation_id = start_v6_generation(key, body, &agent)?;
+                on_started(provider);
+                poll_v6_generation(key, &generation_id, &agent, job_id)
+            });
+
+            match result {
                 Ok(result) => return Ok((provider.clone(), result)),
                 Err(e) => {
                     // Якщо це помилка скасування - повертаємо її одразу
@@ -692,7 +689,6 @@ where
                     }
 
                     if is_concurrency_exceeded(&e) {
-                        crate::logger::log(&format!(" Відео [{}] ліміт потоків, чекаю…", provider));
                         std::thread::sleep(DELAY);
                     } else if is_hourly_limit_exceeded(&e) {
                         crate::logger::log(&format!(

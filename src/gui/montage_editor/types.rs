@@ -412,6 +412,8 @@ pub struct MontageEditorActions {
     pub animate_paths: Vec<PathBuf>,
     /// Дія перегенерації (файл, налаштування, is_custom, job_id, job_name)
     pub regen_action: Option<crate::gui::gallery::RegenAction>,
+    /// Пакетна догенерація плейсхолдерів (цілі, налаштування, job_id, job_name)
+    pub batch_regen_action: Option<(Vec<PathBuf>, crate::queue::JobSettings, u64, String)>,
     /// Запит на відкриття Stock Picker для вказаного індексу сегмента
     pub open_stock_picker: Option<usize>,
     /// Нові налаштування якості/FPS превʼю, якщо користувач змінив їх у топбарі
@@ -423,6 +425,7 @@ impl Default for MontageEditorActions {
         Self {
             animate_paths: vec![],
             regen_action: None,
+            batch_regen_action: None,
             open_stock_picker: None,
             preview_render_changed: None,
         }

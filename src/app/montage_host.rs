@@ -138,6 +138,7 @@ impl VideoMakerApp {
         if let Some((file, settings, is_custom, job_id, job_name)) = montage_actions.regen_action {
             if is_custom {
                 self.media_regen_target = Some(file.clone());
+                self.media_regen_batch_targets.clear();
                 self.media_regen_media_type = settings.video_media_type.clone();
                 self.media_regen_image_priority = settings.googler_image_priority.clone();
                 self.media_regen_video_priority = settings.googler_video_priority.clone();
@@ -173,6 +174,20 @@ impl VideoMakerApp {
                     settings.googler_video_upscale_quality.clone(),
                 );
             }
+        }
+
+        if let Some((targets, settings, job_id, job_name)) = montage_actions.batch_regen_action {
+            self.media_regen_target = None;
+            self.media_regen_batch_targets = targets;
+            self.media_regen_media_type = settings.video_media_type.clone();
+            self.media_regen_image_priority = settings.googler_image_priority.clone();
+            self.media_regen_video_priority = settings.googler_video_priority.clone();
+            self.media_regen_prompt.clear();
+            self.media_regen_base_settings = Some(settings);
+            self.media_regen_job_id = job_id;
+            self.media_regen_job_name = job_name;
+            self.media_regen_error = None;
+            self.media_regen_window_open = true;
         }
 
         // Оновлюємо налаштування превʼю редактора, якщо користувач змінив їх у топбарі
