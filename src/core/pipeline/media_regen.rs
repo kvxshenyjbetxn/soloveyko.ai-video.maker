@@ -323,11 +323,31 @@ pub fn regenerate_single_media(
     });
 }
 
-fn write_segment_texts_baseline(media_dir: &std::path::Path, texts: &[String]) {
-    if let Ok(json) = serde_json::to_string_pretty(texts) {
+fn write_json_string_vec(media_dir: &std::path::Path, file_name: &str, values: &[String]) {
+    if let Ok(json) = serde_json::to_string_pretty(values) {
         let _ = std::fs::create_dir_all(media_dir);
-        let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
+        let _ = std::fs::write(media_dir.join(file_name), json);
     }
+}
+
+fn build_full_segment_prompt(
+    text: &str,
+    video_style_enabled: bool,
+    video_style_prompt: &str,
+) -> String {
+    if video_style_enabled && !video_style_prompt.is_empty() {
+        if video_style_prompt.contains("{{text}}") {
+            video_style_prompt.replace("{{text}}", text)
+        } else {
+            format!("{}\n\n{}", video_style_prompt, text)
+        }
+    } else {
+        text.to_string()
+    }
+}
+
+fn write_segment_texts_baseline(media_dir: &std::path::Path, texts: &[String]) {
+    write_json_string_vec(media_dir, "segment_texts.json", texts);
 }
 
 fn load_segment_texts_baseline(
@@ -400,8 +420,19 @@ pub fn find_changed_prompts_for_rebuild(
     // і не запускаємо масову регенерацію вже обраних медіа.
     let Some(old_texts) = load_segment_texts_baseline(save_dir, &media_dir, new_texts.len()) else {
         write_segment_texts_baseline(&media_dir, &new_texts);
+        let prompts: Vec<String> = new_texts
+            .iter()
+            .map(|text| build_full_segment_prompt(text, video_style_enabled, video_style_prompt))
+            .collect();
+        write_json_string_vec(&media_dir, "prompts.json", &prompts);
         return vec![];
     };
+
+    let prompts: Vec<String> = new_texts
+        .iter()
+        .map(|text| build_full_segment_prompt(text, video_style_enabled, video_style_prompt))
+        .collect();
+    write_json_string_vec(&media_dir, "prompts.json", &prompts);
 
     let mut changed = vec![];
 
@@ -419,16 +450,7 @@ pub fn find_changed_prompts_for_rebuild(
                 let file_path = save_dir.join(media_str);
                 if file_path.exists() {
                     // Будуємо повний промт так само як при початковій генерації
-                    let full_prompt = if video_style_enabled && !video_style_prompt.is_empty() {
-                        if video_style_prompt.contains("{{text}}") {
-                            video_style_prompt.replace("{{text}}", new_text)
-                        } else {
-                            format!("{}\n\n{}", video_style_prompt, new_text)
-                        }
-                    } else {
-                        new_text.clone()
-                    };
-                    changed.push((file_path, full_prompt));
+                    changed.push((file_path, prompts[i].clone()));
                 }
             }
         }

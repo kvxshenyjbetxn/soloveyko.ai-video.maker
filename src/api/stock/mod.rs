@@ -96,11 +96,56 @@ impl From<&StockVideo> for CachedVideo {
     }
 }
 
+fn read_segment_texts_from_segments_json(save_dir: &std::path::Path) -> Option<Vec<String>> {
+    let content = std::fs::read_to_string(save_dir.join("segments.json")).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let segments = value["segments"].as_array()?;
+    Some(
+        segments
+            .iter()
+            .map(|segment| segment["text"].as_str().unwrap_or("").to_string())
+            .collect(),
+    )
+}
+
+fn sync_cache_with_segments(cache: &mut [SegmentCache], segment_texts: &[String]) -> bool {
+    let mut changed = false;
+
+    for (entry, new_text) in cache.iter_mut().zip(segment_texts.iter()) {
+        let old_segment_text = entry.segment_text.trim();
+        let old_keyword = entry.keyword.trim();
+        let new_text_trimmed = new_text.trim();
+        let keyword_followed_segment_text = old_keyword == old_segment_text;
+
+        if old_segment_text != new_text_trimmed {
+            entry.segment_text = new_text.clone();
+            changed = true;
+        }
+
+        if keyword_followed_segment_text && old_keyword != new_text_trimmed {
+            entry.keyword = new_text.clone();
+            entry.photos.clear();
+            entry.videos.clear();
+            changed = true;
+        }
+    }
+
+    changed
+}
+
 /// Читає stock_cache.json з папки задачі
 pub fn load_cache(save_dir: &std::path::Path) -> Option<Vec<SegmentCache>> {
     let path = save_dir.join("stock_cache.json");
-    let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&content).ok()
+    let content = std::fs::read_to_string(&path).ok()?;
+    let mut cache: Vec<SegmentCache> = serde_json::from_str(&content).ok()?;
+
+    if let Some(segment_texts) = read_segment_texts_from_segments_json(save_dir) {
+        if sync_cache_with_segments(&mut cache, &segment_texts) {
+            let _ = save_cache(save_dir, &cache);
+        }
+    }
+
+    Some(cache)
 }
 
 /// Зберігає stock_cache.json у папку задачі
