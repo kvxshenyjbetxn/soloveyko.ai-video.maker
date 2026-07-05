@@ -323,6 +323,43 @@ pub fn regenerate_single_media(
     });
 }
 
+fn write_segment_texts_baseline(media_dir: &std::path::Path, texts: &[String]) {
+    if let Ok(json) = serde_json::to_string_pretty(texts) {
+        let _ = std::fs::create_dir_all(media_dir);
+        let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
+    }
+}
+
+fn load_segment_texts_baseline(
+    save_dir: &std::path::Path,
+    media_dir: &std::path::Path,
+    seg_count: usize,
+) -> Option<Vec<String>> {
+    if let Ok(content) = std::fs::read_to_string(media_dir.join("segment_texts.json")) {
+        if let Ok(texts) = serde_json::from_str::<Vec<String>>(&content) {
+            if !texts.is_empty() {
+                return Some(texts);
+            }
+        }
+    }
+
+    // Старі stock-проєкти могли ще не мати media/segment_texts.json.
+    // У такому разі відновлюємо baseline з stock_cache.json, щоб rebuild
+    // не вважав усі вже вибрані сегменти "зміненими".
+    let cache = crate::api::stock::load_cache(save_dir)?;
+    let mut texts = vec![String::new(); seg_count];
+    let mut has_any_text = false;
+    for entry in cache {
+        if entry.index >= seg_count || entry.segment_text.trim().is_empty() {
+            continue;
+        }
+        texts[entry.index] = entry.segment_text;
+        has_any_text = true;
+    }
+
+    has_any_text.then_some(texts)
+}
+
 /// Порівнює тексти сегментів у segments.json з segment_texts.json (сирі тексти до стилю).
 /// Повертає список (шлях до медіафайлу, готовий промт) для сегментів де текст змінився.
 /// Одразу оновлює segment_texts.json — щоб наступний rebuild порівнював з новим станом.
@@ -358,11 +395,13 @@ pub fn find_changed_prompts_for_rebuild(
 
     let media_dir = save_dir.join("media");
 
-    // Старі тексти сегментів на момент останньої генерації/перебудови
-    let old_texts: Vec<String> = std::fs::read_to_string(media_dir.join("segment_texts.json"))
-        .ok()
-        .and_then(|c| serde_json::from_str::<Vec<String>>(&c).ok())
-        .unwrap_or_default();
+    // Старі тексти сегментів на момент останньої генерації/перебудови.
+    // Якщо baseline ще не існує, безпечно ініціалізуємо його поточним станом
+    // і не запускаємо масову регенерацію вже обраних медіа.
+    let Some(old_texts) = load_segment_texts_baseline(save_dir, &media_dir, new_texts.len()) else {
+        write_segment_texts_baseline(&media_dir, &new_texts);
+        return vec![];
+    };
 
     let mut changed = vec![];
 
@@ -397,9 +436,7 @@ pub fn find_changed_prompts_for_rebuild(
 
     // Одразу оновлюємо segment_texts.json — щоб наступний rebuild порівнював з поточним станом
     if !changed.is_empty() {
-        if let Ok(json) = serde_json::to_string_pretty(&new_texts) {
-            let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
-        }
+        write_segment_texts_baseline(&media_dir, &new_texts);
     }
 
     changed

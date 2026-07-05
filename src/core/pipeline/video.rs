@@ -729,8 +729,14 @@ pub(super) fn run_video_branch(
                 )
                 .map(|(p, d)| (p, d))
             } else {
-                crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority, Some(job_id_c))
-                    .map(|(p, d)| (p, d))
+                crate::api::googler::generate_image_with_priority(
+                    &key,
+                    &prompt,
+                    "16:9",
+                    &priority,
+                    Some(job_id_c),
+                )
+                .map(|(p, d)| (p, d))
             };
 
             sem.release();
@@ -1018,6 +1024,15 @@ fn run_pexels_branch(
     };
 
     let total = segments.len();
+    let media_dir = save_dir.join("media");
+    let _ = std::fs::create_dir_all(&media_dir);
+
+    // Зберігаємо baseline сирих текстів сегментів для майбутнього rebuild.
+    // Це не дає stock-проєктам масово перегенеровувати вже вибрані медіа,
+    // якщо агент змінює лише хвіст сегментів.
+    if let Ok(json) = serde_json::to_string_pretty(&segments) {
+        let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
+    }
 
     // Тривалості сегментів з segments.json (якщо є)
     let seg_durations: Vec<f32> =
