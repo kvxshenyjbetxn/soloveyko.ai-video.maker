@@ -127,22 +127,58 @@ pub fn animate_single_image(
     });
 }
 
+fn segment_index_from_file_path(file_path: &std::path::Path) -> Option<usize> {
+    let stem = file_path.file_stem()?.to_str()?;
+    let digits: String = stem.chars().take_while(|ch| ch.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None;
+    }
+
+    digits.parse::<usize>().ok().map(|n| n.saturating_sub(1))
+}
+
+fn read_string_vec_entry(path: std::path::PathBuf, index: usize) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<Vec<String>>(&content).ok())
+        .and_then(|values| values.into_iter().nth(index))
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn read_stock_cache_prompt(save_dir: &std::path::Path, index: usize) -> Option<String> {
+    crate::api::stock::load_cache(save_dir)
+        .and_then(|cache| cache.into_iter().nth(index))
+        .and_then(|entry| {
+            let keyword = entry.keyword.trim().to_string();
+            if !keyword.is_empty() {
+                return Some(keyword);
+            }
+
+            let segment_text = entry.segment_text.trim().to_string();
+            if !segment_text.is_empty() {
+                Some(segment_text)
+            } else {
+                None
+            }
+        })
+}
+
 pub(crate) fn read_prompt_for_file(file_path: &std::path::Path) -> String {
     let media_dir = match file_path.parent() {
         Some(d) => d,
         None => return String::new(),
     };
-    let index = file_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .and_then(|s| s.parse::<usize>().ok())
-        .map(|n| n.saturating_sub(1))
-        .unwrap_or(0);
+    let save_dir = match media_dir.parent() {
+        Some(d) => d,
+        None => return String::new(),
+    };
+    let Some(index) = segment_index_from_file_path(file_path) else {
+        return String::new();
+    };
 
-    std::fs::read_to_string(media_dir.join("prompts.json"))
-        .ok()
-        .and_then(|c| serde_json::from_str::<Vec<String>>(&c).ok())
-        .and_then(|v| v.into_iter().nth(index))
+    read_string_vec_entry(media_dir.join("prompts.json"), index)
+        .or_else(|| read_stock_cache_prompt(save_dir, index))
+        .or_else(|| read_string_vec_entry(media_dir.join("segment_texts.json"), index))
         .unwrap_or_default()
 }
 

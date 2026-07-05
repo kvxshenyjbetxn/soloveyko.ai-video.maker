@@ -4,6 +4,18 @@ use eframe::egui;
 
 use super::upscale_video_if_needed;
 
+fn build_segment_prompt(text: &str, style_enabled: bool, style_prompt: &str) -> String {
+    if style_enabled && !style_prompt.is_empty() {
+        if style_prompt.contains("{{text}}") {
+            style_prompt.replace("{{text}}", text)
+        } else {
+            format!("{}\n\n{}", style_prompt, text)
+        }
+    } else {
+        text.to_string()
+    }
+}
+
 /// Простий лічильний семафор для обмеження паралельних потоків генерації медіа.
 struct Semaphore {
     count: Mutex<usize>,
@@ -1032,6 +1044,22 @@ fn run_pexels_branch(
     // якщо агент змінює лише хвіст сегментів.
     if let Ok(json) = serde_json::to_string_pretty(&segments) {
         let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
+    }
+
+    // Для кастомної перегенерації плейсхолдерів і вже вибраних stock-кліпів
+    // зберігаємо генеративні prompt-и по індексу сегмента.
+    let prompts: Vec<String> = segments
+        .iter()
+        .map(|segment| {
+            build_segment_prompt(
+                segment,
+                settings.video_style_enabled,
+                &settings.video_style_prompt,
+            )
+        })
+        .collect();
+    if let Ok(json) = serde_json::to_string_pretty(&prompts) {
+        let _ = std::fs::write(media_dir.join("prompts.json"), json);
     }
 
     // Тривалості сегментів з segments.json (якщо є)
