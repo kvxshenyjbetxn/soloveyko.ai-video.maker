@@ -919,9 +919,9 @@ fn build_placeholder_clip(
         id: uuid_str(),
         media_id: format!("placeholder_{}", seg_idx),
         path: None,
-        name: text.trim().to_string(),
+        name: text.to_string(),
         start_secs: start,
-        duration: (end - start).max(0.5),
+        duration: (end - start).max(0.1),
         track_idx,
         kind: ClipKind::Image,
         scale: 1.0,
@@ -940,6 +940,65 @@ fn build_placeholder_clip(
     }
 }
 
+fn append_missing_stock_placeholders(
+    clips: &mut Vec<EditorClip>,
+    save_path: &Path,
+    bg_track_idx: usize,
+    speech_source: Option<&PlaceholderSpeechSource>,
+) {
+    let seg_path = save_path.join("segments.json");
+    let Ok(seg_content) = std::fs::read_to_string(&seg_path) else {
+        return;
+    };
+    let Ok(segments_json) = serde_json::from_str::<serde_json::Value>(&seg_content) else {
+        return;
+    };
+    let Some(segs) = segments_json["segments"].as_array() else {
+        return;
+    };
+
+    // Covered = сегменти, які вже представлені реальним кліпом у редакторі.
+    // Плейсхолдери сюди не включаємо, щоб випадково не приглушити їх відновлення.
+    let covered: std::collections::HashSet<usize> = clips
+        .iter()
+        .filter(|clip| !clip.is_placeholder && clip.path.is_some())
+        .filter_map(placeholder_segment_index)
+        .collect();
+    let stock_track = clips
+        .iter()
+        .find(|clip| {
+            !clip.is_placeholder
+                && clip.path.is_some()
+                && clip.stock_seg_idx.is_some()
+                && matches!(clip.kind, ClipKind::Video | ClipKind::Image)
+        })
+        .map(|clip| clip.track_idx)
+        .unwrap_or(bg_track_idx);
+
+    for (i, seg) in segs.iter().enumerate() {
+        if covered.contains(&i) {
+            continue;
+        }
+        if seg["media"].as_str().is_some() {
+            continue;
+        }
+
+        let Some(text) = seg["text"].as_str().filter(|text| !text.is_empty()) else {
+            continue;
+        };
+        let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
+        let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+        let placeholder_text = spoken_text_for_range(speech_source, start, end, text);
+        clips.push(build_placeholder_clip(
+            i,
+            &placeholder_text,
+            start,
+            end,
+            stock_track,
+        ));
+    }
+}
+
 fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
     let path = save_path.join("timeline.json");
     if !path.exists() {
@@ -955,22 +1014,43 @@ fn load_track_volumes(save_path: &Path) -> Option<Vec<f32>> {
 }
 
 fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
-    let path = save_path.join("timeline.json");
-    // Fallback: якщо timeline.json ще немає, але є segments.json від агента — завантажуємо з нього
-    let path = if !path.exists() {
-        let seg_path = save_path.join("segments.json");
-        if seg_path.exists() {
-            seg_path
-        } else {
-            return (Vec::new(), 10.0, 0.0);
+    let timeline_path = save_path.join("timeline.json");
+    let segments_path = save_path.join("segments.json");
+
+    // Після відновлення задачі timeline.json може бути порожнім, битим або старішим за
+    // segments.json. У такому разі повертаємось до agent-файлу, щоб не втрачати
+    // stock-плейсхолдери з media: null.
+    let read_json = |path: &Path| -> Option<serde_json::Value> {
+        let content = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&content).ok()
+    };
+    let has_any_editor_tracks = |value: &serde_json::Value| {
+        value["segments"]
+            .as_array()
+            .map(|segments| !segments.is_empty())
+            .unwrap_or(false)
+            || value["overlay_tracks"]
+                .as_array()
+                .map(|tracks| !tracks.is_empty())
+                .unwrap_or(false)
+    };
+
+    let (path, v) = if timeline_path.exists() {
+        match read_json(&timeline_path) {
+            Some(v) if has_any_editor_tracks(&v) || !segments_path.exists() => (timeline_path, v),
+            _ if segments_path.exists() => match read_json(&segments_path) {
+                Some(v) => (segments_path, v),
+                None => return (Vec::new(), 10.0, 0.0),
+            },
+            _ => return (Vec::new(), 10.0, 0.0),
+        }
+    } else if segments_path.exists() {
+        match read_json(&segments_path) {
+            Some(v) => (segments_path, v),
+            None => return (Vec::new(), 10.0, 0.0),
         }
     } else {
-        path
-    };
-    let content = std::fs::read_to_string(&path).unwrap_or_default();
-    let v: serde_json::Value = match serde_json::from_str(&content) {
-        Ok(v) => v,
-        Err(_) => return (Vec::new(), 10.0, 0.0),
+        return (Vec::new(), 10.0, 0.0);
     };
     let total = v["total_duration_secs"].as_f64().unwrap_or(10.0) as f32;
     let audio_start = v["audio_start_secs"].as_f64().unwrap_or(0.0) as f32;
@@ -1077,52 +1157,17 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
         }
     }
 
-    // Якщо завантажили timeline.json (редакторський формат), добавляємо заглушки
-    // з segments.json для сегментів де медіа ще не обрано (щоб не зникали після перезапуску).
+    // Якщо відкрили редакторський timeline.json — добираємо з segments.json ті
+    // stock-сегменти, у яких досі media: null. Так плейсхолдери не губляться після
+    // перезапуску або відновлення задачі.
     let tl_was_montage_format = path.file_name().map_or(false, |n| n == "timeline.json");
     if tl_was_montage_format {
-        let seg_path = save_path.join("segments.json");
-        if seg_path.exists() {
-            if let Ok(seg_content) = std::fs::read_to_string(&seg_path) {
-                if let Ok(sv) = serde_json::from_str::<serde_json::Value>(&seg_content) {
-                    if let Some(segs) = sv["segments"].as_array() {
-                        let covered: std::collections::HashSet<usize> =
-                            clips.iter().filter_map(|c| c.stock_seg_idx).collect();
-                        // Плейсхолдери мають бути на тій самій доріжці де вже є вибрані stock-кліпи.
-                        // Якщо користувач додав відео на нову доріжку, bg_track_idx зміниться,
-                        // але агентські сегменти залишаються на своїй оригінальній доріжці.
-                        let stock_track = clips
-                            .iter()
-                            .find(|c| c.stock_seg_idx.is_some())
-                            .map(|c| c.track_idx)
-                            .unwrap_or(0);
-                        for (i, seg) in segs.iter().enumerate() {
-                            if covered.contains(&i) {
-                                continue;
-                            }
-                            if seg["media"].as_str().is_some() {
-                                continue;
-                            } // вже є медіа
-                            let text = seg["text"].as_str().unwrap_or("");
-                            if text.is_empty() {
-                                continue;
-                            }
-                            let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
-                            let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
-                            let placeholder_text =
-                                spoken_text_for_range(speech_source.as_ref(), start, end, text);
-                            clips.push(build_placeholder_clip(
-                                i,
-                                &placeholder_text,
-                                start,
-                                end,
-                                stock_track,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
+        append_missing_stock_placeholders(
+            &mut clips,
+            save_path,
+            bg_track_idx,
+            speech_source.as_ref(),
+        );
     }
 
     (clips, total, audio_start)
