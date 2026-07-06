@@ -170,6 +170,7 @@ pub struct JobSettings {
     pub video_media_type: String,
 
     pub assemblyai_key: String,
+    pub magnific_key: String,
     pub pexels_key: String,
     pub pixabay_key: String,
     pub subtitles_enabled: bool,

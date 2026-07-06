@@ -41,8 +41,12 @@ pub struct StockPickerState {
     pub trim_edit: Option<TrimEditState>,
     /// Збережений API ключ Pexels
     pub pexels_key: String,
+    /// Збережений API ключ Magnific
+    pub magnific_key: String,
     /// Збережений API ключ Pixabay
     pub pixabay_key: String,
+    /// Чи використовувати Magnific для пошуку
+    pub use_magnific: bool,
     /// Чи використовувати Pexels для пошуку
     pub use_pexels: bool,
     /// Чи використовувати Pixabay для пошуку
@@ -66,6 +70,8 @@ pub struct VideoDownloadState {
     pub dest_path: PathBuf,
     /// Прогрес 0.0..1.0; -1.0 = помилка
     pub progress: Arc<Mutex<f32>>,
+    /// Точний текст помилки завантаження або resolve download URL.
+    pub error: Arc<Mutex<Option<String>>>,
 }
 
 /// Стан міні-редактора вибору фрагменту відео
@@ -96,6 +102,7 @@ impl StockPickerState {
     pub fn new(
         save_path: String,
         pexels_key: String,
+        magnific_key: String,
         pixabay_key: String,
         stock_service: String,
         preview_render: PreviewRenderSettings,
@@ -106,14 +113,20 @@ impl StockPickerState {
         sync_segment_durations_from_timeline(path, &mut cache);
         let edit_keyword = cache.first().map(|s| s.keyword.clone()).unwrap_or_default();
 
-        let has_pexels_key = !pexels_key.is_empty();
-        let has_pixabay_key = !pixabay_key.is_empty();
+        let has_pexels_key = !pexels_key.trim().is_empty();
+        let has_magnific_key = !magnific_key.trim().is_empty();
+        let has_pixabay_key = !pixabay_key.trim().is_empty();
 
-        let (use_pexels, use_pixabay) = if has_pexels_key || has_pixabay_key {
-            (has_pexels_key, has_pixabay_key)
-        } else {
-            (stock_service != "Pixabay", stock_service == "Pixabay")
-        };
+        let (use_magnific, use_pexels, use_pixabay) =
+            if has_magnific_key || has_pexels_key || has_pixabay_key {
+                (has_magnific_key, has_pexels_key, has_pixabay_key)
+            } else {
+                match stock_service.as_str() {
+                    "Magnific" => (true, false, false),
+                    "Pixabay" => (false, false, true),
+                    _ => (false, true, false),
+                }
+            };
 
         Some(Self {
             save_path,
@@ -126,7 +139,9 @@ impl StockPickerState {
             trim_edit: None,
             edit_keyword,
             pexels_key,
+            magnific_key,
             pixabay_key,
+            use_magnific,
             use_pexels,
             use_pixabay,
             show_services_filter: false,
@@ -220,13 +235,15 @@ fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &eg
     if !seg.photos.is_empty() || !seg.videos.is_empty() {
         return;
     }
-    if !state.use_pexels && !state.use_pixabay {
+    if !state.use_magnific && !state.use_pexels && !state.use_pixabay {
         return;
     }
 
     let keyword = seg.keyword.clone();
     let pexels_key = state.pexels_key.clone();
+    let magnific_key = state.magnific_key.clone();
     let pixabay_key = state.pixabay_key.clone();
+    let use_magnific = state.use_magnific;
     let use_pexels = state.use_pexels;
     let use_pixabay = state.use_pixabay;
     let arc: SegmentSearchArc = Arc::new(Mutex::new(None));
@@ -238,6 +255,25 @@ fn trigger_segment_search(state: &mut StockPickerState, seg_idx: usize, ctx: &eg
 
         let mut all_photos = Vec::new();
         let mut all_videos = Vec::new();
+
+        // Пошук у Magnific — перший, якщо сервіс налаштований.
+        if use_magnific && !magnific_key.is_empty() {
+            let provider = crate::api::stock::magnific::MagnificProvider;
+            if let Ok(p) = provider.search_photos(&magnific_key, &keyword, 15) {
+                all_photos.extend(p.iter().map(|photo| {
+                    let mut cp = crate::api::stock::CachedPhoto::from(photo);
+                    cp.provider = "Magnific".to_string();
+                    cp
+                }));
+            }
+            if let Ok(v) = provider.search_videos(&magnific_key, &keyword, 15) {
+                all_videos.extend(v.iter().map(|video| {
+                    let mut cv = crate::api::stock::CachedVideo::from(video);
+                    cv.provider = "Magnific".to_string();
+                    cv
+                }));
+            }
+        }
 
         // Пошук у Pexels
         if use_pexels && !pexels_key.is_empty() {
@@ -949,22 +985,29 @@ fn draw_single_mode(
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.label(translate(language, "stock_search_in"));
+                    let prev_magnific = state.use_magnific;
                     let prev_pexels = state.use_pexels;
                     let prev_pixabay = state.use_pixabay;
 
+                    ui.checkbox(&mut state.use_magnific, "Magnific");
                     ui.checkbox(&mut state.use_pexels, "Pexels");
                     ui.checkbox(&mut state.use_pixabay, "Pixabay");
 
-                    // Запобігаємо вимиканню обох чекбоксів
-                    if !state.use_pexels && !state.use_pixabay {
-                        if !prev_pexels {
+                    // Запобігаємо вимиканню всіх сервісів одночасно.
+                    if !state.use_magnific && !state.use_pexels && !state.use_pixabay {
+                        if prev_magnific {
+                            state.use_magnific = true;
+                        } else if prev_pexels {
                             state.use_pexels = true;
                         } else {
                             state.use_pixabay = true;
                         }
                     }
 
-                    if state.use_pexels != prev_pexels || state.use_pixabay != prev_pixabay {
+                    if state.use_magnific != prev_magnific
+                        || state.use_pexels != prev_pexels
+                        || state.use_pixabay != prev_pixabay
+                    {
                         retrigger_search = true;
                     }
                 });
@@ -991,13 +1034,21 @@ fn draw_single_mode(
             if let Some(dl) = &state.video_download {
                 if dl.segment_idx == seg_idx {
                     let p = *dl.progress.lock().unwrap();
-                    ui.horizontal(|ui| {
+                    let error_text = dl.error.lock().unwrap().clone();
+                    ui.vertical(|ui| {
                         if p < 0.0 {
                             ui.label(
                                 egui::RichText::new("❌ Помилка завантаження")
                                     .color(egui::Color32::RED)
                                     .size(12.0),
                             );
+                            if let Some(message) = error_text {
+                                ui.label(
+                                    egui::RichText::new(message)
+                                        .color(egui::Color32::from_rgb(255, 170, 170))
+                                        .size(11.0),
+                                );
+                            }
                         } else {
                             ui.label(
                                 egui::RichText::new(format!("⬇ {} {:.0}%", dl.filename, p * 100.0))
@@ -1044,9 +1095,11 @@ fn draw_single_mode(
             }
             let is_video_mode = state.show_videos.unwrap_or(true);
 
-            let has_any_working_key = (state.use_pexels && !state.pexels_key.is_empty())
+            let has_any_working_key = (state.use_magnific && !state.magnific_key.is_empty())
+                || (state.use_pexels && !state.pexels_key.is_empty())
                 || (state.use_pixabay && !state.pixabay_key.is_empty());
-            let is_any_key_missing = (state.use_pexels && state.pexels_key.is_empty())
+            let is_any_key_missing = (state.use_magnific && state.magnific_key.is_empty())
+                || (state.use_pexels && state.pexels_key.is_empty())
                 || (state.use_pixabay && state.pixabay_key.is_empty());
 
             if is_any_key_missing {
@@ -1102,6 +1155,11 @@ fn draw_single_mode(
                         let cols = ((avail_w / col_w).floor() as usize).max(1);
 
                         if is_video_mode {
+                            let magnific_videos: Vec<_> = videos
+                                .iter()
+                                .filter(|v| v.provider == "Magnific")
+                                .cloned()
+                                .collect();
                             let pexels_videos: Vec<_> = videos
                                 .iter()
                                 .filter(|v| v.provider == "Pexels" || v.provider.is_empty())
@@ -1112,6 +1170,27 @@ fn draw_single_mode(
                                 .filter(|v| v.provider == "Pixabay")
                                 .cloned()
                                 .collect();
+
+                            if !magnific_videos.is_empty() {
+                                ui.label(
+                                    egui::RichText::new("🎬 Magnific Videos")
+                                        .strong()
+                                        .size(13.0),
+                                );
+                                ui.add_space(4.0);
+                                draw_video_grid(
+                                    ui,
+                                    ctx,
+                                    state,
+                                    "magnific_v",
+                                    seg_idx,
+                                    &magnific_videos,
+                                    thumb_size,
+                                    cols,
+                                    action,
+                                );
+                                ui.add_space(12.0);
+                            }
 
                             if !pexels_videos.is_empty() {
                                 ui.label(
@@ -1150,10 +1229,18 @@ fn draw_single_mode(
                                 );
                             }
 
-                            if pexels_videos.is_empty() && pixabay_videos.is_empty() {
+                            if magnific_videos.is_empty()
+                                && pexels_videos.is_empty()
+                                && pixabay_videos.is_empty()
+                            {
                                 ui.label(egui::RichText::new("Немає результатів").weak());
                             }
                         } else {
+                            let magnific_photos: Vec<_> = photos
+                                .iter()
+                                .filter(|p| p.provider == "Magnific")
+                                .cloned()
+                                .collect();
                             let pexels_photos: Vec<_> = photos
                                 .iter()
                                 .filter(|p| p.provider == "Pexels" || p.provider.is_empty())
@@ -1164,6 +1251,27 @@ fn draw_single_mode(
                                 .filter(|p| p.provider == "Pixabay")
                                 .cloned()
                                 .collect();
+
+                            if !magnific_photos.is_empty() {
+                                ui.label(
+                                    egui::RichText::new("📷 Magnific Photos")
+                                        .strong()
+                                        .size(13.0),
+                                );
+                                ui.add_space(4.0);
+                                draw_photo_grid(
+                                    ui,
+                                    ctx,
+                                    state,
+                                    "magnific_p",
+                                    seg_idx,
+                                    &magnific_photos,
+                                    thumb_size,
+                                    cols,
+                                    action,
+                                );
+                                ui.add_space(12.0);
+                            }
 
                             if !pexels_photos.is_empty() {
                                 ui.label(
@@ -1202,7 +1310,10 @@ fn draw_single_mode(
                                 );
                             }
 
-                            if pexels_photos.is_empty() && pixabay_photos.is_empty() {
+                            if magnific_photos.is_empty()
+                                && pexels_photos.is_empty()
+                                && pixabay_photos.is_empty()
+                            {
                                 ui.label(egui::RichText::new("Немає результатів").weak());
                             }
                         }
@@ -1454,13 +1565,51 @@ fn start_video_download_if_needed(
     // Починаємо завантаження
     let progress = Arc::new(Mutex::new(0.0f32));
     let progress_c = Arc::clone(&progress);
-    let url = vid.download_url.clone();
+    let error = Arc::new(Mutex::new(None::<String>));
+    let error_c = Arc::clone(&error);
+    let provider = vid.provider.clone();
+    let video_id = vid.id.clone();
+    let fallback_url = vid.download_url.clone();
+    let magnific_key = state.magnific_key.clone();
     let dest_path = dest.clone();
     let ctx_c = ctx.clone();
 
     let _ = std::fs::create_dir_all(dest.parent().unwrap_or(Path::new(".")));
     std::thread::spawn(move || {
-        let _ = crate::api::stock::download_file_with_progress(&url, &dest_path, Some(&progress_c));
+        let resolved_url = if provider == "Magnific" {
+            crate::api::stock::magnific::resolve_video_download(&magnific_key, &video_id)
+        } else {
+            Ok(fallback_url.clone())
+        };
+
+        match resolved_url {
+            Ok(url) => {
+                if let Err(error) = crate::api::stock::download_file_with_progress(
+                    &url,
+                    &dest_path,
+                    Some(&progress_c),
+                ) {
+                    *error_c.lock().unwrap() = Some(error);
+                    *progress_c.lock().unwrap() = -1.0;
+                }
+            }
+            Err(resolve_error) if provider == "Magnific" && !fallback_url.trim().is_empty() => {
+                if let Err(download_error) = crate::api::stock::download_file_with_progress(
+                    &fallback_url,
+                    &dest_path,
+                    Some(&progress_c),
+                ) {
+                    *error_c.lock().unwrap() = Some(format!(
+                        "{resolve_error}; fallback download error: {download_error}"
+                    ));
+                    *progress_c.lock().unwrap() = -1.0;
+                }
+            }
+            Err(error) => {
+                *error_c.lock().unwrap() = Some(error);
+                *progress_c.lock().unwrap() = -1.0;
+            }
+        }
         ctx_c.request_repaint();
     });
 
@@ -1471,6 +1620,7 @@ fn start_video_download_if_needed(
         filename,
         dest_path: dest,
         progress,
+        error,
     });
 
     let _ = action;
@@ -1494,8 +1644,11 @@ fn start_photo_download(
         .unwrap_or("jpg");
     let filename = format!("{:04}.{}", seg_idx + 1, ext);
     let dest = Path::new(&state.save_path).join("media").join(&filename);
-    let url = photo.original_url.clone();
+    let fallback_url = photo.original_url.clone();
     let id = photo.id.clone();
+    let photo_id = photo.id.clone();
+    let provider = photo.provider.clone();
+    let magnific_key = state.magnific_key.clone();
     let save_path = state.save_path.clone();
     let ctx_c = ctx.clone();
     let fname = filename.clone();
@@ -1504,7 +1657,7 @@ fn start_photo_download(
         s.selected = Some(SelectedMedia {
             kind: "photo".to_string(),
             id,
-            url: url.clone(),
+            url: fallback_url.clone(),
             filename: fname.clone(),
             trim_start: 0.0,
             trim_end: 0.0,
@@ -1514,7 +1667,20 @@ fn start_photo_download(
 
     std::thread::spawn(move || {
         let _ = std::fs::create_dir_all(dest.parent().unwrap_or(Path::new(".")));
-        let _ = crate::api::stock::download_file(&url, &dest);
+        let resolved_url = if provider == "Magnific" {
+            crate::api::stock::magnific::resolve_photo_download(&magnific_key, &photo_id)
+        } else {
+            Ok(fallback_url.clone())
+        };
+        match resolved_url {
+            Ok(url) => {
+                let _ = crate::api::stock::download_file(&url, &dest);
+            }
+            Err(_) if provider == "Magnific" && !fallback_url.trim().is_empty() => {
+                let _ = crate::api::stock::download_file(&fallback_url, &dest);
+            }
+            Err(_) => {}
+        }
         ctx_c.request_repaint();
     });
 

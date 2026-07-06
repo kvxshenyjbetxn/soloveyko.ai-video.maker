@@ -56,7 +56,11 @@ pub(super) fn source_text_for_segments(
 
 /// Чи працює задача у стоковому режимі, де потрібен ручний вибір медіа в редакторі монтажу.
 pub(super) fn uses_stock_montage_control(settings: &crate::queue::JobSettings) -> bool {
-    settings.video_enabled && matches!(settings.video_service.as_str(), "Pexels" | "Pixabay")
+    settings.video_enabled
+        && matches!(
+            settings.video_service.as_str(),
+            "Pexels" | "Magnific" | "Pixabay"
+        )
 }
 
 /// У режимі Prompt Only програма спочатку сама будує базовий segments.json.

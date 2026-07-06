@@ -347,8 +347,11 @@ pub(super) fn run_video_branch(
         return Ok(());
     }
 
-    // Pexels/Pixabay режим — окрема гілка (lazy picker)
-    if settings.video_service == "Pexels" || settings.video_service == "Pixabay" {
+    // Stock-режим — окрема гілка (lazy picker)
+    if matches!(
+        settings.video_service.as_str(),
+        "Pexels" | "Magnific" | "Pixabay"
+    ) {
         return run_pexels_branch(
             job_id,
             job_name,
@@ -860,7 +863,7 @@ pub(super) fn run_video_branch(
     }
 }
 
-/// Гілка Pexels Stock: генерує ключові слова → шукає медіа → зберігає stock_cache.json.
+/// Гілка stock picker: генерує ключові слова → готує stock_cache.json.
 /// Замість генерації медіафайлів одразу, результати чекають вибору користувача.
 fn run_pexels_branch(
     job_id: u64,
@@ -871,10 +874,11 @@ fn run_pexels_branch(
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     ctx: egui::Context,
 ) -> Result<(), String> {
+    let stock_provider = settings.video_service.clone();
     crate::logger::log_job(
         job_id,
         &job_name,
-        "Pexels: starting keyword generation + stock search...",
+        &format!("{stock_provider}: starting keyword generation + stock search..."),
     );
     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
     ctx.request_repaint();
@@ -890,9 +894,12 @@ fn run_pexels_branch(
                 crate::logger::log_job(
                     job_id,
                     &job_name,
-                    &format!("Pexels: using {} segments from segments.json", segs.len()),
+                    &format!(
+                        "{stock_provider}: using {} segments from segments.json",
+                        segs.len()
+                    ),
                 );
-                // Агент написав описи сцен — використовуємо напряму як запит до Pexels
+                // Агент написав описи сцен — використовуємо їх напряму як stock-запити.
                 let kws = segs.clone();
                 (segs, kws)
             }
@@ -935,7 +942,7 @@ fn run_pexels_branch(
                         job_id,
                         &job_name,
                         &format!(
-                            "Pexels: generating keywords via {}...",
+                            "{stock_provider}: generating keywords via {}...",
                             settings.video_llm_service
                         ),
                     );
@@ -987,6 +994,7 @@ fn run_pexels_branch(
                         let prompts_progress_c = Arc::clone(&prompts_progress);
                         let ctx_c = ctx.clone();
                         let jn = job_name.clone();
+                        let stock_provider_name = stock_provider.clone();
                         handles.push(std::thread::spawn(move || {
                             let kw = crate::core::llm::call_llm(
                                 &service,
@@ -1014,7 +1022,10 @@ fn run_pexels_branch(
                                     let _ = crate::logger::log_job(
                                         job_id,
                                         &jn,
-                                        &format!("Pexels keyword {}/{}: \"{}\"", done, t, kw),
+                                        &format!(
+                                            "{stock_provider_name} keyword {}/{}: \"{}\"",
+                                            done, t, kw
+                                        ),
                                     );
                                 }
                             }
@@ -1071,7 +1082,7 @@ fn run_pexels_branch(
         read_segment_durations_from_timeline(save_dir).unwrap_or_else(|| vec![0.0; total]);
 
     // Зберігаємо skeleton cache — ключові слова без результатів пошуку.
-    // Pexels пошук запускається лінивo в GUI при кліку на сегмент.
+    // Реальний stock-пошук запускається ліниво в GUI при кліку на сегмент.
     let cache: Vec<crate::api::stock::SegmentCache> = segments
         .iter()
         .zip(keywords.iter())
@@ -1089,13 +1100,13 @@ fn run_pexels_branch(
         .collect();
 
     crate::api::stock::save_cache(save_dir, &cache)
-        .map_err(|e| format!("Pexels cache save error: {}", e))?;
+        .map_err(|e| format!("{stock_provider} cache save error: {}", e))?;
 
     crate::logger::log_job(
         job_id,
         &job_name,
         &format!(
-            "Pexels: skeleton cache saved ({} segments). Waiting for user selection...",
+            "{stock_provider}: skeleton cache saved ({} segments). Waiting for user selection...",
             total
         ),
     );

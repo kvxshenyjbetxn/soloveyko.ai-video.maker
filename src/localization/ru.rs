@@ -207,6 +207,11 @@ pub fn translate_ru(key: &str) -> &'static str {
         "pexels_service_note" => {
             "Ключевые слова генерируются автоматически. Вы выбираете медиа вручную в пикере."
         }
+        "magnific_key_hint" => "Введите API ключ Magnific...",
+        "magnific_status_checking" => "⏳ Проверка...",
+        "magnific_service_note" => {
+            "Ключевые слова генерируются автоматически. Вы выбираете медиа вручную в пикере."
+        }
         "pixabay_key_hint" => "Введите API ключ Pixabay...",
         "pixabay_service_note" => {
             "Ключевые слова генерируются автоматически. Вы выбираете медиа вручную в пикере."

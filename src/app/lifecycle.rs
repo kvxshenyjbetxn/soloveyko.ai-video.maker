@@ -32,6 +32,9 @@ impl Default for VideoMakerApp {
             pexels_key: String::new(),
             pexels_status: None,
             pexels_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            magnific_key: String::new(),
+            magnific_status: None,
+            magnific_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pixabay_key: String::new(),
             pixabay_status: None,
             pixabay_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -298,6 +301,7 @@ impl VideoMakerApp {
         let googler_key = saved.googler_key.clone();
         let assemblyai_key = saved.assemblyai_key.clone();
         let pexels_key = saved.pexels_key.clone();
+        let magnific_key = saved.magnific_key.clone();
         let pixabay_key = saved.pixabay_key.clone();
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
@@ -505,6 +509,9 @@ impl VideoMakerApp {
             pexels_key,
             pexels_status: None,
             pexels_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            magnific_key,
+            magnific_status: None,
+            magnific_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pixabay_key,
             pixabay_status: None,
             pixabay_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),

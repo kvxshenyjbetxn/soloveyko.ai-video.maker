@@ -71,6 +71,12 @@ pub struct VideoMakerApp {
     pub pexels_status: Option<String>,
     /// Результат фонового тесту API ключа Pexels.
     pub pexels_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Ключ API для Magnific Stock.
+    pub magnific_key: String,
+    /// Статус перевірки Magnific API ключа.
+    pub magnific_status: Option<String>,
+    /// Результат фонового тесту API ключа Magnific.
+    pub magnific_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Ключ API для Pixabay Stock.
     pub pixabay_key: String,
     /// Статус перевірки Pixabay API ключа.

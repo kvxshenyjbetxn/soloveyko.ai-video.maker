@@ -209,6 +209,11 @@ pub fn translate_en(key: &str) -> &'static str {
         "pexels_service_note" => {
             "Keywords are generated automatically. You pick media manually in the picker."
         }
+        "magnific_key_hint" => "Enter Magnific API key...",
+        "magnific_status_checking" => "⏳ Checking...",
+        "magnific_service_note" => {
+            "Keywords are generated automatically. You pick media manually in the picker."
+        }
         "pixabay_key_hint" => "Enter Pixabay API key...",
         "pixabay_service_note" => {
             "Keywords are generated automatically. You pick media manually in the picker."

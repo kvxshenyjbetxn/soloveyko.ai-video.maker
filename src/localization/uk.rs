@@ -207,6 +207,11 @@ pub fn translate_uk(key: &str) -> &'static str {
         "pexels_service_note" => {
             "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері."
         }
+        "magnific_key_hint" => "Введіть API ключ Magnific...",
+        "magnific_status_checking" => "⏳ Перевірка...",
+        "magnific_service_note" => {
+            "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері."
+        }
         "pixabay_key_hint" => "Введіть API ключ Pixabay...",
         "pixabay_service_note" => {
             "Ключові слова генеруються автоматично. Ви обираєте медіа вручну у пікері."

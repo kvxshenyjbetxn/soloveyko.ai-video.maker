@@ -209,6 +209,7 @@ impl VideoMakerApp {
                     if let Some(mut state) = crate::gui::stock_picker::StockPickerState::new(
                         job.settings.save_path.clone(),
                         job.settings.pexels_key.clone(),
+                        job.settings.magnific_key.clone(),
                         job.settings.pixabay_key.clone(),
                         job.settings.video_service.clone(),
                         picker_render,

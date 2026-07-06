@@ -852,7 +852,7 @@ pub fn draw_video_section(
 
         // Перемикач режиму відеоряду: Генерація / Стоки
         let mut gen_mode = video_service.as_str() == "Googler";
-        let mut stock_mode = video_service.as_str() == "Pexels" || video_service.as_str() == "Pixabay";
+        let mut stock_mode = matches!(video_service.as_str(), "Pexels" | "Magnific" | "Pixabay");
 
         ui.label(egui::RichText::new(translate(language, "video_service_mode_label")).strong());
         ui.add_space(2.0);
@@ -864,7 +864,7 @@ pub fn draw_video_section(
             }
             let was_stock = stock_mode;
             if ui.radio_value(&mut stock_mode, true, translate(language, "video_service_mode_stock")).changed() && !was_stock {
-                *video_service = "Pexels".to_string();
+                *video_service = "Magnific".to_string();
                 gen_mode = false;
             }
         });
@@ -884,14 +884,28 @@ pub fn draw_video_section(
                     ui.selectable_value(video_service, "Googler".to_string(), "Googler");
                 });
         } else if stock_mode {
-            // Режим Стоки: Pexels, Pixabay
+            // Режим Стоки: Magnific, Pexels, Pixabay
             egui::ComboBox::from_id_salt("video_service_combo")
-                .selected_text(if video_service.as_str() == "Pixabay" { "Pixabay Stock" } else { "Pexels Stock" })
+                .selected_text(match video_service.as_str() {
+                    "Magnific" => "Magnific Stock",
+                    "Pixabay" => "Pixabay Stock",
+                    _ => "Pexels Stock",
+                })
                 .width(ui.available_width() - 8.0)
                 .show_ui(ui, |ui| {
+                    ui.selectable_value(video_service, "Magnific".to_string(), "Magnific Stock");
                     ui.selectable_value(video_service, "Pexels".to_string(), "Pexels Stock");
                     ui.selectable_value(video_service, "Pixabay".to_string(), "Pixabay Stock");
                 });
+        }
+
+        if video_service.as_str() == "Magnific" {
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(translate(language, "magnific_service_note"))
+                    .color(ui.visuals().widgets.noninteractive.fg_stroke.color)
+                    .size(11.0)
+            );
         }
 
         if video_service.as_str() == "Pexels" {

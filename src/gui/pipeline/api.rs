@@ -24,6 +24,9 @@ pub fn draw_api_section(
     pexels_key: &mut String,
     pexels_status: &mut Option<String>,
     pexels_test_result: &Arc<Mutex<Option<String>>>,
+    magnific_key: &mut String,
+    magnific_status: &mut Option<String>,
+    magnific_test_result: &Arc<Mutex<Option<String>>>,
     pixabay_key: &mut String,
     pixabay_status: &mut Option<String>,
     pixabay_test_result: &Arc<Mutex<Option<String>>>,
@@ -53,6 +56,13 @@ pub fn draw_api_section(
     if let Ok(mut guard) = pexels_test_result.try_lock() {
         if let Some(result) = guard.take() {
             *pexels_status = Some(result);
+        }
+    }
+
+    // Опитуємо результат фонового тесту Magnific і переносимо у magnific_status
+    if let Ok(mut guard) = magnific_test_result.try_lock() {
+        if let Some(result) = guard.take() {
+            *magnific_status = Some(result);
         }
     }
 
@@ -413,6 +423,72 @@ pub fn draw_api_section(
         });
 
         if let Some(status) = pexels_status {
+            ui.add_space(4.0);
+            let is_success = status.starts_with('✔');
+            let is_checking = status.starts_with('⏳');
+            let text_color = if is_success || is_checking {
+                egui::Color32::from_rgb(46, 204, 113)
+            } else {
+                egui::Color32::from_rgb(231, 76, 60)
+            };
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(status.as_str())
+                        .color(text_color)
+                        .size(12.0),
+                )
+                .wrap(),
+            );
+        }
+
+        ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(6.0);
+
+        // --- Magnific ---
+        ui.label(egui::RichText::new("Magnific Stock").strong());
+        ui.add_space(4.0);
+
+        let available_width = ui.available_width();
+
+        ui.horizontal(|ui| {
+            let magnific_response = ui.add(
+                egui::TextEdit::singleline(magnific_key)
+                    .password(true)
+                    .hint_text(translate(language, "magnific_key_hint"))
+                    .desired_width((available_width - 90.0).max(100.0)),
+            );
+
+            if magnific_response.changed() {
+                *magnific_status = None;
+            }
+
+            let test_btn = ui.add_sized(
+                [70.0, 20.0],
+                egui::Button::new(translate(language, "api_check_btn")),
+            );
+
+            if test_btn.clicked() {
+                let trimmed = magnific_key.trim().to_string();
+                if trimmed.is_empty() {
+                    *magnific_status = Some(translate(language, "api_status_empty").to_string());
+                } else {
+                    *magnific_status =
+                        Some(translate(language, "magnific_status_checking").to_string());
+
+                    let result_arc = Arc::clone(magnific_test_result);
+                    let ctx = ui.ctx().clone();
+
+                    std::thread::spawn(move || {
+                        let status = crate::api::stock::magnific::check_key(&trimmed);
+                        *result_arc.lock().unwrap() = Some(status);
+                        ctx.request_repaint();
+                    });
+                }
+            }
+        });
+
+        if let Some(status) = magnific_status {
             ui.add_space(4.0);
             let is_success = status.starts_with('✔');
             let is_checking = status.starts_with('⏳');

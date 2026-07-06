@@ -1,3 +1,4 @@
+pub mod magnific;
 pub mod pexels;
 pub mod pixabay;
 

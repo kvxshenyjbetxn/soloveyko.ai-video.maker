@@ -214,6 +214,9 @@ fn default_assemblyai_key() -> String {
 fn default_pexels_key() -> String {
     String::new()
 }
+fn default_magnific_key() -> String {
+    String::new()
+}
 fn default_pixabay_key() -> String {
     String::new()
 }
@@ -331,6 +334,9 @@ pub struct AppSettings {
     /// Ключ API для Pexels Stock
     #[serde(default = "default_pexels_key")]
     pub pexels_key: String,
+    /// Ключ API для Magnific Stock
+    #[serde(default = "default_magnific_key")]
+    pub magnific_key: String,
     /// Ключ API для Pixabay Stock
     #[serde(default = "default_pixabay_key")]
     pub pixabay_key: String,
@@ -649,6 +655,7 @@ impl Default for AppSettings {
             googler_key: String::new(),
             assemblyai_key: String::new(),
             pexels_key: String::new(),
+            magnific_key: String::new(),
             pixabay_key: String::new(),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
@@ -860,6 +867,9 @@ pub struct PipelineTemplate {
     /// Збережений API ключ для Pexels Stock
     #[serde(default = "default_pexels_key")]
     pub pexels_key: String,
+    /// Збережений API ключ для Magnific Stock
+    #[serde(default = "default_magnific_key")]
+    pub magnific_key: String,
     /// Збережений API ключ для Pixabay Stock
     #[serde(default = "default_pixabay_key")]
     pub pixabay_key: String,
@@ -1134,6 +1144,7 @@ pub fn save_template(
     openrouter_key: &str,
     assemblyai_key: &str,
     pexels_key: &str,
+    magnific_key: &str,
     pixabay_key: &str,
     voiceover_provider: &str,
     voiceover_template_uuid: &str,
@@ -1232,6 +1243,7 @@ pub fn save_template(
             openrouter_key: openrouter_key.to_string(),
             assemblyai_key: assemblyai_key.to_string(),
             pexels_key: pexels_key.to_string(),
+            magnific_key: magnific_key.to_string(),
             pixabay_key: pixabay_key.to_string(),
             voiceover_provider: voiceover_provider.to_string(),
             voiceover_template_uuid: voiceover_template_uuid.to_string(),

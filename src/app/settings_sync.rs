@@ -68,6 +68,7 @@ impl VideoMakerApp {
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.assemblyai_key != self.last_saved_settings.assemblyai_key
                 || self.pexels_key != self.last_saved_settings.pexels_key
+                || self.magnific_key != self.last_saved_settings.magnific_key
                 || self.pixabay_key != self.last_saved_settings.pixabay_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
@@ -184,6 +185,7 @@ impl VideoMakerApp {
                     googler_key: self.googler_key.clone(),
                     assemblyai_key: self.assemblyai_key.clone(),
                     pexels_key: self.pexels_key.clone(),
+                    magnific_key: self.magnific_key.clone(),
                     pixabay_key: self.pixabay_key.clone(),
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
