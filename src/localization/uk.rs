@@ -311,6 +311,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stock_trim_end" => "До:",
         "stock_trim_confirm" => "Підтвердити",
         "stock_trim_cancel" => "Скасувати",
+        "stock_trim_caching" => "⏳ Кешування кадру...",
         "stock_key_missing_warning" => {
             "⚠️ Відсутній API-ключ для обраного стокового сервісу. Додайте його в налаштуваннях API."
         }

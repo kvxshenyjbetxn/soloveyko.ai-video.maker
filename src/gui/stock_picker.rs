@@ -93,6 +93,9 @@ pub struct TrimEditState {
     /// Позиція відтворення відносно trim_start (0..segment_duration)
     pub playhead: f32,
     pub is_playing: bool,
+    /// Користувач зараз тягне повзунок стрічки (актуалізується з попереднього кадру UI).
+    /// На відміну від `!is_playing`, це не охоплює звичайну паузу — тільки сам рух миші.
+    pub is_scrubbing: bool,
     pub last_tick: Option<Instant>,
     /// Налаштування якості/FPS для витягування кадрів
     pub render: PreviewRenderSettings,
@@ -428,6 +431,7 @@ fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
                 frame_cache,
                 playhead: 0.0,
                 is_playing: true,
+                is_scrubbing: false,
                 last_tick: None,
                 render,
             });
@@ -553,6 +557,19 @@ fn draw_trim_editor(
 
     flush_trim_frames(ctx, trim);
 
+    // Без цього media.duration_secs назавжди лишається на тимчасовому плейсхолдері
+    // (10с), встановленому в MediaItem::new() до завершення фонового ffprobe —
+    // і будь-який кадр за межами цих "фейкових" 10с ніколи не вдається дістати.
+    if trim.media.refresh_probe() {
+        // Реальна тривалість файлу (ffprobe) точніша за те, що повернув stock-сервіс
+        // у метаданих пошуку — синхронізуємось, щоб UI не дозволяв обирати позицію
+        // за межами того, що ffmpeg фізично зможе видобути.
+        if trim.media.duration_secs > 0.0 {
+            trim.video_duration = trim.media.duration_secs;
+        }
+        ctx.request_repaint();
+    }
+
     let max_start = (trim.video_duration - trim.segment_duration).max(0.0);
     trim.trim_start = trim.trim_start.clamp(0.0, max_start);
     let trim_end = trim.trim_start + trim.segment_duration;
@@ -574,7 +591,11 @@ fn draw_trim_editor(
     }
 
     let show_time = (trim.trim_start + trim.playhead).min((trim.video_duration - 0.001).max(0.0));
-    // sharp_when_idle = true щоб показувати чіткий кадр коли плеєр на паузі
+    // sharp_when_idle = true тільки коли справді нічого не рухається (не пауза під час
+    // активного перетягування!) — інакше кожна позиція під час скрабу тягне за собою
+    // окремий важкий high-res ffmpeg-запит, який може зайняти кілька секунд і "з'їсти"
+    // воркер-потік, потрібний для звичайного (дешевого) scrub-кадру.
+    let sharp_when_idle = !trim.is_playing && !trim.is_scrubbing;
     let preview_tex = trim
         .frame_cache
         .get_frame(
@@ -582,7 +603,7 @@ fn draw_trim_editor(
             &trim.media,
             show_time,
             trim.is_playing,
-            !trim.is_playing,
+            sharp_when_idle,
             trim.render,
         )
         .or_else(|| {
@@ -597,6 +618,11 @@ fn draw_trim_editor(
                 })
                 .map(|(_, tex)| tex.clone())
         });
+
+    // Чи точний кадр під поточною позицією вже закешований, чи показуємо застарілий fallback
+    let frame_ready =
+        trim.frame_cache
+            .has_exact_frame(&trim.media, show_time, trim.is_playing, trim.render);
 
     // Клонуємо кадри для малювання смуги (уникаємо подвійного borrow)
     let strip_frames: Vec<(f32, egui::TextureHandle)> = trim
@@ -631,6 +657,13 @@ fn draw_trim_editor(
                 );
                 ui.separator();
                 ui.label(format!("{:.1}с → {:.1}с", trim.trim_start, trim_end));
+                if !frame_ready {
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(translate(language, "stock_trim_caching"))
+                            .color(egui::Color32::from_rgb(255, 180, 0)),
+                    );
+                }
             });
             ui.add_space(6.0);
 
@@ -664,8 +697,8 @@ fn draw_trim_editor(
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                         egui::Color32::WHITE,
                     );
-                    // Amber dot — екстракція ще виконується у фоні
-                    if !trim.media.is_extraction_complete() {
+                    // Amber dot — показаний кадр застарілий (fallback), поточний ще кешується
+                    if !frame_ready {
                         let dot = egui::pos2(actual_rect.right() - 10.0, actual_rect.top() + 10.0);
                         painter.circle_filled(
                             dot,
@@ -821,6 +854,8 @@ fn draw_trim_editor(
                     egui::Id::new("trim_strip_drag"),
                     egui::Sense::click_and_drag(),
                 );
+                // Оновлюємо на наступний кадр UI: чи користувач саме зараз тягне повзунок
+                trim.is_scrubbing = drag_resp.dragged();
                 if drag_resp.dragged() {
                     let delta_secs = drag_resp.drag_delta().x / w * trim.video_duration;
                     trim.trim_start = (trim.trim_start + delta_secs).clamp(0.0, max_start);
@@ -1553,6 +1588,7 @@ fn start_video_download_if_needed(
             frame_cache,
             playhead: 0.0,
             is_playing: true,
+            is_scrubbing: false,
             last_tick: None,
             render,
         });

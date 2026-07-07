@@ -313,6 +313,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "stock_trim_end" => "To:",
         "stock_trim_confirm" => "Confirm",
         "stock_trim_cancel" => "Cancel",
+        "stock_trim_caching" => "⏳ Caching frame...",
         "stock_key_missing_warning" => {
             "⚠️ Missing API key for the selected stock service. Add it in the API settings."
         }

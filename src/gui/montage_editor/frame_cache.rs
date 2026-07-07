@@ -382,10 +382,25 @@ impl FrameCache {
         let chunk_start_idx = ((center_idx.saturating_sub(1) / bucket_frames) * bucket_frames + 1)
             .saturating_sub(overlap_frames)
             .max(1);
-        let chunk_end_idx = chunk_start_idx + chunk_frames + overlap_frames * 2;
+        // Не можна запитувати кадри за межами реальної тривалості медіа —
+        // інакше generate_scrub_chunk ніколи не зможе виконати перевірку успіху
+        // (останній запитаний кадр фізично не існує), і той самий приречений
+        // ffmpeg-запуск буде повторюватись на кожному тіку програвання.
+        let max_idx = (media.duration_secs * fps).floor().max(1.0) as u32 + 1;
+        let chunk_end_idx = (chunk_start_idx + chunk_frames + overlap_frames * 2).min(max_idx);
+        if chunk_end_idx <= chunk_start_idx {
+            return;
+        }
 
         // Якщо кінець chunk вже є на диску — цей шматок вже прогрітий.
-        if Self::frame_path(media, chunk_end_idx, FrameQuality::Scrub).exists() {
+        // Біля кінця відео очікуваний останній кадр може бути на кілька кадрів менше
+        // за теоретичний chunk_end_idx (те саме округлення, що і в generate_scrub_chunk),
+        // тож перевіряємо із запасом, інакше "вже готово" ніколи не спрацює для хвоста.
+        let tail_tolerance = 5;
+        let already_warmed = (chunk_end_idx.saturating_sub(tail_tolerance)..=chunk_end_idx)
+            .rev()
+            .any(|idx| Self::frame_path(media, idx, FrameQuality::Scrub).exists());
+        if already_warmed {
             return;
         }
 
@@ -592,6 +607,23 @@ impl FrameCache {
         }
     }
 
+    /// Перевіряє, чи точний кадр для цієї позиції вже є в кеші (без fallback на сусідній).
+    /// Використовується для індикації користувачу "кадр ще завантажується".
+    pub fn has_exact_frame(
+        &self,
+        media: &MediaItem,
+        time: f32,
+        playback_active: bool,
+        settings: PreviewRenderSettings,
+    ) -> bool {
+        if !matches!(media.kind, ClipKind::Video) {
+            return true;
+        }
+        let frame_idx = Self::frame_idx(media, time, settings, playback_active);
+        let key = Self::frame_key(media, frame_idx, FrameQuality::Scrub);
+        self.textures.contains_key(&key)
+    }
+
     /// Повертає текстуру для заданого медіа та часу.
     /// `sharp_when_idle` вмикає high-res still-кадр тільки коли користувач не скрабить.
     pub fn get_frame(
@@ -685,16 +717,23 @@ impl FrameCache {
             self.warm_cached_window(ctx, media, frame_idx, settings, playback_active);
             self.request_first_frame_if_needed(ctx, media, frame_idx, settings);
 
-            // Поточний кадр під playhead завжди має найвищий пріоритет,
-            // навіть якщо паралельно вже гріється chunk для playback/scrub.
-            self.request_frame_async(
-                ctx,
-                media,
-                frame_idx,
-                settings,
-                FrameQuality::Scrub,
-                PreviewTaskPriority::CurrentFrame,
-            );
+            if !playback_active {
+                // Скраб (пауза): саме цей кадр потрібен негайно, навіть якщо
+                // паралельно вже гріється chunk. Під час playback так НЕ робимо —
+                // playhead постійно рухається, тож окремий ffmpeg-запуск на кожен
+                // кадр лише відбирає воркер-потоки у значно ефективнішого chunk'а
+                // (один процес декодує одразу секунди кадрів) і сам майже завжди
+                // встигає застаріти ще до завершення. Це і є причина "зависань"
+                // під час програвання високороздільного відео.
+                self.request_frame_async(
+                    ctx,
+                    media,
+                    frame_idx,
+                    settings,
+                    FrameQuality::Scrub,
+                    PreviewTaskPriority::CurrentFrame,
+                );
+            }
 
             ctx.request_repaint_after(std::time::Duration::from_secs_f32(
                 1.0 / settings.playback_fps().max(1.0),

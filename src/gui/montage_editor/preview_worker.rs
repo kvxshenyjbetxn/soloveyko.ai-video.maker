@@ -586,6 +586,16 @@ fn generate_scrub_chunk(
     crate::bundle::set_no_window(&mut cmd);
 
     let _permit = crate::api::ffmpeg::FfmpegLimiter::get().acquire();
-    matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success())
-        && media.cache_dir.join(format!("{:06}.jpg", end_idx)).exists()
+    let status_ok =
+        matches!(crate::api::ffmpeg::run_tracked(&mut cmd), Ok(status) if status.success());
+    // Біля кінця відео фільтр fps= може віддати на кілька кадрів менше за теоретичний
+    // розрахунок (округлення тайм-кодів останнього реального кадру джерела) — це не
+    // провал, якщо взагалі щось з'явилось близько до очікуваного кінця. Якщо вимагати
+    // рівно end_idx, такий chunk ніколи не позначиться готовим і буде перезапускатись
+    // на кожному тіку програвання назавжди.
+    let tail_tolerance = 5;
+    status_ok
+        && (end_idx.saturating_sub(tail_tolerance)..=end_idx)
+            .rev()
+            .any(|idx| media.cache_dir.join(format!("{idx:06}.jpg")).exists())
 }
