@@ -1594,6 +1594,10 @@ fn start_video_download_if_needed(
                 }
             }
             Err(resolve_error) if provider == "Magnific" && !fallback_url.trim().is_empty() => {
+                // Попереджаємо користувача, бо fallback_url — це watermarked preview.
+                *error_c.lock().unwrap() = Some(format!(
+                    "{resolve_error} — використано watermarked preview (файл з вотермаркою)"
+                ));
                 if let Err(download_error) = crate::api::stock::download_file_with_progress(
                     &fallback_url,
                     &dest_path,
