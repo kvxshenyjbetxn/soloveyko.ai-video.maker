@@ -26,6 +26,10 @@ type SegmentSearchArc = Arc<
 
 pub struct StockPickerState {
     pub save_path: String,
+    /// Чи увімкнено shared cache для стокових медіа.
+    pub shared_stock_cache_enabled: bool,
+    /// Глобальна папка shared cache для повторного використання stock-медіа.
+    pub shared_stock_cache_dir: String,
     pub cache: Vec<SegmentCache>,
     pub active_segment: usize,
     /// Показувати відео (true) чи фото (false); None = auto з кешу
@@ -79,6 +83,8 @@ pub struct TrimEditState {
     pub segment_idx: usize,
     pub video_id: String,
     pub filename: String,
+    /// true, якщо файл був підтягнутий у проєкт зі shared cache.
+    pub loaded_from_shared_cache: bool,
     pub video_duration: f32,
     /// Тривалість фрагменту, який треба вставити
     pub segment_duration: f32,
@@ -104,6 +110,8 @@ pub struct TrimEditState {
 impl StockPickerState {
     pub fn new(
         save_path: String,
+        shared_stock_cache_enabled: bool,
+        shared_stock_cache_dir: String,
         pexels_key: String,
         magnific_key: String,
         pixabay_key: String,
@@ -133,6 +141,8 @@ impl StockPickerState {
 
         Some(Self {
             save_path,
+            shared_stock_cache_enabled,
+            shared_stock_cache_dir,
             active_segment: 0,
             show_videos: None,
             cache,
@@ -422,6 +432,7 @@ fn check_download_complete(state: &mut StockPickerState, ctx: &egui::Context) {
                 segment_idx: dl.segment_idx,
                 video_id: dl.video_id,
                 filename: dl.filename,
+                loaded_from_shared_cache: false,
                 video_duration: dl.video_duration,
                 segment_duration,
                 trim_start: 0.0,
@@ -657,6 +668,14 @@ fn draw_trim_editor(
                 );
                 ui.separator();
                 ui.label(format!("{:.1}с → {:.1}с", trim.trim_start, trim_end));
+                if state.shared_stock_cache_enabled && trim.loaded_from_shared_cache {
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(translate(language, "stock_trim_from_cache"))
+                            .color(egui::Color32::from_rgb(46, 204, 113))
+                            .strong(),
+                    );
+                }
                 if !frame_ready {
                     ui.separator();
                     ui.label(
@@ -1502,6 +1521,15 @@ fn delete_frame_cache_for_file(save_path: &Path, file_path: &Path) {
     }
 }
 
+fn normalized_stock_provider(provider: &str) -> &str {
+    let trimmed = provider.trim();
+    if trimmed.is_empty() {
+        "Pexels"
+    } else {
+        trimmed
+    }
+}
+
 fn start_video_download_if_needed(
     ctx: &egui::Context,
     state: &mut StockPickerState,
@@ -1551,6 +1579,19 @@ fn start_video_download_if_needed(
         });
     }
 
+    let loaded_from_shared_cache = if state.shared_stock_cache_enabled && !dest.exists() {
+        crate::api::stock::shared_cache::restore_to_project(
+            &state.shared_stock_cache_dir,
+            "video",
+            normalized_stock_provider(&vid.provider),
+            &vid.id,
+            &dest,
+        )
+        .unwrap_or(false)
+    } else {
+        false
+    };
+
     // Якщо файл вже є (і належить потрібному відео) — одразу відкриваємо trim редактор
     if dest.exists() {
         let seg_dur = state
@@ -1579,6 +1620,7 @@ fn start_video_download_if_needed(
             segment_idx: seg_idx,
             video_id: vid.id.clone(),
             filename,
+            loaded_from_shared_cache,
             video_duration: video_dur,
             segment_duration,
             trim_start: 0.0,
@@ -1603,10 +1645,12 @@ fn start_video_download_if_needed(
     let progress_c = Arc::clone(&progress);
     let error = Arc::new(Mutex::new(None::<String>));
     let error_c = Arc::clone(&error);
-    let provider = vid.provider.clone();
+    let provider = normalized_stock_provider(&vid.provider).to_string();
     let video_id = vid.id.clone();
     let fallback_url = vid.download_url.clone();
     let magnific_key = state.magnific_key.clone();
+    let state_shared_cache_enabled = state.shared_stock_cache_enabled;
+    let shared_stock_cache_dir = state.shared_stock_cache_dir.clone();
     let dest_path = dest.clone();
     let ctx_c = ctx.clone();
 
@@ -1627,6 +1671,15 @@ fn start_video_download_if_needed(
                 ) {
                     *error_c.lock().unwrap() = Some(error);
                     *progress_c.lock().unwrap() = -1.0;
+                } else if state_shared_cache_enabled {
+                    let _ = crate::api::stock::shared_cache::store_from_project(
+                        &shared_stock_cache_dir,
+                        "video",
+                        &provider,
+                        &video_id,
+                        &dest_path,
+                        "mp4",
+                    );
                 }
             }
             Err(resolve_error) if provider == "Magnific" && !fallback_url.trim().is_empty() => {
@@ -1643,6 +1696,15 @@ fn start_video_download_if_needed(
                         "{resolve_error}; fallback download error: {download_error}"
                     ));
                     *progress_c.lock().unwrap() = -1.0;
+                } else if state_shared_cache_enabled {
+                    let _ = crate::api::stock::shared_cache::store_from_project(
+                        &shared_stock_cache_dir,
+                        "video",
+                        &provider,
+                        &video_id,
+                        &dest_path,
+                        "mp4",
+                    );
                 }
             }
             Err(error) => {
@@ -1682,14 +1744,17 @@ fn start_photo_download(
         .next()
         .filter(|e| e.len() <= 4)
         .unwrap_or("jpg");
+    let ext = ext.to_string();
     let filename = format!("{:04}.{}", seg_idx + 1, ext);
     let dest = Path::new(&state.save_path).join("media").join(&filename);
     let fallback_url = photo.original_url.clone();
     let id = photo.id.clone();
     let photo_id = photo.id.clone();
-    let provider = photo.provider.clone();
+    let provider = normalized_stock_provider(&photo.provider).to_string();
     let magnific_key = state.magnific_key.clone();
     let save_path = state.save_path.clone();
+    let state_shared_cache_enabled = state.shared_stock_cache_enabled;
+    let shared_stock_cache_dir = state.shared_stock_cache_dir.clone();
     let ctx_c = ctx.clone();
     let fname = filename.clone();
 
@@ -1705,6 +1770,20 @@ fn start_photo_download(
         let _ = save_cache(Path::new(&save_path), &state.cache);
     }
 
+    if state.shared_stock_cache_enabled
+        && crate::api::stock::shared_cache::restore_to_project(
+            &state.shared_stock_cache_dir,
+            "photo",
+            &provider,
+            &photo_id,
+            &dest,
+        )
+        .unwrap_or(false)
+    {
+        *action = StockPickerAction::Confirmed(None);
+        return;
+    }
+
     std::thread::spawn(move || {
         let _ = std::fs::create_dir_all(dest.parent().unwrap_or(Path::new(".")));
         let resolved_url = if provider == "Magnific" {
@@ -1714,10 +1793,32 @@ fn start_photo_download(
         };
         match resolved_url {
             Ok(url) => {
-                let _ = crate::api::stock::download_file(&url, &dest);
+                if crate::api::stock::download_file(&url, &dest).is_ok()
+                    && state_shared_cache_enabled
+                {
+                    let _ = crate::api::stock::shared_cache::store_from_project(
+                        &shared_stock_cache_dir,
+                        "photo",
+                        &provider,
+                        &photo_id,
+                        &dest,
+                        &ext,
+                    );
+                }
             }
             Err(_) if provider == "Magnific" && !fallback_url.trim().is_empty() => {
-                let _ = crate::api::stock::download_file(&fallback_url, &dest);
+                if crate::api::stock::download_file(&fallback_url, &dest).is_ok()
+                    && state_shared_cache_enabled
+                {
+                    let _ = crate::api::stock::shared_cache::store_from_project(
+                        &shared_stock_cache_dir,
+                        "photo",
+                        &provider,
+                        &photo_id,
+                        &dest,
+                        &ext,
+                    );
+                }
             }
             Err(_) => {}
         }

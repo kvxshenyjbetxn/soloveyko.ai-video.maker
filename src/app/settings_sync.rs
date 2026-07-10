@@ -99,6 +99,9 @@ impl VideoMakerApp {
                 || self.translation_service != self.last_saved_settings.translation_service
                 || self.save_path_macos != self.last_saved_settings.save_path_macos
                 || self.save_path_windows != self.last_saved_settings.save_path_windows
+                || self.shared_stock_cache_enabled
+                    != self.last_saved_settings.shared_stock_cache_enabled
+                || self.shared_stock_cache_dir != self.last_saved_settings.shared_stock_cache_dir
                 || self.openrouter_max_threads != self.last_saved_settings.openrouter_max_threads
                 || self.claude_max_threads != self.last_saved_settings.claude_max_threads
                 || self.gemini_max_threads != self.last_saved_settings.gemini_max_threads
@@ -234,6 +237,8 @@ impl VideoMakerApp {
                     translation_service: self.translation_service.clone(),
                     save_path_macos: self.save_path_macos.clone(),
                     save_path_windows: self.save_path_windows.clone(),
+                    shared_stock_cache_enabled: self.shared_stock_cache_enabled,
+                    shared_stock_cache_dir: self.shared_stock_cache_dir.clone(),
                     save_path: String::new(),
                     openrouter_max_threads: self.openrouter_max_threads,
                     claude_max_threads: self.claude_max_threads,

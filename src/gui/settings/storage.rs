@@ -422,6 +422,12 @@ pub struct AppSettings {
     /// Шлях збереження для Windows
     #[serde(default)]
     pub save_path_windows: String,
+    /// Чи увімкнено shared cache для завантажених stock-медіа
+    #[serde(default)]
+    pub shared_stock_cache_enabled: bool,
+    /// Спільна папка кешу для завантажених stock-медіа
+    #[serde(default)]
+    pub shared_stock_cache_dir: String,
     /// Застаріле поле — читається лише для міграції зі старих конфігів, не записується
     #[serde(default, skip_serializing)]
     pub save_path: String,
@@ -686,6 +692,8 @@ impl Default for AppSettings {
             translation_service: "OpenRouter".to_string(),
             save_path_macos: String::new(),
             save_path_windows: String::new(),
+            shared_stock_cache_enabled: false,
+            shared_stock_cache_dir: String::new(),
             save_path: String::new(),
             openrouter_max_threads: 5,
             claude_max_threads: 5,
@@ -832,26 +840,30 @@ pub fn save_settings(settings: &AppSettings) {
     }
 }
 
+/// Відкриває довільну папку у системному файловому менеджері (Explorer / Finder / xdg-open).
+pub fn open_folder(path: &std::path::Path) {
+    let _ = fs::create_dir_all(path);
+
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("explorer").arg(path).spawn();
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = Command::new("open").arg(path).spawn();
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = Command::new("xdg-open").arg(path).spawn();
+    }
+}
+
 /// Відкриває папку налаштувань у системному файловому менеджері (Explorer / Finder / xdg-open).
 pub fn open_settings_folder() {
     if let Some(dir) = get_settings_dir() {
-        // Гарантуємо, що папка існує перед відкриттям
-        let _ = fs::create_dir_all(&dir);
-
-        #[cfg(target_os = "windows")]
-        {
-            let _ = Command::new("explorer").arg(dir).spawn();
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let _ = Command::new("open").arg(dir).spawn();
-        }
-
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-        {
-            let _ = Command::new("xdg-open").arg(dir).spawn();
-        }
+        open_folder(&dir);
     }
 }
 

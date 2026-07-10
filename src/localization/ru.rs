@@ -121,6 +121,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "settings_data" => "Управление данными",
         "settings_data_desc" => "Открыть локальную папку с файлом настроек settings.json:",
         "settings_open_folder" => "Открыть папку пользователя",
+        "settings_shared_cache" => "Общий кеш стоков",
+        "settings_shared_cache_desc" => "Папка, где программа хранит загруженные stock-медиа для повторного использования между проектами:",
+        "settings_shared_cache_enabled" => "Включить shared cache для стоков",
+        "settings_shared_cache_open" => "Открыть папку кеша",
         "settings_show_welcome" => "Показывать приветственное окно при запуске",
         "settings_lang" => "Язык интерфейса",
         "settings_lang_desc" => "Выберите язык отображения программы:",
@@ -312,6 +316,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "stock_trim_confirm" => "Подтвердить",
         "stock_trim_cancel" => "Отмена",
         "stock_trim_caching" => "⏳ Кэширование кадра...",
+        "stock_trim_from_cache" => "📦 Из shared cache",
         "stock_key_missing_warning" => {
             "⚠️ Отсутствует API-ключ для выбранного стокового сервиса. Добавьте его в настройках API."
         }

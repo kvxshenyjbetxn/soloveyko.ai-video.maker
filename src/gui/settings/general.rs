@@ -10,6 +10,8 @@ pub fn draw_general_settings(
     accent_color: &mut egui::Color32,
     language: &mut Language,
     show_welcome: &mut bool,
+    shared_stock_cache_enabled: &mut bool,
+    shared_stock_cache_dir: &mut String,
 ) -> bool {
     let mut welcome_changed = false;
     ui.vertical(|ui| {
@@ -162,6 +164,30 @@ pub fn draw_general_settings(
         ui.separator();
         ui.add_space(12.0);
 
+        ui.strong(translate(*language, "settings_shared_cache"));
+        ui.small(translate(*language, "settings_shared_cache_desc"));
+        ui.add_space(8.0);
+        ui.checkbox(
+            shared_stock_cache_enabled,
+            translate(*language, "settings_shared_cache_enabled"),
+        );
+        ui.add_space(6.0);
+        ui.add_enabled_ui(*shared_stock_cache_enabled, |ui| {
+            draw_folder_picker_row(ui, *language, shared_stock_cache_dir);
+            ui.add_space(6.0);
+            if ui
+                .button(translate(*language, "settings_shared_cache_open"))
+                .clicked()
+                && !shared_stock_cache_dir.trim().is_empty()
+            {
+                super::storage::open_folder(std::path::Path::new(shared_stock_cache_dir.trim()));
+            }
+        });
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(12.0);
+
         ui.strong(translate(*language, "welcome_title"));
         ui.add_space(8.0);
 
@@ -174,4 +200,29 @@ pub fn draw_general_settings(
     });
 
     welcome_changed
+}
+
+fn draw_folder_picker_row(ui: &mut egui::Ui, language: Language, path: &mut String) {
+    let btn_width = 70.0;
+    let item_spacing = ui.spacing().item_spacing.x;
+    let available = ui.available_width();
+
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [(available - btn_width - item_spacing).max(60.0), 20.0],
+            egui::TextEdit::singleline(path).hint_text(translate(language, "storage_path_hint")),
+        );
+
+        if ui
+            .add_sized(
+                [btn_width, 20.0],
+                egui::Button::new(translate(language, "storage_browse_btn")),
+            )
+            .clicked()
+        {
+            if let Some(picked) = rfd::FileDialog::new().pick_folder() {
+                *path = picked.to_string_lossy().to_string();
+            }
+        }
+    });
 }

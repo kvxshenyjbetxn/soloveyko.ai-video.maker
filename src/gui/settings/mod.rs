@@ -12,6 +12,16 @@ pub fn draw_settings(
     accent_color: &mut egui::Color32,
     language: &mut Language,
     show_welcome: &mut bool,
+    shared_stock_cache_enabled: &mut bool,
+    shared_stock_cache_dir: &mut String,
 ) -> bool {
-    general::draw_general_settings(ui, current_theme, accent_color, language, show_welcome)
+    general::draw_general_settings(
+        ui,
+        current_theme,
+        accent_color,
+        language,
+        show_welcome,
+        shared_stock_cache_enabled,
+        shared_stock_cache_dir,
+    )
 }

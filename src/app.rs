@@ -275,6 +275,10 @@ pub struct VideoMakerApp {
     pub save_path_macos: String,
     /// Шлях збереження для Windows.
     pub save_path_windows: String,
+    /// Чи увімкнено shared cache для завантажених stock-медіа.
+    pub shared_stock_cache_enabled: bool,
+    /// Спільна папка кешу для завантажених stock-медіа.
+    pub shared_stock_cache_dir: String,
     /// Черга задач пайплайну.
     pub jobs: Vec<crate::queue::PipelineJob>,
     /// Лічильник ID задач.
@@ -552,6 +556,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.accent_color,
                         &mut self.language,
                         &mut self.last_saved_settings.show_welcome,
+                        &mut self.shared_stock_cache_enabled,
+                        &mut self.shared_stock_cache_dir,
                     );
                     if welcome_changed {
                         let new_settings = self.last_saved_settings.clone();

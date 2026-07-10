@@ -121,6 +121,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "settings_data" => "Data Management",
         "settings_data_desc" => "Open local folder containing settings.json:",
         "settings_open_folder" => "Open User Folder",
+        "settings_shared_cache" => "Shared Stock Cache",
+        "settings_shared_cache_desc" => "Folder where the app stores downloaded stock media for reuse across projects:",
+        "settings_shared_cache_enabled" => "Enable shared stock cache",
+        "settings_shared_cache_open" => "Open cache folder",
         "settings_show_welcome" => "Show welcome window on startup",
         "settings_lang" => "Interface Language",
         "settings_lang_desc" => "Select application display language:",
@@ -314,6 +318,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "stock_trim_confirm" => "Confirm",
         "stock_trim_cancel" => "Cancel",
         "stock_trim_caching" => "⏳ Caching frame...",
+        "stock_trim_from_cache" => "📦 From shared cache",
         "stock_key_missing_warning" => {
             "⚠️ Missing API key for the selected stock service. Add it in the API settings."
         }

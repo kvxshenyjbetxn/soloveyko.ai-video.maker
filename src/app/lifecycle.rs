@@ -162,6 +162,8 @@ impl Default for VideoMakerApp {
             threads_window_open: false,
             save_path_macos: String::new(),
             save_path_windows: String::new(),
+            shared_stock_cache_enabled: false,
+            shared_stock_cache_dir: String::new(),
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
@@ -424,6 +426,8 @@ impl VideoMakerApp {
         let translation_temperature = saved.translation_temperature;
         let save_path_macos = saved.save_path_macos.clone();
         let save_path_windows = saved.save_path_windows.clone();
+        let shared_stock_cache_enabled = saved.shared_stock_cache_enabled;
+        let shared_stock_cache_dir = saved.shared_stock_cache_dir.clone();
 
         let openrouter_max_threads = saved.openrouter_max_threads;
         let claude_max_threads = saved.claude_max_threads;
@@ -623,6 +627,8 @@ impl VideoMakerApp {
             threads_window_open: false,
             save_path_macos,
             save_path_windows,
+            shared_stock_cache_enabled,
+            shared_stock_cache_dir,
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,

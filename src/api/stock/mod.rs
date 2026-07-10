@@ -1,6 +1,7 @@
 pub mod magnific;
 pub mod pexels;
 pub mod pixabay;
+pub mod shared_cache;
 
 use std::io::Read;
 
