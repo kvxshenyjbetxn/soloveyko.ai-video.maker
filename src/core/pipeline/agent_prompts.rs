@@ -88,9 +88,14 @@ pub const VIDEO_AGENT_SYSTEM_PROMPT_FULL: &str = r#"
 
 Правила файлів HyperFrames:
 - clips/<nn-name>/index.html — кожен кліп окремий standalone HTML.
-- preview-all/index.html — один загальний preview для перегляду всіх кліпів разом.
-- preview-all/compositions/*.html — ті самі кліпи як sub-compositions для спільного editor preview.
+- Кожен standalone-кліп зобов'язаний мати кореневий елемент з data-composition-id, data-width="1920", data-height="1080", data-duration і один paused GSAP timeline, зареєстрований у window.__timelines за тим самим id.
+- preview-all — це окремий валідний HyperFrames-проєкт для Studio, а НЕ HTML-галерея.
+- preview-all/index.html зобов'язаний містити кореневу композицію з data-composition-id, data-width="1920", data-height="1080", data-duration та window.__timelines[той самий id].
+- preview-all/index.html має послідовно монтувати сцени через data-composition-src="compositions/<nn-name>.html". Не використовуй iframe.
+- preview-all/compositions/*.html — повні копії сцен у форматі HyperFrames sub-composition: весь style, markup і script всередині <template>; внутрішній data-composition-id, id хоста та ключ window.__timelines мають збігатися.
+- У preview-all не використовуй шляхи з ../ або ../../ і не посилайся на clips/: Studio ізолює preview-all як окремий проєкт. Усі потрібні стилі, скрипти та розмітка мають бути локально у preview-all/compositions/.
 - Шлях у полі media для HyperFrames-сегмента має вказувати на відповідний clips/<nn-name>/index.html.
+- Після створення всіх файлів обов'язково виконай `npx hyperframes check` окремо в кожному clips/<nn-name>/ та в preview-all/. Виправ усі помилки до завершення задачі.
 -----------------------------------------------------------------
 "#;
 

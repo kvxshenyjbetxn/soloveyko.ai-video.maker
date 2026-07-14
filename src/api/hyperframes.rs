@@ -2,12 +2,39 @@ use eframe::egui;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+#[cfg(windows)]
+const NPX_COMMAND: &str = "npx.cmd";
+#[cfg(not(windows))]
+const NPX_COMMAND: &str = "npx";
+
+fn new_npx_command() -> std::process::Command {
+    crate::bundle::new_direct_cli_command(NPX_COMMAND)
+}
+
 pub fn open_preview(preview_dir: &Path, job_id: u64, job_name: &str) -> Result<(), String> {
-    if !preview_dir.exists() {
+    let entry_path = preview_dir.join("index.html");
+    if !entry_path.is_file() {
         return Err(format!(
-            "HyperFrames preview папку не знайдено: {}",
-            preview_dir.display()
+            "HyperFrames preview не містить index.html: {}",
+            entry_path.display()
         ));
+    }
+
+    let entry_html = std::fs::read_to_string(&entry_path)
+        .map_err(|e| format!("Не вдалося прочитати HyperFrames preview: {}", e))?;
+    for required in [
+        "data-composition-id",
+        "data-width",
+        "data-height",
+        "window.__timelines",
+    ] {
+        if !entry_html.contains(required) {
+            return Err(format!(
+                "Некоректний HyperFrames preview у {}: відсутній {}. Створіть валідну кореневу композицію, а не HTML-галерею.",
+                entry_path.display(),
+                required
+            ));
+        }
     }
 
     crate::logger::log_job(
@@ -19,7 +46,8 @@ pub fn open_preview(preview_dir: &Path, job_id: u64, job_name: &str) -> Result<(
         ),
     );
 
-    let mut cmd = crate::bundle::new_cli_command("npx");
+    // На Windows npx доступний як npx.cmd; запускаємо його без cmd /C.
+    let mut cmd = new_npx_command();
     cmd.current_dir(preview_dir)
         .args(["hyperframes", "preview"]);
 
@@ -119,7 +147,7 @@ fn render_pending_segments(save_dir: &Path, job_id: u64, job_name: &str) -> Resu
             ),
         );
 
-        let mut cmd = crate::bundle::new_cli_command("npx");
+        let mut cmd = new_npx_command();
         cmd.current_dir(clip_dir)
             .args(["hyperframes", "render", "--quality", "high", "--output"])
             .arg(&output_path);
