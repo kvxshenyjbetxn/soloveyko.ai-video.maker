@@ -40,8 +40,8 @@ pub fn render_pending_segments_async(
     ctx: egui::Context,
     timeline_rebuild_requested: Arc<Mutex<bool>>,
 ) {
-    std::thread::spawn(move || {
-        match render_pending_segments(&save_dir, job_id, &job_name) {
+    std::thread::spawn(
+        move || match render_pending_segments(&save_dir, job_id, &job_name) {
             Ok(rendered) => {
                 crate::logger::log_job(
                     job_id,
@@ -59,16 +59,17 @@ pub fn render_pending_segments_async(
                 );
                 ctx.request_repaint();
             }
-        }
-    });
+        },
+    );
 }
 
 fn render_pending_segments(save_dir: &Path, job_id: u64, job_name: &str) -> Result<usize, String> {
     let segments_path = save_dir.join("segments.json");
     let content = std::fs::read_to_string(&segments_path)
         .map_err(|e| format!("Не вдалося прочитати segments.json: {}", e))?;
-    let mut timeline = serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
-        .map_err(|e| format!("Невалідний segments.json: {}", e))?;
+    let mut timeline =
+        serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
+            .map_err(|e| format!("Невалідний segments.json: {}", e))?;
 
     let media_dir = save_dir.join("media");
     std::fs::create_dir_all(&media_dir)
@@ -77,7 +78,8 @@ fn render_pending_segments(save_dir: &Path, job_id: u64, job_name: &str) -> Resu
     let mut rendered = 0usize;
 
     for segment in timeline.segments.iter_mut() {
-        if segment.media_type != crate::core::pipeline::timeline::sync::SegmentMediaType::Hyperframes
+        if segment.media_type
+            != crate::core::pipeline::timeline::sync::SegmentMediaType::Hyperframes
         {
             continue;
         }
@@ -150,10 +152,8 @@ fn render_pending_segments(save_dir: &Path, job_id: u64, job_name: &str) -> Resu
         return Ok(0);
     }
 
-    let json = serde_json::to_string_pretty(&timeline)
-        .map_err(|e| format!("JSON error: {}", e))?;
-    std::fs::write(&segments_path, json)
-        .map_err(|e| format!("Write error: {}", e))?;
+    let json = serde_json::to_string_pretty(&timeline).map_err(|e| format!("JSON error: {}", e))?;
+    std::fs::write(&segments_path, json).map_err(|e| format!("Write error: {}", e))?;
 
     Ok(rendered)
 }

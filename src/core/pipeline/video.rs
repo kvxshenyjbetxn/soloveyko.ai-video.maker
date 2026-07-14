@@ -742,8 +742,7 @@ pub(super) fn run_video_branch(
                     &job_name_c,
                     &format!(
                         "Segment {}/{}: file already exists, skipping.",
-                        display_idx,
-                        total
+                        display_idx, total
                     ),
                 );
                 if let Ok(mut pp) = media_progress_c.lock() {
@@ -850,8 +849,7 @@ pub(super) fn run_video_branch(
                                         &job_name_c,
                                         &format!(
                                             "Помилка апскейлу для сегмента {}: {}",
-                                            display_idx,
-                                            err
+                                            display_idx, err
                                         ),
                                     );
                                 }

@@ -193,12 +193,11 @@ impl VideoMakerApp {
         if montage_actions.preview_hyperframes {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
-                    let preview_dir = std::path::Path::new(&job.settings.save_path).join("preview-all");
-                    if let Err(e) = crate::api::hyperframes::open_preview(
-                        &preview_dir,
-                        job.id,
-                        &job.name,
-                    ) {
+                    let preview_dir =
+                        std::path::Path::new(&job.settings.save_path).join("preview-all");
+                    if let Err(e) =
+                        crate::api::hyperframes::open_preview(&preview_dir, job.id, &job.name)
+                    {
                         crate::logger::log_job(job.id, &job.name, &e);
                     }
                 } else if let Some(editor) = self.montage_editor_state.as_ref() {

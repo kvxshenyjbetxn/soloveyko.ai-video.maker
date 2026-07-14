@@ -71,7 +71,9 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Открыть HyperFrames preview для клипов этой задачи",
         "montage_hyperframes_render_btn" => "Render HyperFrames",
-        "montage_hyperframes_render_hint" => "Отрендерить все HyperFrames HTML-клипы в MP4 и записать их обратно в segments.json",
+        "montage_hyperframes_render_hint" => {
+            "Отрендерить все HyperFrames HTML-клипы в MP4 и записать их обратно в segments.json"
+        }
         "montage_hyperframes_render_first_hint" => "Сначала отрендерьте HyperFrames-клипы в MP4",
         "montage_editor_inspector" => "Инспектор",
         "montage_editor_no_selection" => "Выберите клип на таймлайне",
@@ -131,7 +133,9 @@ pub fn translate_ru(key: &str) -> &'static str {
         "settings_data_desc" => "Открыть локальную папку с файлом настроек settings.json:",
         "settings_open_folder" => "Открыть папку пользователя",
         "settings_shared_cache" => "Общий кеш стоков",
-        "settings_shared_cache_desc" => "Папка, где программа хранит загруженные stock-медиа для повторного использования между проектами:",
+        "settings_shared_cache_desc" => {
+            "Папка, где программа хранит загруженные stock-медиа для повторного использования между проектами:"
+        }
         "settings_shared_cache_enabled" => "Включить shared cache для стоков",
         "settings_shared_cache_open" => "Открыть папку кеша",
         "settings_show_welcome" => "Показывать приветственное окно при запуске",

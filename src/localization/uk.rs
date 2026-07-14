@@ -71,7 +71,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Відкрити HyperFrames preview для кліпів цієї задачі",
         "montage_hyperframes_render_btn" => "Render HyperFrames",
-        "montage_hyperframes_render_hint" => "Зарендерити всі HyperFrames HTML-кліпи у MP4 і підставити їх у segments.json",
+        "montage_hyperframes_render_hint" => {
+            "Зарендерити всі HyperFrames HTML-кліпи у MP4 і підставити їх у segments.json"
+        }
         "montage_hyperframes_render_first_hint" => "Спочатку зарендери HyperFrames-кліпи у MP4",
         "montage_editor_inspector" => "Інспектор",
         "montage_editor_no_selection" => "Виберіть кліп на таймлінії",
@@ -131,7 +133,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "settings_data_desc" => "Відкрити локальну папку з файлом налаштувань settings.json:",
         "settings_open_folder" => "Відкрити папку користувача",
         "settings_shared_cache" => "Спільний кеш стоків",
-        "settings_shared_cache_desc" => "Папка, де програма зберігає завантажені stock-медіа для повторного використання між проєктами:",
+        "settings_shared_cache_desc" => {
+            "Папка, де програма зберігає завантажені stock-медіа для повторного використання між проєктами:"
+        }
         "settings_shared_cache_enabled" => "Увімкнути shared cache для стоків",
         "settings_shared_cache_open" => "Відкрити папку кешу",
         "settings_show_welcome" => "Показувати привітальне вікно при запуску",

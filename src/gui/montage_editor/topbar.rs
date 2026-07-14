@@ -39,28 +39,29 @@ pub(super) fn draw_topbar(
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
             // Кнопка CapCut (права)
             let can_continue = is_awaiting && !has_pending_hyperframes;
-            let capcut_btn = ui.add_enabled(
-                can_continue,
-                egui::Button::new(
-                    egui::RichText::new(translate(language, "montage_render_capcut"))
-                        .strong()
-                        .color(if can_continue {
-                            Color32::WHITE
-                        } else {
-                            Color32::GRAY
-                        }),
+            let capcut_btn = ui
+                .add_enabled(
+                    can_continue,
+                    egui::Button::new(
+                        egui::RichText::new(translate(language, "montage_render_capcut"))
+                            .strong()
+                            .color(if can_continue {
+                                Color32::WHITE
+                            } else {
+                                Color32::GRAY
+                            }),
+                    )
+                    .fill(if can_continue {
+                        Color32::from_rgb(41, 128, 185)
+                    } else {
+                        Color32::from_rgb(30, 30, 35)
+                    }),
                 )
-                .fill(if can_continue {
-                    Color32::from_rgb(41, 128, 185)
+                .on_hover_text(if has_pending_hyperframes {
+                    translate(language, "montage_hyperframes_render_first_hint")
                 } else {
-                    Color32::from_rgb(30, 30, 35)
-                }),
-            )
-            .on_hover_text(if has_pending_hyperframes {
-                translate(language, "montage_hyperframes_render_first_hint")
-            } else {
-                ""
-            });
+                    ""
+                });
             if capcut_btn.clicked() {
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                     *job.capcut_mode_override.lock().unwrap() = Some(true);
@@ -97,28 +98,29 @@ pub(super) fn draw_topbar(
             ui.add_space(4.0);
 
             // Кнопка FFmpeg (ліва від CapCut)
-            let ffmpeg_btn = ui.add_enabled(
-                can_continue,
-                egui::Button::new(
-                    egui::RichText::new(translate(language, "montage_render_ffmpeg"))
-                        .strong()
-                        .color(if can_continue {
-                            Color32::WHITE
-                        } else {
-                            Color32::GRAY
-                        }),
+            let ffmpeg_btn = ui
+                .add_enabled(
+                    can_continue,
+                    egui::Button::new(
+                        egui::RichText::new(translate(language, "montage_render_ffmpeg"))
+                            .strong()
+                            .color(if can_continue {
+                                Color32::WHITE
+                            } else {
+                                Color32::GRAY
+                            }),
+                    )
+                    .fill(if can_continue {
+                        Color32::from_rgb(39, 174, 96)
+                    } else {
+                        Color32::from_rgb(30, 30, 35)
+                    }),
                 )
-                .fill(if can_continue {
-                    Color32::from_rgb(39, 174, 96)
+                .on_hover_text(if has_pending_hyperframes {
+                    translate(language, "montage_hyperframes_render_first_hint")
                 } else {
-                    Color32::from_rgb(30, 30, 35)
-                }),
-            )
-            .on_hover_text(if has_pending_hyperframes {
-                translate(language, "montage_hyperframes_render_first_hint")
-            } else {
-                ""
-            });
+                    ""
+                });
             if ffmpeg_btn.clicked() {
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                     *job.capcut_mode_override.lock().unwrap() = Some(false);

@@ -39,7 +39,9 @@ pub fn restore_to_project(
 
     if let Err(error) = fs::copy(&cached_path, project_dest) {
         let _ = fs::remove_file(project_dest);
-        return Err(format!("Не вдалося скопіювати файл з shared cache: {error}"));
+        return Err(format!(
+            "Не вдалося скопіювати файл з shared cache: {error}"
+        ));
     }
 
     touch_entry(&conn, kind, provider, asset_id)?;
@@ -152,7 +154,12 @@ fn delete_missing_entry(
     Ok(())
 }
 
-fn touch_entry(conn: &Connection, kind: &str, provider: &str, asset_id: &str) -> Result<(), String> {
+fn touch_entry(
+    conn: &Connection,
+    kind: &str,
+    provider: &str,
+    asset_id: &str,
+) -> Result<(), String> {
     conn.execute(
         "UPDATE stock_assets
          SET last_used_at = CURRENT_TIMESTAMP

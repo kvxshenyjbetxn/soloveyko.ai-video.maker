@@ -71,7 +71,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Open HyperFrames preview for this job's clips",
         "montage_hyperframes_render_btn" => "Render HyperFrames",
-        "montage_hyperframes_render_hint" => "Render all HyperFrames HTML clips to MP4 and write them back into segments.json",
+        "montage_hyperframes_render_hint" => {
+            "Render all HyperFrames HTML clips to MP4 and write them back into segments.json"
+        }
         "montage_hyperframes_render_first_hint" => "Render the HyperFrames clips to MP4 first",
         "montage_editor_inspector" => "Inspector",
         "montage_editor_no_selection" => "Select a clip on the timeline",
@@ -131,7 +133,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "settings_data_desc" => "Open local folder containing settings.json:",
         "settings_open_folder" => "Open User Folder",
         "settings_shared_cache" => "Shared Stock Cache",
-        "settings_shared_cache_desc" => "Folder where the app stores downloaded stock media for reuse across projects:",
+        "settings_shared_cache_desc" => {
+            "Folder where the app stores downloaded stock media for reuse across projects:"
+        }
         "settings_shared_cache_enabled" => "Enable shared stock cache",
         "settings_shared_cache_open" => "Open cache folder",
         "settings_show_welcome" => "Show welcome window on startup",
