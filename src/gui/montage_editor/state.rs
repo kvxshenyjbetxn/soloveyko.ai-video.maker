@@ -68,6 +68,10 @@ pub struct MontageEditorState {
     pub maximized: bool,
     /// Запит на відкриття Stock Picker для сегмента з вказаним індексом
     pub pending_open_stock_picker: Option<usize>,
+    /// true = відкрити HyperFrames preview для preview-all
+    pub pending_preview_hyperframes: bool,
+    /// true = запустити render усіх незарендерених HyperFrames-кліпів
+    pub pending_render_hyperframes: bool,
     /// Прапорець: примусово оновити плейсхолдери після вибору стоку або допису нового медіа.
     pub needs_stock_refresh: bool,
     /// Блокує drag на превью (коли поверх відкрито stock picker або інше вікно)
@@ -144,6 +148,7 @@ impl MontageEditorState {
                 id: uuid_str(),
                 media_id,
                 path: Some(ap.clone()),
+                source_path: None,
                 name: format!("♪ {}", vo_name),
                 start_secs: audio_start_secs,
                 duration: audio_duration,
@@ -270,6 +275,8 @@ impl MontageEditorState {
             overlap_transition_popup: None,
             maximized: false,
             pending_open_stock_picker: None,
+            pending_preview_hyperframes: false,
+            pending_render_hyperframes: false,
             needs_stock_refresh: false,
             input_blocked: false,
             pending_preview_render: None,
@@ -628,6 +635,7 @@ fn clip_from_json_seg(
         id: uuid_str(),
         media_id,
         path: Some(full_path),
+        source_path: None,
         name,
         start_secs: start,
         duration: (end - start).max(0.1),
@@ -922,6 +930,7 @@ fn build_placeholder_clip(
         id: uuid_str(),
         media_id: format!("placeholder_{}", seg_idx),
         path: None,
+        source_path: None,
         name: text.to_string(),
         start_secs: start,
         duration: (end - start).max(0.1),
@@ -941,6 +950,44 @@ fn build_placeholder_clip(
         audio_linked: false,
         is_embedded_audio: false,
     }
+}
+
+fn build_hyperframes_placeholder_clip(
+    seg_idx: usize,
+    text: &str,
+    start: f32,
+    end: f32,
+    track_idx: usize,
+    source_path: PathBuf,
+) -> EditorClip {
+    EditorClip {
+        id: uuid_str(),
+        media_id: format!("placeholder_{}", seg_idx),
+        path: None,
+        source_path: Some(source_path),
+        name: text.to_string(),
+        start_secs: start,
+        duration: (end - start).max(0.1),
+        track_idx,
+        kind: ClipKind::Video,
+        scale: 1.0,
+        pos_x: 0.0,
+        pos_y: 0.0,
+        zoom_enabled: false,
+        shake_enabled: false,
+        is_placeholder: true,
+        trim_start: 0.0,
+        stock_seg_idx: Some(seg_idx),
+        overlap_transition: "fade".to_string(),
+        opacity: 1.0,
+        pair_id: None,
+        audio_linked: false,
+        is_embedded_audio: false,
+    }
+}
+
+fn is_hyperframes_segment(seg: &serde_json::Value) -> bool {
+    seg["media_type"].as_str() == Some("hyperframes")
 }
 
 fn append_missing_stock_placeholders(
@@ -982,9 +1029,6 @@ fn append_missing_stock_placeholders(
         if covered.contains(&i) {
             continue;
         }
-        if seg["media"].as_str().is_some() {
-            continue;
-        }
 
         let Some(text) = seg["text"].as_str().filter(|text| !text.is_empty()) else {
             continue;
@@ -992,6 +1036,35 @@ fn append_missing_stock_placeholders(
         let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
         let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
         let placeholder_text = spoken_text_for_range(speech_source, start, end, text);
+
+        if is_hyperframes_segment(seg) {
+            let Some(media_str) = seg["media"].as_str() else {
+                continue;
+            };
+            let source_path: PathBuf = save_path.join(media_str).components().collect();
+            let is_html = source_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("html"))
+                .unwrap_or(false);
+            if !is_html {
+                continue;
+            }
+            clips.push(build_hyperframes_placeholder_clip(
+                i,
+                &placeholder_text,
+                start,
+                end,
+                stock_track,
+                source_path,
+            ));
+            continue;
+        }
+
+        if seg["media"].as_str().is_some() {
+            continue;
+        }
+
         clips.push(build_placeholder_clip(
             i,
             &placeholder_text,
@@ -1069,25 +1142,57 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
 
         for (i, seg) in segs.iter().enumerate() {
             let text = seg["text"].as_str();
-            let media_str = seg["media"].as_str().map(|s| s.to_string()).or_else(|| {
-                // Відновлення лише для pipeline-формату (є поле "text"),
-                // не для редакторських gap-сегментів.
-                text?;
+            let is_hyperframes = is_hyperframes_segment(seg);
+            let media_str = if is_hyperframes {
+                seg["media"].as_str().map(|s| s.to_string())
+            } else {
+                seg["media"].as_str().map(|s| s.to_string()).or_else(|| {
+                    // Відновлення лише для pipeline-формату (є поле "text"),
+                    // не для редакторських gap-сегментів.
+                    text?;
 
-                if let Some(entry) = stock_cache.as_ref().and_then(|cache| cache.get(i)) {
-                    if let Some(sel) = &entry.selected {
-                        let fp = format!("media/{}", sel.filename);
-                        if save_path.join(&fp).exists() {
-                            return Some(fp);
+                    if let Some(entry) = stock_cache.as_ref().and_then(|cache| cache.get(i)) {
+                        if let Some(sel) = &entry.selected {
+                            let fp = format!("media/{}", sel.filename);
+                            if save_path.join(&fp).exists() {
+                                return Some(fp);
+                            }
                         }
                     }
-                }
 
-                existing_segment_media_rel_path(save_path, i)
-            });
+                    existing_segment_media_rel_path(save_path, i)
+                })
+            };
 
             if let Some(media) = media_str {
                 let media_path = save_path.join(&media);
+                if is_hyperframes {
+                    let is_html = media_path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.eq_ignore_ascii_case("html"))
+                        .unwrap_or(false);
+                    if is_html {
+                        let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
+                        let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
+                        let placeholder_text = spoken_text_for_range(
+                            speech_source.as_ref(),
+                            start,
+                            end,
+                            text.unwrap_or(""),
+                        );
+                        clips.push(build_hyperframes_placeholder_clip(
+                            i,
+                            &placeholder_text,
+                            start,
+                            end,
+                            bg_track_idx,
+                            media_path,
+                        ));
+                        continue;
+                    }
+                }
+
                 let is_missing_pipeline_media = text.is_some() && !media_path.exists();
                 if is_missing_pipeline_media {
                     if let Some((resolved_path, _, _)) =
@@ -1272,6 +1377,7 @@ pub fn refresh_placeholder_clips(editor: &mut MontageEditorState) -> bool {
             .to_string();
         if let Some(clip) = editor.clips.iter_mut().find(|c| c.id == clip_id) {
             clip.path = Some(file_path);
+            clip.source_path = None;
             clip.kind = kind;
             clip.name = name;
             clip.is_placeholder = false;

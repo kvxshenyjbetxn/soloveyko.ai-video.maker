@@ -26,25 +26,31 @@ pub(super) fn draw_inspector(
             let clip = &mut editor.clips[idx];
 
             if clip.is_placeholder {
+                let is_hyperframes = clip.source_path.is_some();
                 let seg_idx = clip.stock_seg_idx.or_else(|| {
                     clip.media_id
                         .strip_prefix("placeholder_")
                         .and_then(|s| s.parse::<usize>().ok())
                 });
-                let title = if let Some(seg_idx) = seg_idx {
-                    format!(
-                        "{} #{}",
-                        translate(language, "montage_editor_placeholder_title"),
-                        seg_idx + 1
-                    )
+                let title_key = if is_hyperframes {
+                    "montage_hyperframes_placeholder_title"
                 } else {
-                    translate(language, "montage_editor_placeholder_title").to_string()
+                    "montage_editor_placeholder_title"
+                };
+                let title = if let Some(seg_idx) = seg_idx {
+                    format!("{} #{}", translate(language, title_key), seg_idx + 1)
+                } else {
+                    translate(language, title_key).to_string()
                 };
                 ui.label(egui::RichText::new(title).size(12.0).strong());
                 ui.add_space(6.0);
                 ui.label(clip.name.as_str());
                 ui.add_space(6.0);
-                ui.weak(translate(language, "montage_editor_placeholder_hint"));
+                ui.weak(if is_hyperframes {
+                    translate(language, "montage_hyperframes_placeholder_hint")
+                } else {
+                    translate(language, "montage_editor_placeholder_hint")
+                });
                 ui.add_space(8.0);
                 ui.label(format!(
                     "{} {:.2}",
@@ -58,23 +64,39 @@ pub(super) fn draw_inspector(
                 ));
                 if let Some(seg_idx) = seg_idx {
                     ui.add_space(8.0);
-                    if ui
-                        .button(translate(language, "montage_editor_replace_stock"))
-                        .clicked()
-                    {
-                        editor.pending_open_stock_picker = Some(seg_idx);
-                    }
-                    if ui
-                        .button(translate(language, "montage_editor_regen_same"))
-                        .clicked()
-                    {
-                        editor.pending_placeholder_regen = Some((seg_idx, false));
-                    }
-                    if ui
-                        .button(translate(language, "montage_editor_regen_custom"))
-                        .clicked()
-                    {
-                        editor.pending_placeholder_regen = Some((seg_idx, true));
+                    if is_hyperframes {
+                        if ui
+                            .button(translate(language, "montage_hyperframes_preview_btn"))
+                            .clicked()
+                        {
+                            let _ = seg_idx;
+                            editor.pending_preview_hyperframes = true;
+                        }
+                        if ui
+                            .button(translate(language, "montage_hyperframes_render_btn"))
+                            .clicked()
+                        {
+                            editor.pending_render_hyperframes = true;
+                        }
+                    } else {
+                        if ui
+                            .button(translate(language, "montage_editor_replace_stock"))
+                            .clicked()
+                        {
+                            editor.pending_open_stock_picker = Some(seg_idx);
+                        }
+                        if ui
+                            .button(translate(language, "montage_editor_regen_same"))
+                            .clicked()
+                        {
+                            editor.pending_placeholder_regen = Some((seg_idx, false));
+                        }
+                        if ui
+                            .button(translate(language, "montage_editor_regen_custom"))
+                            .clicked()
+                        {
+                            editor.pending_placeholder_regen = Some((seg_idx, true));
+                        }
                     }
                 }
                 return;

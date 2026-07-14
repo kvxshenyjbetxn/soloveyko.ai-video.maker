@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::path::Path;
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SegmentMediaType {
+    #[default]
+    Stock,
+    Hyperframes,
+}
+
 /// Тайминг одного медіафайлу — виходить у segments.json.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SegmentTiming {
@@ -12,6 +20,9 @@ pub struct SegmentTiming {
     pub duration_secs: f64,
     /// Впевненість нечіткого збігу [0.0..1.0]; 0 — таймінг оцінений (EST).
     pub confidence: f64,
+    /// Джерело медіа для сегмента: stock або hyperframes.
+    #[serde(default)]
+    pub media_type: SegmentMediaType,
     /// Відносний шлях до медіафайлу (наприклад "media/0001.jpg").
     pub media: Option<String>,
     /// Початок обрізки відео (секунди); встановлюється в редакторі монтажу.
@@ -722,6 +733,7 @@ pub fn build_timeline(
                 end_secs: r.end,
                 duration_secs: r.duration,
                 confidence,
+                media_type: SegmentMediaType::Stock,
                 media: if r.filename.is_empty() {
                     None
                 } else {

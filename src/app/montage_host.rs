@@ -190,6 +190,52 @@ impl VideoMakerApp {
             self.media_regen_window_open = true;
         }
 
+        if montage_actions.preview_hyperframes {
+            if let Some(job_id) = self.montage_editor_open_job {
+                if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                    let preview_dir = std::path::Path::new(&job.settings.save_path).join("preview-all");
+                    if let Err(e) = crate::api::hyperframes::open_preview(
+                        &preview_dir,
+                        job.id,
+                        &job.name,
+                    ) {
+                        crate::logger::log_job(job.id, &job.name, &e);
+                    }
+                } else if let Some(editor) = self.montage_editor_state.as_ref() {
+                    let preview_dir = editor.save_path.join("preview-all");
+                    if let Err(e) = crate::api::hyperframes::open_preview(
+                        &preview_dir,
+                        job_id,
+                        &editor.job_name,
+                    ) {
+                        crate::logger::log_job(job_id, &editor.job_name, &e);
+                    }
+                }
+            }
+        }
+
+        if montage_actions.render_hyperframes {
+            if let Some(job_id) = self.montage_editor_open_job {
+                if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {
+                    crate::api::hyperframes::render_pending_segments_async(
+                        std::path::Path::new(&job.settings.save_path).to_path_buf(),
+                        job.id,
+                        job.name.clone(),
+                        ctx.clone(),
+                        std::sync::Arc::clone(&job.timeline_rebuild_requested),
+                    );
+                } else if let Some(editor) = self.montage_editor_state.as_ref() {
+                    crate::api::hyperframes::render_pending_segments_async(
+                        editor.save_path.clone(),
+                        job_id,
+                        editor.job_name.clone(),
+                        ctx.clone(),
+                        std::sync::Arc::new(std::sync::Mutex::new(false)),
+                    );
+                }
+            }
+        }
+
         // Оновлюємо налаштування превʼю редактора, якщо користувач змінив їх у топбарі
         if let Some(new_render) = montage_actions.preview_render_changed {
             self.preview_quality = new_render.quality.storage_key().to_string();

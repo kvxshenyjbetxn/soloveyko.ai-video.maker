@@ -336,6 +336,8 @@ pub struct EditorClip {
     /// Стабільний ID медіа-елементу в пулі (не залежить від шляху файлу)
     pub media_id: String,
     pub path: Option<PathBuf>,
+    /// Службовий шлях до джерела плейсхолдера (наприклад HyperFrames HTML).
+    pub source_path: Option<PathBuf>,
     pub name: String,
     pub start_secs: f32,
     pub duration: f32,
@@ -416,6 +418,10 @@ pub struct MontageEditorActions {
     pub batch_regen_action: Option<(Vec<PathBuf>, crate::queue::JobSettings, u64, String)>,
     /// Запит на відкриття Stock Picker для вказаного індексу сегмента
     pub open_stock_picker: Option<usize>,
+    /// true = відкрити HyperFrames preview для поточної задачі
+    pub preview_hyperframes: bool,
+    /// true = запустити render усіх незарендерених HyperFrames-кліпів
+    pub render_hyperframes: bool,
     /// Нові налаштування якості/FPS превʼю, якщо користувач змінив їх у топбарі
     pub preview_render_changed: Option<PreviewRenderSettings>,
 }
@@ -427,6 +433,8 @@ impl Default for MontageEditorActions {
             regen_action: None,
             batch_regen_action: None,
             open_stock_picker: None,
+            preview_hyperframes: false,
+            render_hyperframes: false,
             preview_render_changed: None,
         }
     }

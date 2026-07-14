@@ -58,6 +58,7 @@ fn split_clip_at(editor: &mut MontageEditorState, clip_id: &str, split_time: f32
             id: uuid_str(),
             media_id: clip.media_id.clone(),
             path: clip.path.clone(),
+            source_path: clip.source_path.clone(),
             name: clip.name.clone(),
             start_secs: split_time,
             duration: clip_end - split_time,
@@ -105,6 +106,7 @@ fn split_clip_at(editor: &mut MontageEditorState, clip_id: &str, split_time: f32
                     id: uuid_str(),
                     media_id: editor.clips[audio_idx].media_id.clone(),
                     path: editor.clips[audio_idx].path.clone(),
+                    source_path: editor.clips[audio_idx].source_path.clone(),
                     name: editor.clips[audio_idx].name.clone(),
                     start_secs: a_split,
                     duration: a_end - a_split,
@@ -838,6 +840,7 @@ pub(super) fn draw_timeline(
                                                         id: new_id,
                                                         media_id: media_id.clone(),
                                                         path: Some(media_path.clone()),
+                                                        source_path: None,
                                                         name: name.clone(),
                                                         start_secs: start,
                                                         duration,
@@ -894,6 +897,7 @@ pub(super) fn draw_timeline(
                                                             id: uuid_str(),
                                                             media_id,
                                                             path: Some(media_path.clone()),
+                                                            source_path: None,
                                                             name: format!("A: {}", name),
                                                             start_secs: start,
                                                             duration,
@@ -971,7 +975,12 @@ pub(super) fn draw_timeline(
                                         .strip_prefix("placeholder_")
                                         .and_then(|s| s.parse::<usize>().ok())
                                         .unwrap_or(0);
-                                    let accent = Color32::from_rgb(90, 90, 115);
+                                    let is_hyperframes = clip.source_path.is_some();
+                                    let accent = if is_hyperframes {
+                                        Color32::from_rgb(95, 70, 165)
+                                    } else {
+                                        Color32::from_rgb(90, 90, 115)
+                                    };
                                     let is_hovered =
                                         mouse_pos.map(|p| clip_rect.contains(p)).unwrap_or(false);
                                     let border_color = if is_hovered {
@@ -1012,7 +1021,11 @@ pub(super) fn draw_timeline(
 
                                     let title_font = placeholder_title_font_size(track_h);
                                     let body_font = placeholder_body_font_size(track_h);
-                                    let label = format!("+ #{}", seg_idx + 1);
+                                    let label = if is_hyperframes {
+                                        format!("HF #{}", seg_idx + 1)
+                                    } else {
+                                        format!("+ #{}", seg_idx + 1)
+                                    };
                                     if cw <= 56.0 || clip_rect.height() < title_font + 10.0 {
                                         painter.text(
                                             clip_rect.center(),
@@ -1096,12 +1109,21 @@ pub(super) fn draw_timeline(
                                         ui.ctx().request_repaint();
                                     }
 
+                                    let hover_text = if is_hyperframes {
+                                        translate(language, "montage_hyperframes_preview_hint")
+                                    } else {
+                                        clip.name.as_str()
+                                    };
                                     let clip_resp = ui
                                         .allocate_rect(clip_rect, Sense::click())
-                                        .on_hover_text(clip.name.as_str());
+                                        .on_hover_text(hover_text);
                                     if clip_resp.clicked() {
                                         editor.selected_clip_id = Some(clip.id.clone());
-                                        editor.pending_open_stock_picker = Some(seg_idx);
+                                        if is_hyperframes {
+                                            editor.pending_preview_hyperframes = true;
+                                        } else {
+                                            editor.pending_open_stock_picker = Some(seg_idx);
+                                        }
                                     }
                                     if is_hovered {
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

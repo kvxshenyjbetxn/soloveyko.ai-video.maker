@@ -46,17 +46,27 @@ pub fn draw_montage_editor_window(
         None => return MontageEditorActions::default(),
     };
 
-    if state.is_none() {
-        if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
+    let active_job = jobs.iter().find(|j| j.id == job_id);
+    let should_reload_state = match (state.as_ref(), active_job) {
+        (Some(editor), Some(job)) => {
+            editor.save_path != std::path::Path::new(&job.settings.save_path)
+                || editor.job_name != job.name
+        }
+        (None, Some(_)) => true,
+        (_, None) => false,
+    };
+
+    if should_reload_state {
+        if let Some(job) = active_job {
             *state = Some(MontageEditorState::load(
                 std::path::Path::new(&job.settings.save_path),
                 &job.name,
                 preview_render,
             ));
-        } else {
-            *open_job = None;
-            return MontageEditorActions::default();
         }
+    } else if state.is_none() {
+        *open_job = None;
+        return MontageEditorActions::default();
     }
 
     // Синхронізуємо налаштування ефектів превью з поточним JobSettings
@@ -436,6 +446,8 @@ pub fn draw_montage_editor_window(
     let placeholder_regen_opt = editor.pending_placeholder_regen.take();
     let placeholder_batch_regen = std::mem::take(&mut editor.pending_placeholder_batch_regen);
     let open_stock_picker = editor.pending_open_stock_picker.take();
+    let preview_hyperframes = std::mem::take(&mut editor.pending_preview_hyperframes);
+    let render_hyperframes = std::mem::take(&mut editor.pending_render_hyperframes);
     let preview_render_changed = editor.pending_preview_render.take();
     let regen_action = jobs.iter().find(|j| j.id == job_id).and_then(|job| {
         if let Some((path, is_custom)) = regen_opt {
@@ -490,6 +502,8 @@ pub fn draw_montage_editor_window(
             regen_action,
             batch_regen_action,
             open_stock_picker: None,
+            preview_hyperframes: false,
+            render_hyperframes: false,
             preview_render_changed,
         };
     }
@@ -567,6 +581,8 @@ pub fn draw_montage_editor_window(
         regen_action,
         batch_regen_action,
         open_stock_picker,
+        preview_hyperframes,
+        render_hyperframes,
         preview_render_changed,
     }
 }

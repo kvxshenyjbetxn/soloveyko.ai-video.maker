@@ -6,6 +6,7 @@ pub mod edgetts;
 pub mod ffmpeg;
 pub mod gemini;
 pub mod googler;
+pub mod hyperframes;
 pub mod openrouter;
 pub mod pi;
 pub mod process;

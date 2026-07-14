@@ -64,6 +64,15 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_placeholder_hint" => {
             "This segment does not have ready media yet. You can pick stock media or generate a file from the saved prompt."
         }
+        "montage_hyperframes_placeholder_title" => "HyperFrames Clip",
+        "montage_hyperframes_placeholder_hint" => {
+            "The agent prepared a HyperFrames HTML clip for this segment. Click to preview it, then render it to MP4 after review."
+        }
+        "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
+        "montage_hyperframes_preview_hint" => "Open HyperFrames preview for this job's clips",
+        "montage_hyperframes_render_btn" => "Render HyperFrames",
+        "montage_hyperframes_render_hint" => "Render all HyperFrames HTML clips to MP4 and write them back into segments.json",
+        "montage_hyperframes_render_first_hint" => "Render the HyperFrames clips to MP4 first",
         "montage_editor_inspector" => "Inspector",
         "montage_editor_no_selection" => "Select a clip on the timeline",
         "montage_editor_clip_start" => "Start (s):",

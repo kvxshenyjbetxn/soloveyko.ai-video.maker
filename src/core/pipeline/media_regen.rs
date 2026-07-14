@@ -575,6 +575,9 @@ pub fn find_changed_prompts_for_rebuild(
         if new_text.trim().is_empty() {
             continue;
         }
+        if segs[i]["media_type"].as_str() == Some("hyperframes") {
+            continue;
+        }
 
         let old_text = old_texts.get(i).map(|s| s.as_str()).unwrap_or("");
 

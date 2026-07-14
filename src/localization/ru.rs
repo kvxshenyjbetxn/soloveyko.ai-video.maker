@@ -64,6 +64,15 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_placeholder_hint" => {
             "Для этого сегмента ещё нет готового медиа. Можно выбрать сток или сгенерировать файл по сохранённому промту."
         }
+        "montage_hyperframes_placeholder_title" => "HyperFrames клип",
+        "montage_hyperframes_placeholder_hint" => {
+            "Для этого сегмента агент подготовил HyperFrames HTML-клип. Нажми для preview, а после проверки — отрендерь в MP4."
+        }
+        "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
+        "montage_hyperframes_preview_hint" => "Открыть HyperFrames preview для клипов этой задачи",
+        "montage_hyperframes_render_btn" => "Render HyperFrames",
+        "montage_hyperframes_render_hint" => "Отрендерить все HyperFrames HTML-клипы в MP4 и записать их обратно в segments.json",
+        "montage_hyperframes_render_first_hint" => "Сначала отрендерьте HyperFrames-клипы в MP4",
         "montage_editor_inspector" => "Инспектор",
         "montage_editor_no_selection" => "Выберите клип на таймлайне",
         "montage_editor_clip_start" => "Старт (с):",

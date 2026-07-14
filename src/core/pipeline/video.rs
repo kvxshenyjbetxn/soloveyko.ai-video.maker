@@ -16,6 +16,13 @@ fn build_segment_prompt(text: &str, style_enabled: bool, style_prompt: &str) -> 
     }
 }
 
+#[derive(Clone)]
+struct PipelineSegmentInput {
+    index: usize,
+    text: String,
+    media_type: crate::core::pipeline::timeline::sync::SegmentMediaType,
+}
+
 /// Простий лічильний семафор для обмеження паралельних потоків генерації медіа.
 struct Semaphore {
     count: Mutex<usize>,
@@ -396,15 +403,15 @@ pub(super) fn run_video_branch(
 
     // Нарізаємо текст на сегменти: при агентному режимі — з segments.json
     let save_dir = std::path::Path::new(&settings.save_path);
-    let segments = if is_agent_mode {
-        match read_segments_from_timeline(save_dir) {
+    let agent_segments = if is_agent_mode {
+        match read_pipeline_segments_from_timeline(save_dir) {
             Ok(segs) if !segs.is_empty() => {
                 crate::logger::log_job(
                     job_id,
                     &job_name,
                     &format!("Agent mode: {} segments from segments.json", segs.len()),
                 );
-                segs
+                Some(segs)
             }
             _ => {
                 crate::logger::log_job(
@@ -412,13 +419,15 @@ pub(super) fn run_video_branch(
                     &job_name,
                     "Agent mode: segments.json not ready, using text split.",
                 );
-                crate::core::pipeline::timeline::text_splitter::split_text(
-                    &source_text,
-                    &settings.text_split_mode,
-                    settings.text_split_char_limit,
-                )
+                None
             }
         }
+    } else {
+        None
+    };
+
+    let segments = if let Some(segs) = agent_segments.as_ref() {
+        segs.iter().map(|seg| seg.text.clone()).collect()
     } else {
         crate::core::pipeline::timeline::text_splitter::split_text(
             &source_text,
@@ -436,6 +445,28 @@ pub(super) fn run_video_branch(
             total, settings.text_split_mode
         ),
     );
+
+    let generation_targets: Vec<usize> = if let Some(segs) = agent_segments.as_ref() {
+        segs.iter()
+            .filter(|seg| {
+                seg.media_type == crate::core::pipeline::timeline::sync::SegmentMediaType::Stock
+            })
+            .map(|seg| seg.index)
+            .collect()
+    } else {
+        (0..total).collect()
+    };
+    let hyperframes_count = total.saturating_sub(generation_targets.len());
+    if hyperframes_count > 0 {
+        crate::logger::log_job(
+            job_id,
+            &job_name,
+            &format!(
+                "HyperFrames segments detected: {}. Regular media generation will skip them.",
+                hyperframes_count
+            ),
+        );
+    }
 
     let contexts = if settings.video_context_enabled && !is_agent_mode {
         build_video_contexts(
@@ -622,11 +653,22 @@ pub(super) fn run_video_branch(
         }
     }
     super::ensure_job_not_cancelled(job_id)?;
-    crate::logger::log_job(
-        job_id,
-        &job_name,
-        "Prompts ready. Starting media generation...",
-    );
+    if generation_targets.is_empty() {
+        crate::logger::log_job(
+            job_id,
+            &job_name,
+            "Prompts ready. Усі сегменти позначені як HyperFrames, звичайну генерацію медіа пропущено.",
+        );
+    } else {
+        crate::logger::log_job(
+            job_id,
+            &job_name,
+            &format!(
+                "Prompts ready. Starting media generation for {} segment(s)...",
+                generation_targets.len()
+            ),
+        );
+    }
 
     // Фаза 2: паралельна генерація медіа із семафором
     let use_video = settings.video_media_type == "video";
@@ -651,13 +693,21 @@ pub(super) fn run_video_branch(
         let _ = std::fs::write(media_dir.join("segment_texts.json"), json);
     }
 
-    *media_progress.lock().unwrap() = Some((0, total));
+    if generation_targets.is_empty() {
+        *media_progress.lock().unwrap() = Some((0, 0));
+        *video_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+        ctx.request_repaint();
+        return Ok(());
+    }
+
+    *media_progress.lock().unwrap() = Some((0, generation_targets.len()));
     ctx.request_repaint();
 
     let sem = Arc::new(Semaphore::new(settings.googler_image_max_threads.max(1)));
     let mut handles = Vec::new();
 
-    for (i, prompt) in prompts.into_iter().enumerate() {
+    for seg_idx in generation_targets {
+        let prompt = prompts.get(seg_idx).cloned().unwrap_or_default();
         let sem = Arc::clone(&sem);
         let media_progress_c = Arc::clone(&media_progress);
         let ctx_c = ctx.clone();
@@ -677,21 +727,22 @@ pub(super) fn run_video_branch(
         let skip_existing = settings.skip_existing_media;
 
         let handle = std::thread::spawn(move || -> (usize, Result<(), String>) {
+            let display_idx = seg_idx + 1;
             sem.acquire();
 
             if crate::queue::is_job_cancelled(job_id_c) {
                 sem.release();
-                return (i, Err(crate::queue::cancelled_error()));
+                return (seg_idx, Err(crate::queue::cancelled_error()));
             }
 
             // Режим догенерації: якщо файл вже є — пропускаємо
-            if skip_existing && media_file_exists_by_index(&media_dir, i + 1) {
+            if skip_existing && media_file_exists_by_index(&media_dir, display_idx) {
                 crate::logger::log_job(
                     job_id_c,
                     &job_name_c,
                     &format!(
                         "Segment {}/{}: file already exists, skipping.",
-                        i + 1,
+                        display_idx,
                         total
                     ),
                 );
@@ -702,16 +753,17 @@ pub(super) fn run_video_branch(
                 }
                 ctx_c.request_repaint();
                 sem.release();
-                return (i, Ok(()));
+                return (seg_idx, Ok(()));
             }
 
             if prompt.trim().is_empty() {
                 crate::logger::log_job(
                     job_id_c,
                     &job_name_c,
-                    &format!("Segment {}/{}: empty prompt, skipping.", i + 1, total),
+                    &format!("Segment {}/{}: empty prompt, skipping.", display_idx, total),
                 );
-                return (i, Err("Порожній промпт — пропущено".to_string()));
+                sem.release();
+                return (seg_idx, Err("Порожній промпт — пропущено".to_string()));
             }
 
             let result = if use_video {
@@ -726,7 +778,7 @@ pub(super) fn run_video_branch(
                             &job_name_c,
                             &format!(
                                 "Generating video {}/{} ... (модель: {})",
-                                i + 1,
+                                display_idx,
                                 total,
                                 crate::api::googler::video_provider_model_name(provider)
                             ),
@@ -747,7 +799,7 @@ pub(super) fn run_video_branch(
                             &job_name_c,
                             &format!(
                                 "Generating image {}/{} ... (модель: {})",
-                                i + 1,
+                                display_idx,
                                 total,
                                 crate::api::googler::image_provider_model_name(provider)
                             ),
@@ -761,14 +813,14 @@ pub(super) fn run_video_branch(
             sem.release();
 
             if crate::queue::is_job_cancelled(job_id_c) {
-                return (i, Err(crate::queue::cancelled_error()));
+                return (seg_idx, Err(crate::queue::cancelled_error()));
             }
 
             match result {
-                Err(e) => (i, Err(e)),
+                Err(e) => (seg_idx, Err(e)),
                 Ok((provider_used, data_uri)) => {
-                    match decode_result(&data_uri, i + 1, total, &media_dir) {
-                        Err(e) => (i, Err(e)),
+                    match decode_result(&data_uri, display_idx, total, &media_dir) {
+                        Err(e) => (seg_idx, Err(e)),
                         Ok(path) => {
                             crate::logger::log_job(
                                 job_id_c,
@@ -776,7 +828,7 @@ pub(super) fn run_video_branch(
                                 &format!(
                                     "{} {}/{} saved: {} (провайдер: {})",
                                     if use_video { "Video" } else { "Image" },
-                                    i + 1,
+                                    display_idx,
                                     total,
                                     path.display(),
                                     provider_used
@@ -798,7 +850,7 @@ pub(super) fn run_video_branch(
                                         &job_name_c,
                                         &format!(
                                             "Помилка апскейлу для сегмента {}: {}",
-                                            i + 1,
+                                            display_idx,
                                             err
                                         ),
                                     );
@@ -811,7 +863,7 @@ pub(super) fn run_video_branch(
                                 }
                             }
                             ctx_c.request_repaint();
-                            (i, Ok(()))
+                            (seg_idx, Ok(()))
                         }
                     }
                 }
@@ -1115,14 +1167,32 @@ fn run_pexels_branch(
     Ok(())
 }
 
-/// Читає сегменти тексту з segments.json (для агентного режиму).
-fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>, String> {
+/// Читає сегменти з segments.json разом з media_type.
+fn read_pipeline_segments_from_timeline(
+    save_dir: &std::path::Path,
+) -> Result<Vec<PipelineSegmentInput>, String> {
     let content = std::fs::read_to_string(save_dir.join("segments.json"))
         .map_err(|e| format!("Cannot read segments.json: {}", e))?;
     let timeline =
         serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
             .map_err(|e| format!("Invalid segments.json: {}", e))?;
-    Ok(timeline.segments.into_iter().map(|s| s.text).collect())
+    Ok(timeline
+        .segments
+        .into_iter()
+        .map(|segment| PipelineSegmentInput {
+            index: segment.index,
+            text: segment.text,
+            media_type: segment.media_type,
+        })
+        .collect())
+}
+
+/// Читає сегменти тексту з segments.json (для агентного режиму).
+fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>, String> {
+    Ok(read_pipeline_segments_from_timeline(save_dir)?
+        .into_iter()
+        .map(|segment| segment.text)
+        .collect())
 }
 
 /// Читає тривалості сегментів з segments.json

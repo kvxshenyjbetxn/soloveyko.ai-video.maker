@@ -17,6 +17,8 @@ pub(super) fn draw_topbar(
 ) -> bool {
     let mut continue_clicked = false;
     let placeholder_segments = collect_placeholder_segment_indices(editor);
+    let hyperframes_segments = collect_hyperframes_segment_indices(editor);
+    let has_pending_hyperframes = !hyperframes_segments.is_empty();
     ui.horizontal(|ui| {
         draw_preview_settings(ui, language, editor);
 
@@ -36,23 +38,29 @@ pub(super) fn draw_topbar(
 
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
             // Кнопка CapCut (права)
+            let can_continue = is_awaiting && !has_pending_hyperframes;
             let capcut_btn = ui.add_enabled(
-                is_awaiting,
+                can_continue,
                 egui::Button::new(
                     egui::RichText::new(translate(language, "montage_render_capcut"))
                         .strong()
-                        .color(if is_awaiting {
+                        .color(if can_continue {
                             Color32::WHITE
                         } else {
                             Color32::GRAY
                         }),
                 )
-                .fill(if is_awaiting {
+                .fill(if can_continue {
                     Color32::from_rgb(41, 128, 185)
                 } else {
                     Color32::from_rgb(30, 30, 35)
                 }),
-            );
+            )
+            .on_hover_text(if has_pending_hyperframes {
+                translate(language, "montage_hyperframes_render_first_hint")
+            } else {
+                ""
+            });
             if capcut_btn.clicked() {
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                     *job.capcut_mode_override.lock().unwrap() = Some(true);
@@ -90,22 +98,27 @@ pub(super) fn draw_topbar(
 
             // Кнопка FFmpeg (ліва від CapCut)
             let ffmpeg_btn = ui.add_enabled(
-                is_awaiting,
+                can_continue,
                 egui::Button::new(
                     egui::RichText::new(translate(language, "montage_render_ffmpeg"))
                         .strong()
-                        .color(if is_awaiting {
+                        .color(if can_continue {
                             Color32::WHITE
                         } else {
                             Color32::GRAY
                         }),
                 )
-                .fill(if is_awaiting {
+                .fill(if can_continue {
                     Color32::from_rgb(39, 174, 96)
                 } else {
                     Color32::from_rgb(30, 30, 35)
                 }),
-            );
+            )
+            .on_hover_text(if has_pending_hyperframes {
+                translate(language, "montage_hyperframes_render_first_hint")
+            } else {
+                ""
+            });
             if ffmpeg_btn.clicked() {
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                     *job.capcut_mode_override.lock().unwrap() = Some(false);
@@ -140,6 +153,22 @@ pub(super) fn draw_topbar(
             }
 
             ui.add_space(8.0);
+
+            if !hyperframes_segments.is_empty() {
+                let label = format!(
+                    "🎞 {} ({})",
+                    translate(language, "montage_hyperframes_render_btn"),
+                    hyperframes_segments.len()
+                );
+                if ui
+                    .button(label)
+                    .on_hover_text(translate(language, "montage_hyperframes_render_hint"))
+                    .clicked()
+                {
+                    editor.pending_render_hyperframes = true;
+                }
+                ui.add_space(4.0);
+            }
 
             if !placeholder_segments.is_empty() {
                 let label = format!(
@@ -196,7 +225,26 @@ pub(super) fn draw_topbar(
 fn collect_placeholder_segment_indices(editor: &MontageEditorState) -> Vec<usize> {
     let mut segments = BTreeSet::new();
     for clip in &editor.clips {
-        if !clip.is_placeholder {
+        if !clip.is_placeholder || clip.source_path.is_some() {
+            continue;
+        }
+
+        let seg_idx = clip.stock_seg_idx.or_else(|| {
+            clip.media_id
+                .strip_prefix("placeholder_")
+                .and_then(|value| value.parse::<usize>().ok())
+        });
+        if let Some(seg_idx) = seg_idx {
+            segments.insert(seg_idx);
+        }
+    }
+    segments.into_iter().collect()
+}
+
+fn collect_hyperframes_segment_indices(editor: &MontageEditorState) -> Vec<usize> {
+    let mut segments = BTreeSet::new();
+    for clip in &editor.clips {
+        if !clip.is_placeholder || clip.source_path.is_none() {
             continue;
         }
 

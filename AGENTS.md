@@ -1,3 +1,5 @@
+ПИШИ КОРОЧЕ ВІДПОВІДІ! ПО ДІЛУ!
+
 ## graphify
 - for questions about the codebase, architecture, file relationships, function callers, and data flow, check graphify first
 - if `graphify-out/graph.json` exists and the request is not an explicit graph rebuild, use `/graphify query "<question>"` before manually reading files

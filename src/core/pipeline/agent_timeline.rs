@@ -451,6 +451,10 @@ pub(super) fn assign_media_to_timeline(save_dir: &std::path::Path) -> Result<(),
     let stock_cache = crate::api::stock::load_cache(save_dir);
 
     for (i, seg) in timeline.segments.iter_mut().enumerate() {
+        if seg.media_type == crate::core::pipeline::timeline::sync::SegmentMediaType::Hyperframes {
+            continue;
+        }
+
         let explicit_media = seg.media.as_ref().and_then(|media| {
             let media_path = save_dir.join(media);
             if media_path.exists() {

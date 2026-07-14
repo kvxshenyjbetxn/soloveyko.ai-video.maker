@@ -64,6 +64,15 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_editor_placeholder_hint" => {
             "Для цього сегмента ще немає готового медіа. Можна вибрати сток або згенерувати файл за збереженим промтом."
         }
+        "montage_hyperframes_placeholder_title" => "HyperFrames кліп",
+        "montage_hyperframes_placeholder_hint" => {
+            "Для цього сегмента агент підготував HyperFrames HTML-кліп. Натисни для preview, а після перевірки — зарендер у MP4."
+        }
+        "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
+        "montage_hyperframes_preview_hint" => "Відкрити HyperFrames preview для кліпів цієї задачі",
+        "montage_hyperframes_render_btn" => "Render HyperFrames",
+        "montage_hyperframes_render_hint" => "Зарендерити всі HyperFrames HTML-кліпи у MP4 і підставити їх у segments.json",
+        "montage_hyperframes_render_first_hint" => "Спочатку зарендери HyperFrames-кліпи у MP4",
         "montage_editor_inspector" => "Інспектор",
         "montage_editor_no_selection" => "Виберіть кліп на таймлінії",
         "montage_editor_clip_start" => "Старт (с):",
