@@ -73,6 +73,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_hyperframes_generate_hint" => {
             "Run an isolated agent for each HyperFrames clip using its scene brief"
         }
+        "montage_hyperframes_edit_btn" => "✎ Edit HyperFrames",
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Open HyperFrames preview for this job's clips",
         "montage_hyperframes_render_btn" => "Render HyperFrames",

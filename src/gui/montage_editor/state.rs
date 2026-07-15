@@ -72,6 +72,8 @@ pub struct MontageEditorState {
     pub pending_preview_hyperframes: bool,
     /// true = створити всі HyperFrames HTML-кліпи окремими сесіями агента
     pub pending_generate_hyperframes: bool,
+    /// Сегмент HyperFrames, для якого треба відкрити чат редагування.
+    pub pending_edit_hyperframes: Option<usize>,
     /// true = запустити render усіх незарендерених HyperFrames-кліпів
     pub pending_render_hyperframes: bool,
     /// Прапорець: примусово оновити плейсхолдери після вибору стоку або допису нового медіа.
@@ -279,6 +281,7 @@ impl MontageEditorState {
             pending_open_stock_picker: None,
             pending_preview_hyperframes: false,
             pending_generate_hyperframes: false,
+            pending_edit_hyperframes: None,
             pending_render_hyperframes: false,
             needs_stock_refresh: false,
             input_blocked: false,

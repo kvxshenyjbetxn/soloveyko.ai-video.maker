@@ -448,6 +448,7 @@ pub fn draw_montage_editor_window(
     let open_stock_picker = editor.pending_open_stock_picker.take();
     let preview_hyperframes = std::mem::take(&mut editor.pending_preview_hyperframes);
     let generate_hyperframes = std::mem::take(&mut editor.pending_generate_hyperframes);
+    let edit_hyperframes = editor.pending_edit_hyperframes.take();
     let render_hyperframes = std::mem::take(&mut editor.pending_render_hyperframes);
     let preview_render_changed = editor.pending_preview_render.take();
     let regen_action = jobs.iter().find(|j| j.id == job_id).and_then(|job| {
@@ -505,6 +506,7 @@ pub fn draw_montage_editor_window(
             open_stock_picker: None,
             preview_hyperframes: false,
             generate_hyperframes: false,
+            edit_hyperframes: None,
             render_hyperframes: false,
             preview_render_changed,
         };
@@ -585,6 +587,7 @@ pub fn draw_montage_editor_window(
         open_stock_picker,
         preview_hyperframes,
         generate_hyperframes,
+        edit_hyperframes,
         render_hyperframes,
         preview_render_changed,
     }

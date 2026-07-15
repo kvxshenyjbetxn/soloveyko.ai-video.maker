@@ -65,11 +65,20 @@ pub(super) fn draw_inspector(
                 if let Some(seg_idx) = seg_idx {
                     ui.add_space(8.0);
                     if is_hyperframes {
+                        if clip
+                            .source_path
+                            .as_deref()
+                            .is_some_and(std::path::Path::is_file)
+                            && ui
+                                .button(translate(language, "montage_hyperframes_edit_btn"))
+                                .clicked()
+                        {
+                            editor.pending_edit_hyperframes = Some(seg_idx);
+                        }
                         if ui
                             .button(translate(language, "montage_hyperframes_preview_btn"))
                             .clicked()
                         {
-                            let _ = seg_idx;
                             editor.pending_preview_hyperframes = true;
                         }
                         if ui

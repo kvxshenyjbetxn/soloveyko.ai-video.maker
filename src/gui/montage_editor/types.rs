@@ -422,6 +422,8 @@ pub struct MontageEditorActions {
     pub preview_hyperframes: bool,
     /// true = створити HyperFrames HTML-кліпи окремими сесіями агента
     pub generate_hyperframes: bool,
+    /// Сегмент HyperFrames, для якого треба відкрити чат редагування.
+    pub edit_hyperframes: Option<usize>,
     /// true = запустити render усіх незарендерених HyperFrames-кліпів
     pub render_hyperframes: bool,
     /// Нові налаштування якості/FPS превʼю, якщо користувач змінив їх у топбарі
@@ -437,6 +439,7 @@ impl Default for MontageEditorActions {
             open_stock_picker: None,
             preview_hyperframes: false,
             generate_hyperframes: false,
+            edit_hyperframes: None,
             render_hyperframes: false,
             preview_render_changed: None,
         }

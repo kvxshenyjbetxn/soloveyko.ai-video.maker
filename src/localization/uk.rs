@@ -73,6 +73,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_hyperframes_generate_hint" => {
             "Запустити окремого агента для кожного HyperFrames-кліпу за його режисерським описом"
         }
+        "montage_hyperframes_edit_btn" => "✎ Редагувати HyperFrames",
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Відкрити HyperFrames preview для кліпів цієї задачі",
         "montage_hyperframes_render_btn" => "Render HyperFrames",

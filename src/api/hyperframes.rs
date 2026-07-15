@@ -63,8 +63,14 @@ pub fn rebuild_preview_all(save_dir: &Path) -> Result<usize, String> {
         let body = extract_tag_inner(&source, "body")
             .ok_or_else(|| format!("HyperFrames-кліп {} не містить body", source_path.display()))?;
         let styles = extract_tag_blocks(&source, "style");
+        // Зовнішні runtime-скрипти зазвичай лежать у head standalone-кліпу.
+        // Для sub-composition вони мусять бути всередині template разом з inline timeline.
+        let runtime_scripts = extract_tag_blocks(&source, "script")
+            .into_iter()
+            .filter(|script| script.contains("src="))
+            .collect::<Vec<_>>();
         let file_name = format!("{:04}-scene.html", position + 1);
-        let composition = wrap_subcomposition(&styles, body);
+        let composition = wrap_subcomposition(&runtime_scripts, &styles, body);
         std::fs::write(compositions_dir.join(&file_name), composition).map_err(|error| {
             format!(
                 "Не вдалося записати preview composition {}: {}",
@@ -138,9 +144,10 @@ fn extract_tag_blocks(html: &str, tag: &str) -> Vec<String> {
     blocks
 }
 
-fn wrap_subcomposition(styles: &[String], body: &str) -> String {
+fn wrap_subcomposition(runtime_scripts: &[String], styles: &[String], body: &str) -> String {
     format!(
-        "<!doctype html>\n<html>\n<body>\n<template>\n{}\n{}\n</template>\n</body>\n</html>\n",
+        "<!doctype html>\n<html>\n<body>\n<template>\n{}\n{}\n{}\n</template>\n</body>\n</html>\n",
+        runtime_scripts.join("\n"),
         styles.join("\n"),
         body.trim()
     )
@@ -163,7 +170,7 @@ fn build_preview_index(slots: &[PreviewSlot], duration_secs: f64) -> String {
         .join("\n");
 
     format!(
-        "<!doctype html>\n<html>\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=1920, height=1080\" />\n  <script src=\"https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js\"></script>\n  <style>\n    html, body {{ margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }}\n    #preview-all {{ position: relative; width: 1920px; height: 1080px; overflow: hidden; }}\n    .clip {{ position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }}\n  </style>\n</head>\n<body>\n  <div id=\"preview-all\" data-composition-id=\"preview-all\" data-width=\"1920\" data-height=\"1080\" data-duration=\"{duration_secs:.3}\">\n{slots_html}\n  </div>\n  <script>\n    window.__timelines = window.__timelines || {{}};\n    window.__timelines['preview-all'] = gsap.timeline({{ paused: true }});\n  </script>\n</body>\n</html>\n"
+        "<!doctype html>\n<html>\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=1920, height=1080\" />\n  <script src=\"https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js\"></script>\n  <style>\n    html, body {{ margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }}\n    #preview-all {{ position: relative; width: 1920px; height: 1080px; overflow: hidden; }}\n    .clip {{ position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }}\n  </style>\n</head>\n<body>\n  <div id=\"preview-all\" data-composition-id=\"preview-all\" data-width=\"1920\" data-height=\"1080\" data-duration=\"{duration_secs:.3}\" data-start=\"0\">\n{slots_html}\n  </div>\n  <script>\n    window.__timelines = window.__timelines || {{}};\n    window.__timelines['preview-all'] = gsap.timeline({{ paused: true }});\n  </script>\n</body>\n</html>\n"
     )
 }
 
