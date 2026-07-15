@@ -18,6 +18,7 @@ pub(super) fn draw_topbar(
     let mut continue_clicked = false;
     let placeholder_segments = collect_placeholder_segment_indices(editor);
     let hyperframes_segments = collect_hyperframes_segment_indices(editor);
+    let pending_hyperframes_segments = collect_pending_hyperframes_segment_indices(editor);
     let has_pending_hyperframes = !hyperframes_segments.is_empty();
     ui.horizontal(|ui| {
         draw_preview_settings(ui, language, editor);
@@ -156,6 +157,22 @@ pub(super) fn draw_topbar(
 
             ui.add_space(8.0);
 
+            if !pending_hyperframes_segments.is_empty() {
+                let generate_label = format!(
+                    "✨ {} ({})",
+                    translate(language, "montage_hyperframes_generate_btn"),
+                    pending_hyperframes_segments.len()
+                );
+                if ui
+                    .button(generate_label)
+                    .on_hover_text(translate(language, "montage_hyperframes_generate_hint"))
+                    .clicked()
+                {
+                    editor.pending_generate_hyperframes = true;
+                }
+                ui.add_space(4.0);
+            }
+
             if !hyperframes_segments.is_empty() {
                 let label = format!(
                     "🎞 {} ({})",
@@ -244,9 +261,24 @@ fn collect_placeholder_segment_indices(editor: &MontageEditorState) -> Vec<usize
 }
 
 fn collect_hyperframes_segment_indices(editor: &MontageEditorState) -> Vec<usize> {
+    collect_hyperframes_segment_indices_by(editor, |_| true)
+}
+
+/// Повертає лише HyperFrames-сегменти, для яких агент ще не створив HTML-файл.
+fn collect_pending_hyperframes_segment_indices(editor: &MontageEditorState) -> Vec<usize> {
+    collect_hyperframes_segment_indices_by(editor, |source_path| !source_path.is_file())
+}
+
+fn collect_hyperframes_segment_indices_by(
+    editor: &MontageEditorState,
+    predicate: impl Fn(&std::path::Path) -> bool,
+) -> Vec<usize> {
     let mut segments = BTreeSet::new();
     for clip in &editor.clips {
-        if !clip.is_placeholder || clip.source_path.is_none() {
+        let Some(source_path) = clip.source_path.as_deref() else {
+            continue;
+        };
+        if !clip.is_placeholder || !predicate(source_path) {
             continue;
         }
 

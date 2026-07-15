@@ -282,6 +282,10 @@ pub struct PipelineJob {
     pub agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>,
     /// Активна сесія агента (session_id для продовження чату)
     pub agent_session: Arc<Mutex<Option<AgentSessionInfo>>>,
+    /// Окрема історія чату для ізольованої генерації HyperFrames-кліпів.
+    pub hyperframes_agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>,
+    /// Поточна сесія HyperFrames-агента для перегляду та продовження діалогу.
+    pub hyperframes_agent_session: Arc<Mutex<Option<AgentSessionInfo>>>,
     /// Перевизначення режиму рендеру з редактора монтажу: None = з налаштувань, Some(true) = CapCut, Some(false) = FFmpeg
     pub capcut_mode_override: Arc<Mutex<Option<bool>>>,
 }
@@ -312,6 +316,8 @@ impl PipelineJob {
             timeline_rebuild_requested: Arc::new(Mutex::new(false)),
             agent_chat: Arc::new(Mutex::new(Vec::new())),
             agent_session: Arc::new(Mutex::new(None)),
+            hyperframes_agent_chat: Arc::new(Mutex::new(Vec::new())),
+            hyperframes_agent_session: Arc::new(Mutex::new(None)),
             capcut_mode_override: Arc::new(Mutex::new(None)),
         }
     }

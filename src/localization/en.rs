@@ -30,6 +30,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_editor_info_path" => "Path:",
         "montage_editor_no_data" => "⚠ timeline.json not found. Run the task first.",
         "agent_chat_title" => "Chat with Agent",
+        "hyperframes_agent_chat_title" => "HyperFrames Agent",
         "agent_chat_send_btn" => "Send",
         "agent_chat_rebuild_btn" => "Rebuild Timeline",
         "agent_awaiting_hint" => {
@@ -67,6 +68,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_hyperframes_placeholder_title" => "HyperFrames Clip",
         "montage_hyperframes_placeholder_hint" => {
             "The agent prepared a HyperFrames HTML clip for this segment. Click to preview it, then render it to MP4 after review."
+        }
+        "montage_hyperframes_generate_btn" => "Create HyperFrames",
+        "montage_hyperframes_generate_hint" => {
+            "Run an isolated agent for each HyperFrames clip using its scene brief"
         }
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Open HyperFrames preview for this job's clips",

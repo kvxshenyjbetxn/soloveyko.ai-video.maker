@@ -213,6 +213,25 @@ impl VideoMakerApp {
             }
         }
 
+        if montage_actions.generate_hyperframes {
+            if let Some(job_id) = self.montage_editor_open_job {
+                if let Some(job) = self.jobs.iter().find(|job| job.id == job_id) {
+                    self.open_hyperframes_agent_chats
+                        .entry(job_id)
+                        .or_insert_with(crate::gui::agent_chat_window::AgentChatWindowState::new);
+                    crate::core::pipeline::hyperframes_agent::generate_pending_clips_async(
+                        job.settings.clone(),
+                        job.id,
+                        job.name.clone(),
+                        ctx.clone(),
+                        std::sync::Arc::clone(&job.timeline_rebuild_requested),
+                        std::sync::Arc::clone(&job.hyperframes_agent_chat),
+                        std::sync::Arc::clone(&job.hyperframes_agent_session),
+                    );
+                }
+            }
+        }
+
         if montage_actions.render_hyperframes {
             if let Some(job_id) = self.montage_editor_open_job {
                 if let Some(job) = self.jobs.iter().find(|j| j.id == job_id) {

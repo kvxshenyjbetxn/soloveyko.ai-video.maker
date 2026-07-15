@@ -252,6 +252,12 @@ impl VideoMakerApp {
             &self.jobs,
             &mut self.open_agent_chats,
         );
+        crate::gui::agent_chat_window::draw_hyperframes_agent_chat_windows(
+            ctx,
+            self.language,
+            &self.jobs,
+            &mut self.open_hyperframes_agent_chats,
+        );
     }
 
     /// Відображає спливаюче сповіщення про копіювання.

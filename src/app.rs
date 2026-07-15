@@ -299,6 +299,9 @@ pub struct VideoMakerApp {
     /// Відкриті вікна чату з агентом: job_id → стан вікна.
     pub open_agent_chats:
         std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
+    /// Відкриті чати ізольованого агента HyperFrames: job_id → стан вікна.
+    pub open_hyperframes_agent_chats:
+        std::collections::HashMap<u64, crate::gui::agent_chat_window::AgentChatWindowState>,
     /// Задачі, для яких користувач вручну закрив вікно контролю (авто-відкриття їх пропускає).
     pub control_dismissed: std::collections::HashSet<u64>,
     /// Чи відкрите вікно введення назви задачі.

@@ -70,6 +70,8 @@ pub struct MontageEditorState {
     pub pending_open_stock_picker: Option<usize>,
     /// true = відкрити HyperFrames preview для preview-all
     pub pending_preview_hyperframes: bool,
+    /// true = створити всі HyperFrames HTML-кліпи окремими сесіями агента
+    pub pending_generate_hyperframes: bool,
     /// true = запустити render усіх незарендерених HyperFrames-кліпів
     pub pending_render_hyperframes: bool,
     /// Прапорець: примусово оновити плейсхолдери після вибору стоку або допису нового медіа.
@@ -276,6 +278,7 @@ impl MontageEditorState {
             maximized: false,
             pending_open_stock_picker: None,
             pending_preview_hyperframes: false,
+            pending_generate_hyperframes: false,
             pending_render_hyperframes: false,
             needs_stock_refresh: false,
             input_blocked: false,
@@ -1038,10 +1041,10 @@ fn append_missing_stock_placeholders(
         let placeholder_text = spoken_text_for_range(speech_source, start, end, text);
 
         if is_hyperframes_segment(seg) {
-            let Some(media_str) = seg["media"].as_str() else {
-                continue;
-            };
-            let source_path: PathBuf = save_path.join(media_str).components().collect();
+            let source_path = seg["media"]
+                .as_str()
+                .map(|media| save_path.join(media))
+                .unwrap_or_else(|| save_path.join(format!("clips/{:04}-scene/index.html", i + 1)));
             let is_html = source_path
                 .extension()
                 .and_then(|ext| ext.to_str())
@@ -1235,18 +1238,32 @@ fn load_timeline_clips(save_path: &Path) -> (Vec<EditorClip>, f32, f32) {
                 }
                 clips.push(clip);
             } else if let Some(text) = text {
-                // Сегмент без медіа (media: null) — плейсхолдер для Stock Picker
                 let start = seg["start_secs"].as_f64().unwrap_or(0.0) as f32;
                 let end = seg["end_secs"].as_f64().unwrap_or(0.0) as f32;
                 let placeholder_text =
                     spoken_text_for_range(speech_source.as_ref(), start, end, text);
-                clips.push(build_placeholder_clip(
-                    i,
-                    &placeholder_text,
-                    start,
-                    end,
-                    bg_track_idx,
-                ));
+                if is_hyperframes {
+                    // HTML ще не існує: зберігаємо очікуваний шлях, щоб показати
+                    // окрему дію генерації замість стокового плейсхолдера.
+                    let source_path =
+                        save_path.join(format!("clips/{:04}-scene/index.html", i + 1));
+                    clips.push(build_hyperframes_placeholder_clip(
+                        i,
+                        &placeholder_text,
+                        start,
+                        end,
+                        bg_track_idx,
+                        source_path,
+                    ));
+                } else {
+                    clips.push(build_placeholder_clip(
+                        i,
+                        &placeholder_text,
+                        start,
+                        end,
+                        bg_track_idx,
+                    ));
+                }
             }
         }
     }

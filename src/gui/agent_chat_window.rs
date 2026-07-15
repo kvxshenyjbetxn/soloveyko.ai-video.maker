@@ -20,12 +20,50 @@ impl AgentChatWindowState {
     }
 }
 
-/// Малює всі відкриті вікна чату з агентами. Закриті вікна видаляються з мапи.
+#[derive(Clone, Copy)]
+enum AgentChatKind {
+    Timeline,
+    Hyperframes,
+}
+
+/// Малює звичайні чати агента, який будує таймлайн.
 pub fn draw_agent_chat_windows(
     ctx: &egui::Context,
     language: Language,
     jobs: &[crate::queue::PipelineJob],
     open_agent_chats: &mut std::collections::HashMap<u64, AgentChatWindowState>,
+) {
+    draw_agent_chat_windows_impl(
+        ctx,
+        language,
+        jobs,
+        open_agent_chats,
+        AgentChatKind::Timeline,
+    );
+}
+
+/// Малює окремі чати для ізольованої генерації HyperFrames-кліпів.
+pub fn draw_hyperframes_agent_chat_windows(
+    ctx: &egui::Context,
+    language: Language,
+    jobs: &[crate::queue::PipelineJob],
+    open_agent_chats: &mut std::collections::HashMap<u64, AgentChatWindowState>,
+) {
+    draw_agent_chat_windows_impl(
+        ctx,
+        language,
+        jobs,
+        open_agent_chats,
+        AgentChatKind::Hyperframes,
+    );
+}
+
+fn draw_agent_chat_windows_impl(
+    ctx: &egui::Context,
+    language: Language,
+    jobs: &[crate::queue::PipelineJob],
+    open_agent_chats: &mut std::collections::HashMap<u64, AgentChatWindowState>,
+    kind: AgentChatKind,
 ) {
     use crate::queue::JobStatus;
     let job_ids: Vec<u64> = open_agent_chats.keys().cloned().collect();
@@ -39,8 +77,23 @@ pub fn draw_agent_chat_windows(
 
         let job_name = jobs[job_idx].name.clone();
         let job_status = jobs[job_idx].status.lock().unwrap().clone();
-        let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
-        let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
+        let (agent_chat_arc, agent_session_arc, chat_file_name, title_key, allow_resume_pipeline) =
+            match kind {
+                AgentChatKind::Timeline => (
+                    std::sync::Arc::clone(&jobs[job_idx].agent_chat),
+                    std::sync::Arc::clone(&jobs[job_idx].agent_session),
+                    "agent_chat.json",
+                    "agent_chat_title",
+                    true,
+                ),
+                AgentChatKind::Hyperframes => (
+                    std::sync::Arc::clone(&jobs[job_idx].hyperframes_agent_chat),
+                    std::sync::Arc::clone(&jobs[job_idx].hyperframes_agent_session),
+                    "hyperframes_agent_chat.json",
+                    "hyperframes_agent_chat_title",
+                    false,
+                ),
+            };
         let timeline_rebuild_arc = std::sync::Arc::clone(&jobs[job_idx].timeline_rebuild_requested);
         let job_settings = jobs[job_idx].settings.clone();
 
@@ -62,7 +115,7 @@ pub fn draw_agent_chat_windows(
                                 content: response,
                             });
                         let save_dir = std::path::Path::new(&job_settings.save_path);
-                        save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
+                        save_agent_chat(save_dir, chat_file_name, &agent_chat_arc.lock().unwrap());
                         state.error = None;
                     }
                     Err(e) => {
@@ -76,17 +129,18 @@ pub fn draw_agent_chat_windows(
         let mut trigger_send = false;
         let mut trigger_rebuild = false;
         let mut trigger_resume_pipeline = false;
-        let is_awaiting_agent = job_status == JobStatus::AwaitingAgentControl;
+        let is_awaiting_agent =
+            allow_resume_pipeline && job_status == JobStatus::AwaitingAgentControl;
 
         let title = format!(
             "{} — #{} {}",
-            translate(language, "agent_chat_title"),
+            translate(language, title_key),
             job_id + 1,
             job_name,
         );
 
         egui::Window::new(title)
-            .id(egui::Id::new(("agent_chat", job_id)))
+            .id(egui::Id::new(("agent_chat", job_id, title_key)))
             .open(&mut is_open)
             .resizable(true)
             .min_size([380.0, 300.0])
@@ -291,7 +345,7 @@ pub fn draw_agent_chat_windows(
                             content: message.clone(),
                         });
                     let save_dir = std::path::Path::new(&job_settings.save_path);
-                    save_agent_chat(save_dir, &agent_chat_arc.lock().unwrap());
+                    save_agent_chat(save_dir, chat_file_name, &agent_chat_arc.lock().unwrap());
                     state.input.clear();
                     state.error = None;
 
@@ -567,11 +621,15 @@ fn draw_icon_x(painter: &egui::Painter, rect: egui::Rect) {
     );
 }
 
-fn save_agent_chat(save_dir: &std::path::Path, chat: &[crate::queue::AgentChatMessage]) {
+fn save_agent_chat(
+    save_dir: &std::path::Path,
+    file_name: &str,
+    chat: &[crate::queue::AgentChatMessage],
+) {
     let messages: Vec<serde_json::Value> = chat
         .iter()
         .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
         .collect();
     let json = serde_json::to_string_pretty(&messages).unwrap_or_default();
-    let _ = std::fs::write(save_dir.join("agent_chat.json"), json);
+    let _ = std::fs::write(save_dir.join(file_name), json);
 }

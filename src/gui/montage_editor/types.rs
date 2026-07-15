@@ -420,6 +420,8 @@ pub struct MontageEditorActions {
     pub open_stock_picker: Option<usize>,
     /// true = відкрити HyperFrames preview для поточної задачі
     pub preview_hyperframes: bool,
+    /// true = створити HyperFrames HTML-кліпи окремими сесіями агента
+    pub generate_hyperframes: bool,
     /// true = запустити render усіх незарендерених HyperFrames-кліпів
     pub render_hyperframes: bool,
     /// Нові налаштування якості/FPS превʼю, якщо користувач змінив їх у топбарі
@@ -434,6 +436,7 @@ impl Default for MontageEditorActions {
             batch_regen_action: None,
             open_stock_picker: None,
             preview_hyperframes: false,
+            generate_hyperframes: false,
             render_hyperframes: false,
             preview_render_changed: None,
         }

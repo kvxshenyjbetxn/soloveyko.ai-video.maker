@@ -25,6 +25,9 @@ pub struct SegmentTiming {
     pub media_type: SegmentMediaType,
     /// Відносний шлях до медіафайлу (наприклад "media/0001.jpg").
     pub media: Option<String>,
+    /// Режисерський опис сцени для окремої генерації HyperFrames-кліпу.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hyperframes_brief: Option<String>,
     /// Початок обрізки відео (секунди); встановлюється в редакторі монтажу.
     #[serde(default)]
     pub trim_start: f64,
@@ -739,6 +742,7 @@ pub fn build_timeline(
                 } else {
                     Some(format!("media/{}", r.filename))
                 },
+                hyperframes_brief: None,
                 trim_start: 0.0,
             }
         })

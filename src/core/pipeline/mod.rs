@@ -2,6 +2,7 @@ pub mod agent_prompts;
 mod agent_timeline;
 pub mod capcut;
 mod final_stages;
+pub mod hyperframes_agent;
 mod media_regen;
 pub mod montage;
 mod retry;
@@ -25,6 +26,28 @@ pub(crate) use self::media_regen::read_prompt_for_file;
 
 use self::subtitles::run_av_branch;
 use self::video::run_video_branch;
+
+/// Продовжує сесію агента (--resume) залежно від сервісу.
+/// Запускає нову ізольовану сесію CLI-агента.
+pub fn call_agent_new_session_streaming(
+    service: &str,
+    model: &str,
+    prompt: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+    on_chunk: impl Fn(&str) + Send,
+) -> Result<(String, String), String> {
+    agent_timeline::call_agent_new_session_streaming(
+        service,
+        model,
+        prompt,
+        session_id,
+        job_info,
+        working_dir,
+        on_chunk,
+    )
+}
 
 /// Продовжує сесію агента (--resume) залежно від сервісу.
 pub fn call_agent_resume(

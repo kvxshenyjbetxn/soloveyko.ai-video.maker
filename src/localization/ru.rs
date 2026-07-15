@@ -30,6 +30,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_editor_info_path" => "Путь:",
         "montage_editor_no_data" => "⚠ timeline.json не найден. Запустите задачу сначала.",
         "agent_chat_title" => "Чат с агентом",
+        "hyperframes_agent_chat_title" => "HyperFrames агент",
         "agent_chat_send_btn" => "Отправить",
         "agent_chat_rebuild_btn" => "Перестроить таймлайн",
         "agent_awaiting_hint" => {
@@ -67,6 +68,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_hyperframes_placeholder_title" => "HyperFrames клип",
         "montage_hyperframes_placeholder_hint" => {
             "Для этого сегмента агент подготовил HyperFrames HTML-клип. Нажми для preview, а после проверки — отрендерь в MP4."
+        }
+        "montage_hyperframes_generate_btn" => "Создать HyperFrames",
+        "montage_hyperframes_generate_hint" => {
+            "Запустить отдельного агента для каждого HyperFrames-клипа по его режиссёрскому описанию"
         }
         "montage_hyperframes_preview_btn" => "👁 Preview HyperFrames",
         "montage_hyperframes_preview_hint" => "Открыть HyperFrames preview для клипов этой задачи",
