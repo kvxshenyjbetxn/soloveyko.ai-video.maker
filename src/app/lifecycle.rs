@@ -20,8 +20,8 @@ impl Default for VideoMakerApp {
             template_name_input: String::new(),
             saved_templates: crate::gui::settings::storage::load_saved_templates(),
             template_status: None,
-            voicebot_key: String::new(),
-            voicebot_status: None,
+            lumean_key: String::new(),
+            lumean_status: None,
             googler_key: String::new(),
             googler_status: None,
             googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -38,11 +38,11 @@ impl Default for VideoMakerApp {
             pixabay_key: String::new(),
             pixabay_status: None,
             pixabay_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            voiceover_provider: "Voice Bot".to_string(),
+            voiceover_provider: "Lumean".to_string(),
             voiceover_template_uuid: String::new(),
-            voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
-            voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            lumean_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            lumean_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            lumean_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pipeline_translation_enabled: true,
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
@@ -107,7 +107,7 @@ impl Default for VideoMakerApp {
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             openrouter_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            lumean_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_service: "Googler".to_string(),
             video_media_type: "image".to_string(),
             text_split_mode: "paragraphs".to_string(),
@@ -300,7 +300,7 @@ impl VideoMakerApp {
         };
 
         let openrouter_key = saved.openrouter_key.clone();
-        let voicebot_key = saved.voicebot_key.clone();
+        let lumean_key = saved.lumean_key.clone();
         let googler_key = saved.googler_key.clone();
         let assemblyai_key = saved.assemblyai_key.clone();
         let pexels_key = saved.pexels_key.clone();
@@ -464,7 +464,7 @@ impl VideoMakerApp {
         }
 
         let openrouter_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
-        let voicebot_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let lumean_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
         let googler_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
 
         // Завантажуємо баланси у фоні при старті, якщо ключі вже збережені
@@ -475,10 +475,10 @@ impl VideoMakerApp {
                 cc.egui_ctx.clone(),
             );
         }
-        if !voicebot_key.is_empty() {
-            crate::api::voicebot::fetch_balance(
-                voicebot_key.clone(),
-                std::sync::Arc::clone(&voicebot_balance),
+        if !lumean_key.is_empty() {
+            crate::api::lumean::fetch_balance(
+                lumean_key.clone(),
+                std::sync::Arc::clone(&lumean_balance),
                 cc.egui_ctx.clone(),
             );
         }
@@ -502,8 +502,8 @@ impl VideoMakerApp {
             template_name_input: saved.last_template.clone(),
             saved_templates,
             template_status: None,
-            voicebot_key,
-            voicebot_status: None,
+            lumean_key,
+            lumean_status: None,
             googler_key,
             googler_status: None,
             googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -522,9 +522,9 @@ impl VideoMakerApp {
             pixabay_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider,
             voiceover_template_uuid,
-            voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
-            voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            lumean_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            lumean_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            lumean_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pipeline_translation_enabled,
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
@@ -588,7 +588,7 @@ impl VideoMakerApp {
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             openrouter_balance,
-            voicebot_balance,
+            lumean_balance,
             video_service,
             video_media_type,
             text_split_mode,

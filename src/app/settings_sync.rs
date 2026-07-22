@@ -31,7 +31,7 @@ impl VideoMakerApp {
                 || current_color_arr != self.last_saved_settings.accent_color
                 || current_language_str != self.last_saved_settings.language
                 || self.openrouter_key != self.last_saved_settings.openrouter_key
-                || self.voicebot_key != self.last_saved_settings.voicebot_key
+                || self.lumean_key != self.last_saved_settings.lumean_key
                 || self.voiceover_provider != self.last_saved_settings.voiceover_provider
                 || self.voiceover_template_uuid != self.last_saved_settings.voiceover_template_uuid
                 || self.template_name_input != self.last_saved_settings.last_template
@@ -184,7 +184,7 @@ impl VideoMakerApp {
                     pipeline_width: self.pipeline_width,
                     language: current_language_str,
                     openrouter_key: self.openrouter_key.clone(),
-                    voicebot_key: self.voicebot_key.clone(),
+                    lumean_key: self.lumean_key.clone(),
                     googler_key: self.googler_key.clone(),
                     assemblyai_key: self.assemblyai_key.clone(),
                     pexels_key: self.pexels_key.clone(),

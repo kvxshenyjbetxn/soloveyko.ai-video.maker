@@ -69,10 +69,10 @@ pub fn draw_pipeline_panel(
     openrouter_key: &mut String,
     openrouter_status: &mut Option<String>,
     openrouter_balance: &Arc<Mutex<Option<String>>>,
-    voicebot_key: &mut String,
-    voicebot_status: &mut Option<String>,
-    voicebot_test_result: &Arc<Mutex<Option<String>>>,
-    voicebot_balance: &Arc<Mutex<Option<String>>>,
+    lumean_key: &mut String,
+    lumean_status: &mut Option<String>,
+    lumean_test_result: &Arc<Mutex<Option<String>>>,
+    lumean_balance: &Arc<Mutex<Option<String>>>,
     googler_key: &mut String,
     googler_status: &mut Option<String>,
     googler_test_result: &Arc<Mutex<Option<String>>>,
@@ -91,8 +91,8 @@ pub fn draw_pipeline_panel(
     pixabay_test_result: &Arc<Mutex<Option<String>>>,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
-    voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
-    voicebot_loading: &Arc<Mutex<bool>>,
+    lumean_templates: &Arc<Mutex<Option<Result<Vec<crate::api::lumean::LumeanTemplate>, String>>>>,
+    lumean_loading: &Arc<Mutex<bool>>,
     edge_tts_voice: &mut String,
     edge_tts_rate: &mut String,
     edge_tts_pitch: &mut String,
@@ -574,10 +574,10 @@ pub fn draw_pipeline_panel(
                                 openrouter_key,
                                 openrouter_status,
                                 openrouter_balance,
-                                voicebot_key,
-                                voicebot_status,
-                                voicebot_test_result,
-                                voicebot_balance,
+                                lumean_key,
+                                lumean_status,
+                                lumean_test_result,
+                                lumean_balance,
                                 googler_key,
                                 googler_status,
                                 googler_test_result,
@@ -725,11 +725,11 @@ pub fn draw_pipeline_panel(
                             voiceover::draw_voiceover_section(
                                 ui,
                                 language,
-                                voicebot_key,
+                                lumean_key,
                                 voiceover_provider,
                                 voiceover_template_uuid,
-                                voicebot_templates,
-                                voicebot_loading,
+                                lumean_templates,
+                                lumean_loading,
                                 edge_tts_voice,
                                 edge_tts_rate,
                                 edge_tts_pitch,
@@ -967,8 +967,16 @@ pub fn draw_pipeline_panel(
                     Some(translate(language, "queue_error_no_model").to_string())
                 } else if *pipeline_translation_enabled && openrouter_key.is_empty() {
                     Some(translate(language, "queue_error_no_key").to_string())
-                } else if *pipeline_voiceover_enabled && voicebot_key.is_empty() {
-                    Some(translate(language, "queue_error_no_voicebot_key").to_string())
+                } else if *pipeline_voiceover_enabled
+                    && voiceover_provider == "Lumean"
+                    && lumean_key.is_empty()
+                {
+                    Some(translate(language, "queue_error_no_lumean_key").to_string())
+                } else if *pipeline_voiceover_enabled
+                    && voiceover_provider == "Lumean"
+                    && voiceover_template_uuid.is_empty()
+                {
+                    Some(translate(language, "queue_error_no_lumean_template").to_string())
                 } else {
                     None
                 };
@@ -1081,7 +1089,7 @@ pub fn draw_pipeline_panel(
                                         translation_service,
                                         openrouter_key,
                                         *pipeline_voiceover_enabled,
-                                        voicebot_key,
+                                        lumean_key,
                                         voiceover_template_uuid,
                                         voiceover_provider,
                                         edge_tts_voice,
@@ -1176,7 +1184,7 @@ pub fn draw_pipeline_panel(
                                     queue_error,
                                     translation_service,
                                     *pipeline_voiceover_enabled,
-                                    voicebot_key,
+                                    lumean_key,
                                     voiceover_template_uuid,
                                     voiceover_provider,
                                     edge_tts_voice,
@@ -1280,7 +1288,7 @@ fn build_job_settings(
     translation_service: &str,
     openrouter_key: &str,
     voiceover_enabled: bool,
-    voicebot_key: &str,
+    lumean_key: &str,
     voiceover_template_uuid: &str,
     voiceover_provider: &str,
     edge_tts_voice: &str,
@@ -1360,7 +1368,7 @@ fn build_job_settings(
         translation_service: translation_service.to_string(),
         openrouter_key: openrouter_key.to_string(),
         voiceover_enabled,
-        voicebot_key: voicebot_key.to_string(),
+        lumean_key: lumean_key.to_string(),
         voiceover_template_uuid: voiceover_template_uuid.to_string(),
         voiceover_provider: voiceover_provider.to_string(),
         edge_tts_voice: edge_tts_voice.to_string(),
@@ -1456,7 +1464,7 @@ fn validate_and_enqueue(
     queue_error: &mut Option<String>,
     translation_service: &str,
     voiceover_enabled: bool,
-    voicebot_key: &str,
+    lumean_key: &str,
     voiceover_template_uuid: &str,
     voiceover_provider: &str,
     edge_tts_voice: &str,
@@ -1551,7 +1559,7 @@ fn validate_and_enqueue(
         translation_service,
         openrouter_key,
         voiceover_enabled,
-        voicebot_key,
+        lumean_key,
         voiceover_template_uuid,
         voiceover_provider,
         edge_tts_voice,

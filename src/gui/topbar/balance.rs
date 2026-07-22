@@ -2,15 +2,15 @@ use super::thread_load_color;
 use crate::localization::{Language, translate};
 use eframe::egui;
 
-/// Вікно балансів сервісів (OpenRouter, VoiceBot, Googler).
+/// Вікно балансів сервісів (OpenRouter, Lumean, Googler).
 pub fn draw_balance_window(
     ctx: &egui::Context,
     open: &mut bool,
     language: Language,
     openrouter_key: &str,
     openrouter_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
-    voicebot_key: &str,
-    voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    lumean_key: &str,
+    lumean_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     googler_key: &str,
     googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
 ) {
@@ -67,34 +67,34 @@ pub fn draw_balance_window(
 
             ui.add_space(4.0);
 
-            // --- VoiceBot ---
+            // --- Lumean ---
             ui.group(|ui| {
                 ui.set_min_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("VoiceBot").strong());
+                    ui.label(egui::RichText::new("Lumean").strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add_enabled(
-                                !voicebot_key.is_empty(),
+                                !lumean_key.is_empty(),
                                 egui::Button::new(translate(language, "balance_refresh")).small(),
                             )
                             .clicked()
                         {
-                            crate::api::voicebot::fetch_balance(
-                                voicebot_key.to_string(),
-                                Arc::clone(voicebot_balance),
+                            crate::api::lumean::fetch_balance(
+                                lumean_key.to_string(),
+                                Arc::clone(lumean_balance),
                                 ui.ctx().clone(),
                             );
                         }
                     });
                 });
                 ui.separator();
-                if let Ok(guard) = voicebot_balance.try_lock() {
+                if let Ok(guard) = lumean_balance.try_lock() {
                     match guard.as_ref() {
                         Some(text) => {
                             ui.label(text.as_str());
                         }
-                        None if voicebot_key.is_empty() => {
+                        None if lumean_key.is_empty() => {
                             ui.label(
                                 egui::RichText::new(translate(language, "balance_no_key")).weak(),
                             );
@@ -179,10 +179,10 @@ pub fn draw_balance_window(
                             ctx2.clone(),
                         );
                     }
-                    if !voicebot_key.is_empty() {
-                        crate::api::voicebot::fetch_balance(
-                            voicebot_key.to_string(),
-                            Arc::clone(voicebot_balance),
+                    if !lumean_key.is_empty() {
+                        crate::api::lumean::fetch_balance(
+                            lumean_key.to_string(),
+                            Arc::clone(lumean_balance),
                             ctx2.clone(),
                         );
                     }
@@ -209,7 +209,7 @@ pub fn draw_threads_window(
     codex_max_threads: &mut usize,
     agy_max_threads: &mut usize,
     pi_max_threads: &mut usize,
-    voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    lumean_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     edge_tts_max_threads: &mut usize,
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
@@ -389,20 +389,20 @@ pub fn draw_threads_window(
 
             ui.add_space(4.0);
 
-            // --- VoiceBot ---
+            // --- Lumean ---
             ui.group(|ui| {
                 ui.set_min_width(ui.available_width());
-                ui.label(egui::RichText::new("VoiceBot").strong());
+                ui.label(egui::RichText::new("Lumean").strong());
                 ui.separator();
                 ui.add_space(4.0);
-                let _ = voicebot_balance;
+                let _ = lumean_balance;
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "balance_active_threads"));
-                    let active = crate::api::voicebot::VoiceBotLimiter::get().active_count();
+                    let active = crate::api::lumean::LumeanLimiter::get().active_count();
                     active_label(ui, active, 5);
                 });
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(translate(language, "balance_voicebot_limit")).weak());
+                ui.label(egui::RichText::new(translate(language, "balance_lumean_limit")).weak());
             });
 
             ui.add_space(4.0);

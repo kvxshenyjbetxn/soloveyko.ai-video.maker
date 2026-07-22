@@ -2,7 +2,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// Синхронно виконує озвучку тексту через обраного провайдера (Voice Bot API або Edge TTS).
+/// Синхронно виконує озвучку тексту через обраного провайдера (Lumean API або Edge TTS).
 pub fn run_voiceover_sync(
     job_id: u64,
     job_name: &str,
@@ -12,37 +12,35 @@ pub fn run_voiceover_sync(
     if settings.voiceover_provider == "Edge TTS" {
         run_edge_tts_voiceover(job_id, job_name, settings, text)
     } else {
-        run_voicebot_voiceover(job_id, job_name, settings, text)
+        run_lumean_voiceover(job_id, job_name, settings, text)
     }
 }
 
-/// Виконує озвучку через Voice Bot API.
-fn run_voicebot_voiceover(
+/// Виконує озвучку через Lumean API.
+fn run_lumean_voiceover(
     job_id: u64,
     job_name: &str,
     settings: &crate::queue::JobSettings,
     text: &str,
 ) -> Result<(), String> {
-    let _permit = crate::api::voicebot::VoiceBotLimiter::get().acquire();
+    let _permit = crate::api::lumean::LumeanLimiter::get().acquire();
 
     let template_uuid = &settings.voiceover_template_uuid;
-    let voicebot_key = &settings.voicebot_key;
+    let lumean_key = &settings.lumean_key;
     let save_path = &settings.save_path;
 
-    let template_opt = if template_uuid.is_empty() {
-        None
-    } else {
-        Some(template_uuid.as_str())
-    };
+    if template_uuid.is_empty() {
+        return Err("Оберіть шаблон Lumean для озвучення".to_string());
+    }
 
-    let task_id = crate::api::voicebot::create_tts_task(voicebot_key, text, template_opt)?;
+    let order_id = crate::api::lumean::create_tts_order(lumean_key, text, template_uuid)?;
 
     crate::logger::log_job(
         job_id,
         job_name,
         &format!(
-            "TTS task created (ID: {}). Polling status every 5 sec...",
-            task_id
+            "Створено TTS-замовлення Lumean (ID: {}). Перевірка кожні 5 с...",
+            order_id
         ),
     );
 
@@ -51,34 +49,38 @@ fn run_voicebot_voiceover(
         std::thread::sleep(std::time::Duration::from_secs(5));
         super::super::ensure_job_not_cancelled(job_id)?;
 
-        let task_status = crate::api::voicebot::get_task_status(voicebot_key, task_id)?;
+        let (order_status, audio_path) =
+            crate::api::lumean::get_order_status(lumean_key, &order_id)?;
 
         crate::logger::log_job(
             job_id,
             job_name,
-            &format!("TTS status (ID: {}): {}", task_id, task_status),
+            &format!(
+                "Статус TTS-замовлення Lumean (ID: {}): {}",
+                order_id, order_status
+            ),
         );
 
-        match task_status.as_str() {
-            "ending" | "ending_processed" => {
+        match order_status.as_str() {
+            "completed" | "result_delivered" => {
+                let audio_path = audio_path.ok_or_else(|| {
+                    "Lumean завершив замовлення без посилання на аудіофайл".to_string()
+                })?;
                 let filename =
-                    crate::api::voicebot::download_task_result(voicebot_key, task_id, save_path)?;
+                    crate::api::lumean::download_result(lumean_key, &audio_path, save_path)?;
                 crate::logger::log_job(
                     job_id,
                     job_name,
-                    &format!("Voiceover file saved: {}", filename),
+                    &format!("Файл озвучення збережено: {}", filename),
                 );
                 return Ok(());
             }
-            "error" | "error_handled" => {
+            "failed" | "compensated" | "cancelled" | "partially_completed" => {
                 return Err(format!(
-                    "TTS processing error from server (status: {})",
-                    task_status
+                    "Обробка TTS у Lumean завершилась зі статусом: {order_status}"
                 ));
             }
-            _ => {
-                // waiting або processing — продовжуємо опитування
-            }
+            _ => {}
         }
     }
 }

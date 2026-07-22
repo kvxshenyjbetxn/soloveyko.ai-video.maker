@@ -134,7 +134,7 @@ pub struct JobSettings {
     pub translation_service: String,
     pub openrouter_key: String,
     pub voiceover_enabled: bool,
-    pub voicebot_key: String,
+    pub lumean_key: String,
     pub voiceover_template_uuid: String,
     pub voiceover_provider: String,
     pub edge_tts_voice: String,

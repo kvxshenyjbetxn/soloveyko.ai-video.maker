@@ -56,7 +56,7 @@ pub fn draw_navigation_bar(
     jobs: &[crate::queue::PipelineJob],
     language: Language,
     openrouter_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
-    voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    lumean_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
     balance_window_open: &mut bool,
 ) {
@@ -114,10 +114,10 @@ pub fn draw_navigation_bar(
                             ui.separator();
                         }
                     }
-                    if let Ok(guard) = voicebot_balance.try_lock() {
+                    if let Ok(guard) = lumean_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
                             let display = text.split_whitespace().next().unwrap_or(text.as_str());
-                            if draw_balance_chip(ui, "VoiceBot", display).clicked() {
+                            if draw_balance_chip(ui, "Lumean", display).clicked() {
                                 *balance_window_open = true;
                             }
                             ui.separator();
@@ -220,8 +220,8 @@ pub fn draw_status_bar(
                 }
                 if thread_chip(
                     ui,
-                    "VoiceBot",
-                    crate::api::voicebot::VoiceBotLimiter::get().active_count(),
+                    "Lumean",
+                    crate::api::lumean::LumeanLimiter::get().active_count(),
                     5,
                 ) {
                     open_threads = true;

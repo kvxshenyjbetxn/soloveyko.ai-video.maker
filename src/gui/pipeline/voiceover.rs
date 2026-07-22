@@ -2,22 +2,16 @@ use crate::localization::{Language, translate};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
-#[derive(serde::Deserialize, Clone, Debug)]
-pub struct VoiceBotTemplate {
-    pub uuid: String,
-    pub name: String,
-}
-
 /// Малює секцію "Озвучка" на панелі пайплайну.
 #[allow(clippy::too_many_arguments)]
 pub fn draw_voiceover_section(
     ui: &mut egui::Ui,
     language: Language,
-    voicebot_key: &str,
+    lumean_key: &str,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
-    voicebot_templates: &Arc<Mutex<Option<Result<Vec<VoiceBotTemplate>, String>>>>,
-    voicebot_loading: &Arc<Mutex<bool>>,
+    lumean_templates: &Arc<Mutex<Option<Result<Vec<crate::api::lumean::LumeanTemplate>, String>>>>,
+    lumean_loading: &Arc<Mutex<bool>>,
     edge_tts_voice: &mut String,
     edge_tts_rate: &mut String,
     edge_tts_pitch: &mut String,
@@ -36,15 +30,15 @@ pub fn draw_voiceover_section(
         egui::ComboBox::from_id_salt("voiceover_provider_combo")
             .selected_text(voiceover_provider.as_str())
             .show_ui(ui, |ui| {
-                ui.selectable_value(voiceover_provider, "Voice Bot".to_string(), "Voice Bot");
+                ui.selectable_value(voiceover_provider, "Lumean".to_string(), "Lumean");
                 ui.selectable_value(voiceover_provider, "Edge TTS".to_string(), "Edge TTS");
             });
 
         ui.add_space(8.0);
 
-        if voiceover_provider.as_str() == "Voice Bot" {
-            let is_loading = *voicebot_loading.lock().unwrap();
-            let templates_snapshot = voicebot_templates.lock().unwrap().clone();
+        if voiceover_provider.as_str() == "Lumean" {
+            let is_loading = *lumean_loading.lock().unwrap();
+            let templates_snapshot = lumean_templates.lock().unwrap().clone();
 
             if is_loading {
                 ui.label(
@@ -55,64 +49,27 @@ pub fn draw_voiceover_section(
             } else {
                 match templates_snapshot {
                     None => {
-                        if voicebot_key.is_empty() {
+                        if lumean_key.is_empty() {
                             ui.add(
                                 egui::Label::new(
-                                    egui::RichText::new(translate(
-                                        language,
-                                        "voicebot_key_required",
-                                    ))
-                                    .color(egui::Color32::from_rgb(231, 76, 60))
-                                    .size(12.0),
+                                    egui::RichText::new(translate(language, "lumean_key_required"))
+                                        .color(egui::Color32::from_rgb(231, 76, 60))
+                                        .size(12.0),
                                 )
                                 .wrap(),
                             );
                         } else {
                             // Встановлюємо прапорець до spawn, щоб наступний фрейм не тригернув ще раз
-                            *voicebot_loading.lock().unwrap() = true;
+                            *lumean_loading.lock().unwrap() = true;
 
-                            let templates_arc = Arc::clone(voicebot_templates);
-                            let loading_arc = Arc::clone(voicebot_loading);
-                            let key = voicebot_key.to_string();
+                            let templates_arc = Arc::clone(lumean_templates);
+                            let loading_arc = Arc::clone(lumean_loading);
+                            let key = lumean_key.to_string();
                             let ctx = ui.ctx().clone();
 
                             std::thread::spawn(move || {
-                                let agent = ureq::AgentBuilder::new()
-                                    .timeout_connect(std::time::Duration::from_secs(10))
-                                    .timeout(std::time::Duration::from_secs(15))
-                                    .build();
-
-                                let parsed = match agent
-                                    .get("https://voiceapi.csv666.ru/templates")
-                                    .set("X-API-Key", &key)
-                                    .set("Accept", "application/json")
-                                    .call()
-                                {
-                                    Ok(response) => {
-                                        match response.into_json::<Vec<VoiceBotTemplate>>() {
-                                            Ok(templates) => Ok(templates),
-                                            Err(e) => Err(format!("Помилка парсингу: {}", e)),
-                                        }
-                                    }
-                                    Err(ureq::Error::Status(401, _)) => {
-                                        Err("Невірний ключ. Перевірте X-API-Key в секції АПІ."
-                                            .to_string())
-                                    }
-                                    Err(ureq::Error::Status(code, _)) if code >= 500 => {
-                                        Err(format!(
-                                            "Сервер тимчасово недоступний ({}). Спробуйте пізніше.",
-                                            code
-                                        ))
-                                    }
-                                    Err(ureq::Error::Status(code, _)) => {
-                                        Err(format!("Помилка запиту ({})", code))
-                                    }
-                                    Err(_) => {
-                                        Err("Помилка мережі. Перевірте з'єднання.".to_string())
-                                    }
-                                };
-
-                                *templates_arc.lock().unwrap() = Some(parsed);
+                                let templates = crate::api::lumean::fetch_templates(&key);
+                                *templates_arc.lock().unwrap() = Some(templates);
                                 *loading_arc.lock().unwrap() = false;
                                 ctx.request_repaint();
                             });
@@ -121,17 +78,17 @@ pub fn draw_voiceover_section(
                     Some(Ok(templates)) => {
                         let selected_name = templates
                             .iter()
-                            .find(|t| t.uuid == *voiceover_template_uuid)
+                            .find(|t| t.id == *voiceover_template_uuid)
                             .map(|t| t.name.as_str())
                             .unwrap_or(translate(language, "voiceover_template_hint"));
 
-                        egui::ComboBox::from_id_salt("voicebot_template_combo")
+                        egui::ComboBox::from_id_salt("lumean_template_combo")
                             .selected_text(selected_name)
                             .show_ui(ui, |ui| {
                                 for template in &templates {
                                     ui.selectable_value(
                                         voiceover_template_uuid,
-                                        template.uuid.clone(),
+                                        template.id.clone(),
                                         &template.name,
                                     );
                                 }
@@ -151,7 +108,7 @@ pub fn draw_voiceover_section(
                             .button(translate(language, "voiceover_templates_retry"))
                             .clicked()
                         {
-                            *voicebot_templates.lock().unwrap() = None;
+                            *lumean_templates.lock().unwrap() = None;
                         }
                     }
                 }

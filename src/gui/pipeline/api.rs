@@ -3,17 +3,17 @@ use crate::localization::{Language, translate};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
-/// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter, Voice Bot, Googler та AssemblyAI.
+/// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter, Lumean, Googler та AssemblyAI.
 pub fn draw_api_section(
     ui: &mut egui::Ui,
     language: Language,
     openrouter_key: &mut String,
     openrouter_status: &mut Option<String>,
     openrouter_balance: &Arc<Mutex<Option<String>>>,
-    voicebot_key: &mut String,
-    voicebot_status: &mut Option<String>,
-    voicebot_test_result: &Arc<Mutex<Option<String>>>,
-    voicebot_balance: &Arc<Mutex<Option<String>>>,
+    lumean_key: &mut String,
+    lumean_status: &mut Option<String>,
+    lumean_test_result: &Arc<Mutex<Option<String>>>,
+    lumean_balance: &Arc<Mutex<Option<String>>>,
     googler_key: &mut String,
     googler_status: &mut Option<String>,
     googler_test_result: &Arc<Mutex<Option<String>>>,
@@ -31,10 +31,10 @@ pub fn draw_api_section(
     pixabay_status: &mut Option<String>,
     pixabay_test_result: &Arc<Mutex<Option<String>>>,
 ) {
-    // Опитуємо результат фонового тесту Voice Bot і переносимо у voicebot_status
-    if let Ok(mut guard) = voicebot_test_result.try_lock() {
+    // Опитуємо результат фонового тесту Lumean і переносимо у lumean_status
+    if let Ok(mut guard) = lumean_test_result.try_lock() {
         if let Some(result) = guard.take() {
-            *voicebot_status = Some(result);
+            *lumean_status = Some(result);
         }
     }
 
@@ -143,23 +143,23 @@ pub fn draw_api_section(
         ui.separator();
         ui.add_space(6.0);
 
-        // --- Voice Bot ---
-        ui.label(egui::RichText::new("Voice Bot").strong());
+        // --- Lumean ---
+        ui.label(egui::RichText::new("Lumean").strong());
         ui.add_space(4.0);
 
         let available_width = ui.available_width();
 
         ui.horizontal(|ui| {
-            let vb_response = ui.add(
-                egui::TextEdit::singleline(voicebot_key)
+            let lumean_response = ui.add(
+                egui::TextEdit::singleline(lumean_key)
                     .password(true)
-                    .hint_text(translate(language, "voicebot_key_hint"))
+                    .hint_text(translate(language, "lumean_key_hint"))
                     .desired_width((available_width - 90.0).max(100.0)),
             );
 
-            if vb_response.changed() {
-                *voicebot_status = None;
-                if let Ok(mut bal) = voicebot_balance.try_lock() {
+            if lumean_response.changed() {
+                *lumean_status = None;
+                if let Ok(mut bal) = lumean_balance.try_lock() {
                     *bal = None;
                 }
             }
@@ -170,61 +170,24 @@ pub fn draw_api_section(
             );
 
             if test_btn.clicked() {
-                let trimmed = voicebot_key.trim().to_string();
+                let trimmed = lumean_key.trim().to_string();
                 if trimmed.is_empty() {
-                    *voicebot_status = Some(translate(language, "api_status_empty").to_string());
+                    *lumean_status = Some(translate(language, "api_status_empty").to_string());
                 } else {
-                    *voicebot_status =
-                        Some(translate(language, "voicebot_status_checking").to_string());
+                    *lumean_status =
+                        Some(translate(language, "lumean_status_checking").to_string());
 
-                    let result_arc = Arc::clone(voicebot_test_result);
-                    let balance_arc = Arc::clone(voicebot_balance);
-                    let ctx = ui.ctx().clone();
-
-                    std::thread::spawn(move || {
-                        let agent = ureq::AgentBuilder::new()
-                            .timeout_connect(std::time::Duration::from_secs(10))
-                            .timeout(std::time::Duration::from_secs(15))
-                            .build();
-
-                        let (status_text, balance_opt) = match agent
-                            .get("https://voiceapi.csv666.ru/balance")
-                            .set("X-API-Key", &trimmed)
-                            .set("Accept", "application/json")
-                            .call()
-                        {
-                            Ok(response) => {
-                                match response.into_json::<api::voicebot::BalanceResponse>() {
-                                    Ok(data) => (
-                                        format!("✔ Баланс: {}", data.balance_text),
-                                        Some(data.balance_text),
-                                    ),
-                                    Err(_) => ("✔ Ключ валідний".to_string(), None),
-                                }
-                            }
-                            Err(ureq::Error::Status(401, _)) => {
-                                ("❌ Невірний ключ".to_string(), None)
-                            }
-                            Err(ureq::Error::Status(code, _)) if code >= 500 => {
-                                (format!("⚠ Сервер тимчасово недоступний ({})", code), None)
-                            }
-                            Err(ureq::Error::Status(code, _)) => {
-                                (format!("❌ Помилка ({})", code), None)
-                            }
-                            Err(_) => ("❌ Помилка мережі. Перевірте з'єднання.".to_string(), None),
-                        };
-
-                        *result_arc.lock().unwrap() = Some(status_text);
-                        if let Some(bal) = balance_opt {
-                            *balance_arc.lock().unwrap() = Some(bal);
-                        }
-                        ctx.request_repaint();
-                    });
+                    api::lumean::check_key(
+                        trimmed,
+                        Arc::clone(lumean_test_result),
+                        Arc::clone(lumean_balance),
+                        ui.ctx().clone(),
+                    );
                 }
             }
         });
 
-        if let Some(status) = voicebot_status {
+        if let Some(status) = lumean_status {
             ui.add_space(4.0);
             let is_success = status.starts_with('✔');
             let is_checking = status.starts_with('⏳');

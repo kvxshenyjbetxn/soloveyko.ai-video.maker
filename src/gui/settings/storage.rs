@@ -324,8 +324,9 @@ pub struct AppSettings {
     pub language: String,
     /// Ключ API для OpenRouter
     pub openrouter_key: String,
-    /// Ключ API для Voice Bot
-    pub voicebot_key: String,
+    /// Ключ API для Lumean.
+    #[serde(alias = "voicebot_key")]
+    pub lumean_key: String,
     /// Ключ API для Googler
     pub googler_key: String,
     /// Ключ API для AssemblyAI
@@ -340,7 +341,7 @@ pub struct AppSettings {
     /// Ключ API для Pixabay Stock
     #[serde(default = "default_pixabay_key")]
     pub pixabay_key: String,
-    /// Поточний вибраний сервіс озвучки ("Voice Bot")
+    /// Поточний вибраний сервіс озвучки ("Lumean")
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки
     pub voiceover_template_uuid: String,
@@ -657,13 +658,13 @@ impl Default for AppSettings {
             pipeline_width: 450.0,
             language: "Uk".to_string(),
             openrouter_key: String::new(),
-            voicebot_key: String::new(),
+            lumean_key: String::new(),
             googler_key: String::new(),
             assemblyai_key: String::new(),
             pexels_key: String::new(),
             magnific_key: String::new(),
             pixabay_key: String::new(),
-            voiceover_provider: "Voice Bot".to_string(),
+            voiceover_provider: "Lumean".to_string(),
             voiceover_template_uuid: String::new(),
             last_template: String::new(),
             pipeline_translation_enabled: true,
@@ -798,6 +799,7 @@ pub fn load_settings() -> AppSettings {
                     settings.edge_tts_rate = clean_numeric_param(&settings.edge_tts_rate);
                     settings.edge_tts_pitch = clean_numeric_param(&settings.edge_tts_pitch);
                     settings.edge_tts_volume = clean_numeric_param(&settings.edge_tts_volume);
+                    migrate_lumean_provider(&mut settings.voiceover_provider);
                     // Міграція з єдиного save_path у платформо-специфічні поля
                     if settings.save_path_macos.is_empty()
                         && settings.save_path_windows.is_empty()
@@ -822,6 +824,13 @@ pub fn load_settings() -> AppSettings {
         }
     }
     AppSettings::default()
+}
+
+/// Замінює застарілу назву провайдера в існуючих налаштуваннях.
+fn migrate_lumean_provider(provider: &mut String) {
+    if provider == "Voice Bot" {
+        *provider = "Lumean".to_string();
+    }
 }
 
 /// Зберігає поточні налаштування користувача у файл settings.json.
@@ -1363,6 +1372,7 @@ pub fn load_template(name: &str) -> Option<PipelineTemplate> {
                     template.edge_tts_rate = clean_numeric_param(&template.edge_tts_rate);
                     template.edge_tts_pitch = clean_numeric_param(&template.edge_tts_pitch);
                     template.edge_tts_volume = clean_numeric_param(&template.edge_tts_volume);
+                    migrate_lumean_provider(&mut template.voiceover_provider);
                     migrate_googler_provider_settings(
                         &mut template.googler_image_priority,
                         &mut template.googler_video_priority,

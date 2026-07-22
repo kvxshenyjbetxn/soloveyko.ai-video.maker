@@ -51,10 +51,10 @@ pub struct VideoMakerApp {
     pub saved_templates: Vec<String>,
     /// Статус роботи з шаблонами
     pub template_status: Option<String>,
-    /// Ключ API для Voice Bot.
-    pub voicebot_key: String,
-    /// Статус перевірки Voice Bot API ключа.
-    pub voicebot_status: Option<String>,
+    /// Ключ API для Lumean.
+    pub lumean_key: String,
+    /// Статус перевірки Lumean API ключа.
+    pub lumean_status: Option<String>,
     /// Ключ API для Googler.
     pub googler_key: String,
     /// Статус перевірки Googler API ключа.
@@ -92,16 +92,14 @@ pub struct VideoMakerApp {
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки.
     pub voiceover_template_uuid: String,
-    /// Завантажені шаблони Voice Bot.
-    pub voicebot_templates: std::sync::Arc<
-        std::sync::Mutex<
-            Option<Result<Vec<crate::gui::pipeline::voiceover::VoiceBotTemplate>, String>>,
-        >,
+    /// Завантажені шаблони Lumean.
+    pub lumean_templates: std::sync::Arc<
+        std::sync::Mutex<Option<Result<Vec<crate::api::lumean::LumeanTemplate>, String>>>,
     >,
-    /// Прапорець завантаження шаблонів Voice Bot.
-    pub voicebot_loading: std::sync::Arc<std::sync::Mutex<bool>>,
-    /// Результат фонового тесту API ключа Voice Bot.
-    pub voicebot_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Прапорець завантаження шаблонів Lumean.
+    pub lumean_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Результат фонового тесту API ключа Lumean.
+    pub lumean_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Чи увімкнено етап "Переклад" у пайплайні.
     pub pipeline_translation_enabled: bool,
     /// Чи увімкнено контроль перекладу у пайплайні.
@@ -198,8 +196,8 @@ pub struct VideoMakerApp {
     pub openrouter_models_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Баланс OpenRouter для відображення у топбарі.
     pub openrouter_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
-    /// Баланс VoiceBot для відображення у топбарі.
-    pub voicebot_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Баланс Lumean для відображення у топбарі.
+    pub lumean_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Обраний сервіс для генерації відеоряду.
     pub video_service: String,
     /// Тип медіа для генерації: "image" або "video"

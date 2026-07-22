@@ -96,7 +96,7 @@ impl VideoMakerApp {
             &self.jobs,
             self.language,
             &self.openrouter_balance,
-            &self.voicebot_balance,
+            &self.lumean_balance,
             &self.googler_balance,
             &mut self.balance_window_open,
         );
@@ -108,8 +108,8 @@ impl VideoMakerApp {
             self.language,
             &self.openrouter_key,
             &self.openrouter_balance,
-            &self.voicebot_key,
-            &self.voicebot_balance,
+            &self.lumean_key,
+            &self.lumean_balance,
             &self.googler_key,
             &self.googler_balance,
         );
@@ -124,7 +124,7 @@ impl VideoMakerApp {
             &mut self.codex_max_threads,
             &mut self.agy_max_threads,
             &mut self.pi_max_threads,
-            &self.voicebot_balance,
+            &self.lumean_balance,
             &mut self.edge_tts_max_threads,
             &mut self.googler_image_max_threads,
             &mut self.googler_video_max_threads,
