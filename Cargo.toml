@@ -33,4 +33,4 @@ version = "4.11.0"
 copyright = "Copyright © 2026 Soloveyko.ai. All rights reserved."
 short_description = "Soloveyko.AI-Video.Maker Application"
 long_description = "An amazing cross-platform desktop video maker using Rust and egui."
-icon = ["video.maker.icns", "video.maker.png", "video.maker.ico"]
+icon = ["assets/video.maker.icns", "assets/video.maker.png", "assets/video.maker.ico"]

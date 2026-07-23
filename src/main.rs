@@ -17,7 +17,7 @@ use eframe::egui;
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn load_icon() -> egui::IconData {
-    let bytes = include_bytes!("../video.maker.png");
+    let bytes = include_bytes!("../assets/video.maker.png");
     let img = image::load_from_memory(bytes)
         .expect("Не вдалося завантажити іконку")
         .to_rgba8();
