@@ -172,7 +172,7 @@ fn probe_media_info(path: &Path) -> (Option<f32>, bool) {
         "-v",
         "error",
         "-show_entries",
-        "format=duration:stream=codec_type",
+        "format=duration:stream=codec_type,duration",
         "-of",
         "json",
     ])
@@ -186,21 +186,38 @@ fn probe_media_info(path: &Path) -> (Option<f32>, bool) {
         return (None, false);
     };
 
-    let duration = json
-        .get("format")
-        .and_then(|v| v.get("duration"))
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.trim().parse::<f32>().ok());
-
-    let has_audio = json
+    let parse_duration = |value: &serde_json::Value| {
+        value
+            .as_str()
+            .and_then(|s| s.trim().parse::<f32>().ok())
+            .or_else(|| value.as_f64().map(|duration| duration as f32))
+            .filter(|duration| duration.is_finite() && *duration > 0.0)
+    };
+    let streams = json
         .get("streams")
-        .and_then(|v| v.as_array())
-        .map(|streams| {
-            streams
-                .iter()
-                .any(|stream| stream.get("codec_type").and_then(|v| v.as_str()) == Some("audio"))
-        })
-        .unwrap_or(false);
+        .and_then(|streams| streams.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let video_duration = streams
+        .iter()
+        .filter(|stream| stream.get("codec_type").and_then(|value| value.as_str()) == Some("video"))
+        .filter_map(|stream| stream.get("duration").and_then(parse_duration))
+        .max_by(|a, b| a.total_cmp(b));
+    let format_duration = json
+        .get("format")
+        .and_then(|format| format.get("duration"))
+        .and_then(parse_duration);
+    let stream_duration = streams
+        .iter()
+        .filter_map(|stream| stream.get("duration").and_then(parse_duration))
+        .max_by(|a, b| a.total_cmp(b));
+    // Для відеофайлів контейнер може бути довшим через аудіодоріжку.
+    // Точка розвороту повинна збігатися з кінцем саме відеопотоку.
+    let duration = video_duration.or(format_duration).or(stream_duration);
+
+    let has_audio = streams
+        .iter()
+        .any(|stream| stream.get("codec_type").and_then(|value| value.as_str()) == Some("audio"));
 
     (duration, has_audio)
 }

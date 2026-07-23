@@ -614,6 +614,7 @@ fn draw_trim_editor(
             &trim.media,
             show_time,
             trim.is_playing,
+            false,
             sharp_when_idle,
             trim.render,
         )

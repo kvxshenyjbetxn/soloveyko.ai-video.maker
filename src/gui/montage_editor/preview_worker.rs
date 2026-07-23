@@ -59,6 +59,7 @@ struct PreviewTask {
 struct PreviewDemand {
     center_frame: u32,
     playback_active: bool,
+    playback_reverse: bool,
     want_sharp: bool,
     settings: PreviewRenderSettings,
     updated_at: Instant,
@@ -109,6 +110,7 @@ impl PreviewWorker {
         media: &MediaItem,
         frame_idx: u32,
         playback_active: bool,
+        playback_reverse: bool,
         want_sharp: bool,
         settings: PreviewRenderSettings,
     ) {
@@ -119,6 +121,7 @@ impl PreviewWorker {
             PreviewDemand {
                 center_frame: frame_idx,
                 playback_active,
+                playback_reverse,
                 want_sharp,
                 settings,
                 updated_at: Instant::now(),
@@ -335,9 +338,22 @@ impl PreviewWorkerState {
                 ..
             } => match frame_kind {
                 PreviewFrameKind::Scrub => match task.priority {
-                    PreviewTaskPriority::CurrentFrame => *frame_idx != demand.center_frame,
+                    PreviewTaskPriority::CurrentFrame => {
+                        if demand.playback_active && demand.playback_reverse {
+                            *frame_idx < demand.center_frame
+                                || frame_distance(*frame_idx, demand.center_frame)
+                                    > demand.settings.fallback_frame_distance()
+                        } else {
+                            *frame_idx != demand.center_frame
+                        }
+                    }
                     PreviewTaskPriority::PlaybackAhead => {
-                        !demand.playback_active || *frame_idx <= demand.center_frame
+                        !demand.playback_active
+                            || if demand.playback_reverse {
+                                *frame_idx >= demand.center_frame
+                            } else {
+                                *frame_idx <= demand.center_frame
+                            }
                     }
                     PreviewTaskPriority::ScrubFallback => {
                         demand.playback_active
@@ -356,15 +372,18 @@ impl PreviewWorkerState {
                 start_idx, end_idx, ..
             } => match task.priority {
                 PreviewTaskPriority::PlaybackAhead => {
+                    let warmup = demand
+                        .settings
+                        .cached_frame_warmup()
+                        .max(demand.settings.playback_prefetch_frames() * 4);
                     !demand.playback_active
-                        || *end_idx < demand.center_frame
-                        || *start_idx
-                            > demand.center_frame.saturating_add(
-                                demand
-                                    .settings
-                                    .cached_frame_warmup()
-                                    .max(demand.settings.playback_prefetch_frames() * 4),
-                            )
+                        || if demand.playback_reverse {
+                            *start_idx > demand.center_frame
+                                || *end_idx < demand.center_frame.saturating_sub(warmup)
+                        } else {
+                            *end_idx < demand.center_frame
+                                || *start_idx > demand.center_frame.saturating_add(warmup)
+                        }
                 }
                 PreviewTaskPriority::ScrubFallback => {
                     demand.playback_active

@@ -11,6 +11,99 @@ pub fn find_voice_file(save_dir: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Повертає тривалість відеофайлу через ffprobe.
+fn probe_video_duration(path: &Path) -> Option<f64> {
+    let ffprobe = crate::bundle::ffprobe_path();
+    let mut ffprobe_proc = std::process::Command::new(ffprobe);
+    ffprobe_proc.args([
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration:stream=codec_type,duration",
+        "-of",
+        "json",
+    ]);
+    ffprobe_proc.arg(path);
+    crate::bundle::set_no_window(&mut ffprobe_proc);
+
+    let output = ffprobe_proc.output().ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let parse_duration = |value: &serde_json::Value| {
+        value
+            .as_str()
+            .and_then(|duration| duration.parse::<f64>().ok())
+            .or_else(|| value.as_f64())
+            .filter(|duration| duration.is_finite() && *duration > 0.0)
+    };
+
+    json.get("streams")
+        .and_then(|streams| streams.as_array())
+        .and_then(|streams| {
+            streams
+                .iter()
+                .filter(|stream| {
+                    stream.get("codec_type").and_then(|value| value.as_str()) == Some("video")
+                })
+                .filter_map(|stream| stream.get("duration").and_then(parse_duration))
+                .max_by(|a, b| a.total_cmp(b))
+        })
+        .or_else(|| {
+            json.get("format")
+                .and_then(|format| format.get("duration"))
+                .and_then(parse_duration)
+        })
+}
+
+/// Будує FFmpeg-фільтр «вперед → назад», якщо відео коротше за сегмент.
+fn build_boomerang_filter(
+    input_idx: usize,
+    trim_start: f64,
+    target_duration: f64,
+    source_duration: Option<f64>,
+    suffix: &str,
+    output_label: &str,
+) -> Option<String> {
+    let source_duration = source_duration?;
+    let available_duration = source_duration - trim_start;
+    if available_duration <= 0.0 || target_duration <= available_duration + 0.001 {
+        return None;
+    }
+
+    let part_count = (target_duration / available_duration).ceil() as usize;
+    let source_labels: String = (0..part_count)
+        .map(|part| format!("[v_src_{input_idx}_{part}]"))
+        .collect();
+    let mut filters = vec![format!("[{input_idx}:v]split={part_count}{source_labels}")];
+    let mut part_labels = Vec::with_capacity(part_count);
+
+    for part in 0..part_count {
+        let played_duration =
+            (target_duration - part as f64 * available_duration).min(available_duration);
+        let reverse = part % 2 == 1;
+        let source_start = if reverse {
+            trim_start + available_duration - played_duration
+        } else {
+            trim_start
+        };
+        let part_label = format!("v_part_{input_idx}_{part}");
+        let reverse_filter = if reverse {
+            ",reverse,setpts=PTS-STARTPTS"
+        } else {
+            ""
+        };
+        filters.push(format!(
+            "[v_src_{input_idx}_{part}]trim=start={source_start:.6}:duration={played_duration:.6},setpts=PTS-STARTPTS{reverse_filter}[{part_label}]"
+        ));
+        part_labels.push(format!("[{part_label}]"));
+    }
+
+    filters.push(format!(
+        "{}concat=n={part_count}:v=1:a=0{suffix}[{output_label}]",
+        part_labels.concat()
+    ));
+    Some(filters.join(";"))
+}
+
 /// Будує та запускає FFmpeg-монтаж.
 ///
 /// `transition` — "none", "random" або конкретна назва xfade-ефекту.
@@ -475,11 +568,29 @@ pub fn run_montage(
             ));
         } else if clip.is_video {
             let ts = clip.trim_start;
-            filter_parts.push(format!(
-                "[{file_idx}:v]trim=start={ts:.6}:duration={adj_dur:.6},setpts=PTS-STARTPTS,\
-                scale=1920:1080:force_original_aspect_ratio=increase,\
-                crop=1920:1080,format=yuv420p,setsar=1,fps={fps},settb=AVTB[v{i}_final]"
-            ));
+            let suffix = format!(
+                ",scale=1920:1080:force_original_aspect_ratio=increase,\
+                crop=1920:1080,format=yuv420p,setsar=1,fps={fps},settb=AVTB"
+            );
+            let source_duration = clip
+                .path
+                .as_ref()
+                .and_then(|path| probe_video_duration(&save_dir.join(path)));
+
+            if let Some(filter) = build_boomerang_filter(
+                file_idx,
+                ts,
+                adj_dur,
+                source_duration,
+                &suffix,
+                &format!("v{i}_final"),
+            ) {
+                filter_parts.push(filter);
+            } else {
+                filter_parts.push(format!(
+                    "[{file_idx}:v]trim=start={ts:.6}:duration={adj_dur:.6},setpts=PTS-STARTPTS{suffix}[v{i}_final]"
+                ));
+            }
             file_idx += 1;
         } else {
             // Зображення — застосовуємо ефекти зуму та покачування
@@ -711,6 +822,7 @@ pub fn run_montage(
         x: i32,
         y: i32,
         is_video: bool,
+        source_duration: Option<f64>,
         /// Тривалість fade-in на початку кліпу (перекриття з попереднім), 0 = немає
         fade_in_dur: f64,
         /// Відносний час початку fade-out (від 0 = початок кліпу), 0 = немає
@@ -810,6 +922,7 @@ pub fn run_montage(
                 x,
                 y,
                 is_video: is_vid,
+                source_duration: is_vid.then(|| probe_video_duration(&media_abs)).flatten(),
                 fade_in_dur,
                 fade_out_start,
                 fade_out_dur,
@@ -891,16 +1004,29 @@ pub fn run_montage(
                     let enable_expr = format!("between(t,{:.6},{:.6})", ov.start, ov.end);
                     // Порядок важливий: setpts=PTS-STARTPTS нормалізує до 0, потім scale/format/fade,
                     // і лише наприкінці settb+зсув на таймлінію — щоб fade=start_time відносно початку кліпу.
-                    filter_parts.push(format!(
-                        "[{}:v]trim=start={trim:.6}:duration={ov_dur:.6},\
-                        setpts=PTS-STARTPTS,\
-                        scale={w}:{h}:force_original_aspect_ratio=decrease,\
+                    let suffix = format!(
+                        ",scale={w}:{h}:force_original_aspect_ratio=decrease,\
                         pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format={pix_fmt},fps={fps},setsar=1\
-                        {fade_chain},settb=AVTB,setpts=PTS+{start:.6}/TB[{prep}]",
-                        ov.input_idx,
-                        trim = ov.trim_start,
+                        {fade_chain},settb=AVTB,setpts=PTS+{start:.6}/TB",
                         start = ov.start,
-                    ));
+                    );
+                    if let Some(filter) = build_boomerang_filter(
+                        ov.input_idx,
+                        ov.trim_start,
+                        ov_dur,
+                        ov.source_duration,
+                        &suffix,
+                        &prep,
+                    ) {
+                        filter_parts.push(filter);
+                    } else {
+                        filter_parts.push(format!(
+                            "[{}:v]trim=start={trim:.6}:duration={ov_dur:.6},\
+                            setpts=PTS-STARTPTS{suffix}[{prep}]",
+                            ov.input_idx,
+                            trim = ov.trim_start,
+                        ));
+                    }
                     filter_parts.push(format!(
                         "[{current}][{prep}]overlay=x={x}:y={y}:enable='{enable_expr}':eof_action=pass[{out_label}]",
                         x = ov.x, y = ov.y,

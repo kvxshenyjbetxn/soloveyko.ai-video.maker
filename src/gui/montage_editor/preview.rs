@@ -114,6 +114,31 @@ fn shake_uv(t: f32, settings: &MontagePreviewSettings, is_image: bool) -> Vec2 {
     )
 }
 
+/// Повертає позицію кадру й напрямок для циклу «вперед → назад» короткого відео.
+fn boomerang_playback_offset(
+    clip_offset: f32,
+    trim_start: f32,
+    source_duration: f32,
+) -> (f32, bool) {
+    let trim_start = trim_start.clamp(0.0, source_duration);
+    let available_duration = source_duration - trim_start;
+    if available_duration <= 0.001 {
+        return (trim_start, false);
+    }
+
+    let cycle_duration = available_duration * 2.0;
+    let cycle_offset = clip_offset.max(0.0).rem_euclid(cycle_duration);
+    let reversing = cycle_offset > available_duration;
+    let source_offset = if reversing {
+        cycle_duration - cycle_offset
+    } else {
+        cycle_offset
+    };
+    let source_time = (trim_start + source_offset).min((source_duration - 0.001).max(trim_start));
+
+    (source_time, reversing)
+}
+
 /// Малює кадр текстури у container.
 /// `uv` — zoom-crop (з `zoom_uv`); `uv_shift` — додаткове UV-зміщення (shake).
 /// Зображення завжди заповнює container без чорних країв.
@@ -149,28 +174,30 @@ fn render_clip_frame(
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
-/// Шукає медіа для кліпу:
-/// 1. По media_id (стабільний UUID, не залежить від шляху)
-/// 2. Fallback: по точному шляху
-/// 3. Fallback: по стему файлу (для .jpg → .mp4 після оживлення)
+/// Шукає медіа для кліпу за поточним шляхом, а не за застарілим `media_id`.
+/// Це важливо після заміни зображення анімованим відео з тим самим сегментом.
 fn find_media_for_clip<'a>(pool: &'a [MediaItem], clip: &EditorClip) -> Option<&'a MediaItem> {
-    if !clip.media_id.is_empty() {
-        if let Some(m) = pool.iter().find(|m| m.id == clip.media_id) {
-            return Some(m);
-        }
-    }
     if let Some(ref path) = clip.path {
-        if let Some(m) = pool.iter().find(|m| m.path == *path) {
-            return Some(m);
+        if let Some(media) = pool.iter().find(|media| media.path == *path) {
+            return Some(media);
         }
-        let stem = path.file_stem().and_then(|s| s.to_str())?;
+        let stem = path.file_stem().and_then(|stem| stem.to_str())?;
         let parent = path.parent()?;
-        return pool.iter().find(|m| {
-            m.path.parent() == Some(parent)
-                && m.path.file_stem().and_then(|s| s.to_str()) == Some(stem)
-        });
+        if let Some(media) = pool.iter().find(|media| {
+            media.path.parent() == Some(parent)
+                && media
+                    .path
+                    .file_stem()
+                    .and_then(|file_stem| file_stem.to_str())
+                    == Some(stem)
+        }) {
+            return Some(media);
+        }
     }
-    None
+
+    (!clip.media_id.is_empty())
+        .then(|| pool.iter().find(|media| media.id == clip.media_id))
+        .flatten()
 }
 
 pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
@@ -261,9 +288,6 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         .unwrap_or(0.0);
     let in_transition = overlap_progress.is_some()
         || (has_settings_trans && clip_offset < settings.transition_duration);
-    // Зміщення у вихідному файлі з урахуванням trim_start (для кадрів превʼю)
-    let source_offset = clip_offset + active.as_ref().map(|c| c.trim_start).unwrap_or(0.0);
-
     // Індекс зображення серед усіх зображень (для alternate-зуму)
     let img_idx_active = active_idx
         .map(|idx| {
@@ -304,6 +328,19 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         },
     );
 
+    // Активне відео повинно мати точну тривалість до розрахунку ping-pong часу.
+    if let Some(path) = active.as_ref().and_then(|clip| clip.path.as_ref()) {
+        if let Some(media) = editor
+            .media_pool
+            .iter_mut()
+            .find(|media| media.path == *path)
+        {
+            if media.ensure_duration_verified() {
+                ui.ctx().request_repaint();
+            }
+        }
+    }
+
     // Медіа-елементи (clone щоб розділити borrow від frame_cache)
     // Якщо не знайдено в пулі але файл існує — додаємо в пул на ходу (захист від десинхронізації)
     let active_media: Option<MediaItem> = {
@@ -338,6 +375,13 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
         .as_ref()
         .and_then(|c| find_media_for_clip(&editor.media_pool, c))
         .cloned();
+    let (source_offset, active_reversing) = active
+        .as_ref()
+        .zip(active_media.as_ref())
+        .map(|(clip, media)| {
+            boomerang_playback_offset(clip_offset, clip.trim_start, media.duration_secs)
+        })
+        .unwrap_or((0.0, false));
 
     // Текстури. Під час drag/playback використовуємо легкий scrub-кеш,
     // після зупинки плейхеду просимо чіткий still-кадр у фоні.
@@ -349,6 +393,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             m,
             source_offset,
             editor.is_playing,
+            active_reversing,
             use_sharp_frame,
             editor.preview_render,
         )
@@ -358,14 +403,17 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
             // Для overlap-переходу: кадр на поточній позиції плейхеду в межах outgoing кліпу
             if overlap_progress.is_some() {
                 if let Some(ref out) = outgoing {
-                    let out_t = (ph - out.start_secs + out.trim_start)
-                        .max(0.0)
-                        .min(m.duration_secs - 0.001);
+                    let (out_t, out_reversing) = boomerang_playback_offset(
+                        (ph - out.start_secs).max(0.0),
+                        out.trim_start,
+                        m.duration_secs,
+                    );
                     editor.frame_cache.get_frame(
                         ui.ctx(),
                         m,
                         out_t,
                         editor.is_playing,
+                        out_reversing,
                         false,
                         editor.preview_render,
                     )
@@ -380,6 +428,7 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                     m,
                     last_t,
                     editor.is_playing,
+                    false,
                     false,
                     editor.preview_render,
                 )
@@ -814,6 +863,15 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
 
         // ── Overlay-доріжки (track 1+) рендеруємо ПІСЛЯ track 0 — поверх фону ──
         for (ov_idx, item) in overlay_data.iter().enumerate() {
+            if let Some(media) = editor
+                .media_pool
+                .iter_mut()
+                .find(|media| media.path == item.path)
+            {
+                if media.ensure_duration_verified() {
+                    ui.ctx().request_repaint();
+                }
+            }
             let ov_media = editor
                 .media_pool
                 .iter()
@@ -829,12 +887,14 @@ pub(super) fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
                         Color32::from_rgba_unmultiplied(255, 200, 60, 220),
                     );
                 }
-                let source_t = item.t_off + item.trim_start;
+                let (source_t, reversing) =
+                    boomerang_playback_offset(item.t_off, item.trim_start, media.duration_secs);
                 if let Some(tex) = editor.frame_cache.get_frame(
                     ui.ctx(),
                     &media,
                     source_t,
                     editor.is_playing,
+                    reversing,
                     use_sharp_frame,
                     editor.preview_render,
                 ) {
@@ -1125,5 +1185,38 @@ fn update_preview_drag(
         } else if sel_rect.contains(mouse) {
             ctx.set_cursor_icon(egui::CursorIcon::Grab);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::boomerang_playback_offset;
+
+    fn assert_time(actual: f32, expected: f32) {
+        assert!((actual - expected).abs() < 0.01, "{actual} != {expected}");
+    }
+
+    #[test]
+    fn boomerang_reverses_after_source_end() {
+        let (end, end_reversing) = boomerang_playback_offset(2.0, 0.0, 2.0);
+        let (back, back_reversing) = boomerang_playback_offset(2.5, 0.0, 2.0);
+        let (restart, restart_reversing) = boomerang_playback_offset(4.0, 0.0, 2.0);
+
+        assert_time(end, 1.999);
+        assert!(!end_reversing);
+        assert_time(back, 1.5);
+        assert!(back_reversing);
+        assert_time(restart, 0.0);
+        assert!(!restart_reversing);
+    }
+
+    #[test]
+    fn boomerang_respects_trim_start() {
+        let (forward, _) = boomerang_playback_offset(1.0, 1.0, 3.0);
+        let (back, reversing) = boomerang_playback_offset(2.5, 1.0, 3.0);
+
+        assert_time(forward, 2.0);
+        assert_time(back, 2.5);
+        assert!(reversing);
     }
 }

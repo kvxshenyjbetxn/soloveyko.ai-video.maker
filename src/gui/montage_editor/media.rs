@@ -31,8 +31,10 @@ pub struct MediaItem {
     pub extraction_complete: Arc<AtomicBool>,
     /// true = відеофайл містить вбудовану аудіодоріжку
     pub has_audio: bool,
-    /// Результат фонового ffprobe (duration_secs, has_audio); None = ще виконується
-    probe_result: Arc<Mutex<Option<(f32, bool)>>>,
+    /// Результат фонового ffprobe (duration_secs, has_audio, duration_verified).
+    probe_result: Arc<Mutex<Option<(f32, bool, bool)>>>,
+    duration_verified: bool,
+    duration_probe_attempted_sync: bool,
 }
 
 impl MediaItem {
@@ -68,10 +70,10 @@ impl MediaItem {
 
         // Тривалість та наявність аудіо зондуємо у фоновому потоці,
         // щоб не блокувати UI-трід ffprobe-викликами.
-        let probe_result: Arc<Mutex<Option<(f32, bool)>>> = Arc::new(Mutex::new(None));
+        let probe_result: Arc<Mutex<Option<(f32, bool, bool)>>> = Arc::new(Mutex::new(None));
         let (duration_secs, has_audio) = if is_image {
             // Для зображень — відразу встановлюємо значення без зонду
-            *probe_result.lock().unwrap() = Some((5.0, false));
+            *probe_result.lock().unwrap() = Some((5.0, false, true));
             (5.0, false)
         } else if is_video || is_audio {
             let probe_arc_c = Arc::clone(&probe_result);
@@ -79,16 +81,17 @@ impl MediaItem {
             let is_vid = is_video;
             std::thread::spawn(move || {
                 let (dur, has_audio) = probe_duration_and_audio(&path_c);
+                let duration_verified = dur.is_some();
                 let duration = dur.unwrap_or(10.0);
                 let audio = is_vid && has_audio;
                 if let Ok(mut g) = probe_arc_c.lock() {
-                    *g = Some((duration, audio));
+                    *g = Some((duration, audio, duration_verified));
                 }
             });
             // Тимчасові значення до завершення зонду
             (10.0, false)
         } else {
-            *probe_result.lock().unwrap() = Some((5.0, false));
+            *probe_result.lock().unwrap() = Some((5.0, false, true));
             (5.0, false)
         };
 
@@ -151,6 +154,8 @@ impl MediaItem {
             extraction_complete,
             has_audio,
             probe_result,
+            duration_verified: is_image || (!is_video && !is_audio),
+            duration_probe_attempted_sync: false,
         }
     }
 
@@ -158,13 +163,35 @@ impl MediaItem {
     /// Повертає true якщо дані змінились — сигнал що UI треба перемалювати.
     pub fn refresh_probe(&mut self) -> bool {
         if let Ok(mut guard) = self.probe_result.try_lock() {
-            if let Some((dur, audio)) = guard.take() {
+            if let Some((dur, audio, duration_verified)) = guard.take() {
                 self.duration_secs = dur;
                 self.has_audio = audio;
+                self.duration_verified = duration_verified;
                 return true;
             }
         }
         false
+    }
+
+    /// Гарантує точну тривалість активного відео перед розрахунком бумерангу.
+    pub fn ensure_duration_verified(&mut self) -> bool {
+        let mut changed = self.refresh_probe();
+        if self.duration_verified
+            || self.duration_probe_attempted_sync
+            || !matches!(self.kind, ClipKind::Video)
+        {
+            return changed;
+        }
+
+        self.duration_probe_attempted_sync = true;
+        let (duration, has_audio) = probe_duration_and_audio(&self.path);
+        if let Some(duration) = duration {
+            changed |= (self.duration_secs - duration).abs() > 0.001 || self.has_audio != has_audio;
+            self.duration_secs = duration;
+            self.has_audio = has_audio;
+            self.duration_verified = true;
+        }
+        changed
     }
 
     pub fn is_extraction_complete(&self) -> bool {

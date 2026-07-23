@@ -611,7 +611,7 @@ fn load_preview_texture(
         let media = editor.media_pool.iter().find(|m| m.path == path).cloned()?;
         editor
             .frame_cache
-            .get_frame(ctx, &media, 0.0, false, false, editor.preview_render)
+            .get_frame(ctx, &media, 0.0, false, false, false, editor.preview_render)
     } else {
         None
     }

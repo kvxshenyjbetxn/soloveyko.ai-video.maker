@@ -316,6 +316,7 @@ impl FrameCache {
         center_idx: u32,
         settings: PreviewRenderSettings,
         playback_active: bool,
+        playback_reverse: bool,
     ) {
         let warmup = settings.cached_frame_warmup();
         let parallel_loads = settings.max_parallel_frame_loads() * 4;
@@ -328,32 +329,24 @@ impl FrameCache {
             parallel_loads,
         );
 
-        let past = if playback_active {
+        let behind = if playback_active {
             warmup / 4
         } else {
             warmup / 2
         };
-        for offset in 1..=past {
-            let idx = center_idx.saturating_sub(offset);
-            if idx >= 1 {
-                self.request_cached_frame_async(
-                    ctx,
-                    media,
-                    idx,
-                    FrameQuality::Scrub,
-                    parallel_loads,
-                );
-            }
-        }
+        let (ahead_sign, behind_sign) = if playback_reverse {
+            (-1i64, 1i64)
+        } else {
+            (1, -1)
+        };
 
         for offset in 1..=warmup {
-            self.request_cached_frame_async(
-                ctx,
-                media,
-                center_idx + offset,
-                FrameQuality::Scrub,
-                parallel_loads,
-            );
+            let idx = (center_idx as i64 + ahead_sign * offset as i64).max(1) as u32;
+            self.request_cached_frame_async(ctx, media, idx, FrameQuality::Scrub, parallel_loads);
+        }
+        for offset in 1..=behind {
+            let idx = (center_idx as i64 + behind_sign * offset as i64).max(1) as u32;
+            self.request_cached_frame_async(ctx, media, idx, FrameQuality::Scrub, parallel_loads);
         }
     }
 
@@ -364,6 +357,7 @@ impl FrameCache {
         center_idx: u32,
         settings: PreviewRenderSettings,
         playback_active: bool,
+        playback_reverse: bool,
     ) {
         if !matches!(media.kind, ClipKind::Video) {
             return;
@@ -379,27 +373,23 @@ impl FrameCache {
         } else {
             0
         };
-        let chunk_start_idx = ((center_idx.saturating_sub(1) / bucket_frames) * bucket_frames + 1)
-            .saturating_sub(overlap_frames)
-            .max(1);
-        // Не можна запитувати кадри за межами реальної тривалості медіа —
-        // інакше generate_scrub_chunk ніколи не зможе виконати перевірку успіху
-        // (останній запитаний кадр фізично не існує), і той самий приречений
-        // ffmpeg-запуск буде повторюватись на кожному тіку програвання.
+        // Не можна запитувати кадри за межами реальної тривалості медіа.
         let max_idx = (media.duration_secs * fps).floor().max(1.0) as u32 + 1;
-        let chunk_end_idx = (chunk_start_idx + chunk_frames + overlap_frames * 2).min(max_idx);
+        let bucket_start = (center_idx.saturating_sub(1) / bucket_frames) * bucket_frames + 1;
+        let (chunk_start_idx, chunk_end_idx) = if playback_reverse {
+            let end = center_idx.saturating_add(overlap_frames).min(max_idx);
+            let start = end.saturating_sub(chunk_frames + overlap_frames * 2).max(1);
+            (start, end)
+        } else {
+            let start = bucket_start.saturating_sub(overlap_frames).max(1);
+            let end = (start + chunk_frames + overlap_frames * 2).min(max_idx);
+            (start, end)
+        };
         if chunk_end_idx <= chunk_start_idx {
             return;
         }
 
-        // Якщо кінець chunk вже є на диску — цей шматок вже прогрітий.
-        // Біля кінця відео очікуваний останній кадр може бути на кілька кадрів менше
-        // за теоретичний chunk_end_idx (те саме округлення, що і в generate_scrub_chunk),
-        // тож перевіряємо із запасом, інакше "вже готово" ніколи не спрацює для хвоста.
-        let tail_tolerance = 5;
-        let already_warmed = (chunk_end_idx.saturating_sub(tail_tolerance)..=chunk_end_idx)
-            .rev()
-            .any(|idx| Self::frame_path(media, idx, FrameQuality::Scrub).exists());
+        let already_warmed = Self::frame_path(media, center_idx, FrameQuality::Scrub).exists();
         if already_warmed {
             return;
         }
@@ -567,6 +557,31 @@ impl FrameCache {
             .cloned()
     }
 
+    /// Під час reverse-playback попередній показаний кадр має більший індекс.
+    fn cached_future_frame(
+        &self,
+        media: &MediaItem,
+        frame_idx: u32,
+        quality: FrameQuality,
+        max_distance: u32,
+    ) -> Option<egui::TextureHandle> {
+        let prefix = Self::quality_prefix(media, quality);
+        self.access_order
+            .iter()
+            .rev()
+            .filter_map(|key| {
+                let idx = Self::frame_index_from_key(&prefix, key)?;
+                if idx < frame_idx {
+                    return None;
+                }
+                let dist = idx - frame_idx;
+                (dist <= max_distance).then_some((dist, key))
+            })
+            .min_by_key(|(distance, _)| *distance)
+            .and_then(|(_, key)| self.textures.get(key))
+            .cloned()
+    }
+
     fn request_first_frame_if_needed(
         &mut self,
         ctx: &egui::Context,
@@ -632,6 +647,7 @@ impl FrameCache {
         media: &MediaItem,
         time: f32,
         playback_active: bool,
+        playback_reverse: bool,
         sharp_when_idle: bool,
         settings: PreviewRenderSettings,
     ) -> Option<egui::TextureHandle> {
@@ -640,6 +656,7 @@ impl FrameCache {
         }
 
         let frame_idx = Self::frame_idx(media, time, settings, playback_active);
+        let playback_reverse = playback_active && playback_reverse;
         let use_sharp_frame = !playback_active && sharp_when_idle && settings.allows_sharp_frame();
         let is_video = matches!(media.kind, ClipKind::Video);
         let wants_sequence = is_video && (playback_active || frame_idx > 1);
@@ -650,13 +667,21 @@ impl FrameCache {
                 media,
                 frame_idx,
                 playback_active,
+                playback_reverse,
                 use_sharp_frame,
                 settings,
             );
         }
 
         if wants_sequence {
-            self.ensure_scrub_sequence_async(ctx, media, frame_idx, settings, playback_active);
+            self.ensure_scrub_sequence_async(
+                ctx,
+                media,
+                frame_idx,
+                settings,
+                playback_active,
+                playback_reverse,
+            );
         }
 
         if use_sharp_frame {
@@ -677,10 +702,25 @@ impl FrameCache {
         }
 
         let scrub_key = Self::frame_key(media, frame_idx, FrameQuality::Scrub);
+        if playback_reverse && !self.textures.contains_key(&scrub_key) {
+            let frame_path = Self::frame_path(media, frame_idx, FrameQuality::Scrub);
+            if let Some(texture) = Self::load_frame_from_disk(ctx, &frame_path, &scrub_key) {
+                self.insert_texture(scrub_key.clone(), texture.clone());
+                self.remember_last_texture(media, &texture);
+                return Some(texture);
+            }
+        }
         if let Some(texture) = self.textures.get(&scrub_key).cloned() {
             self.touch_key(&scrub_key);
             if wants_sequence {
-                self.warm_cached_window(ctx, media, frame_idx, settings, playback_active);
+                self.warm_cached_window(
+                    ctx,
+                    media,
+                    frame_idx,
+                    settings,
+                    playback_active,
+                    playback_reverse,
+                );
             } else if !use_sharp_frame && !matches!(media.kind, ClipKind::Image) {
                 let prefetch_frames = if playback_active {
                     settings.playback_prefetch_frames()
@@ -714,17 +754,19 @@ impl FrameCache {
 
         // Для відео спочатку намагаємось читати вже згенерований proxy-cache без нового ffmpeg на кожен кадр.
         if wants_sequence {
-            self.warm_cached_window(ctx, media, frame_idx, settings, playback_active);
+            self.warm_cached_window(
+                ctx,
+                media,
+                frame_idx,
+                settings,
+                playback_active,
+                playback_reverse,
+            );
             self.request_first_frame_if_needed(ctx, media, frame_idx, settings);
 
-            if !playback_active {
-                // Скраб (пауза): саме цей кадр потрібен негайно, навіть якщо
-                // паралельно вже гріється chunk. Під час playback так НЕ робимо —
-                // playhead постійно рухається, тож окремий ffmpeg-запуск на кожен
-                // кадр лише відбирає воркер-потоки у значно ефективнішого chunk'а
-                // (один процес декодує одразу секунди кадрів) і сам майже завжди
-                // встигає застаріти ще до завершення. Це і є причина "зависань"
-                // під час програвання високороздільного відео.
+            if !playback_active || playback_reverse {
+                // Для паузи та reverse-playback потрібен точний поточний кадр.
+                // Forward-playback покладається на ефективніше пакетне декодування.
                 self.request_frame_async(
                     ctx,
                     media,
@@ -753,13 +795,22 @@ impl FrameCache {
         }
 
         let fallback = if playback_active {
-            self.cached_past_frame(
-                media,
-                frame_idx,
-                FrameQuality::Scrub,
-                settings.fallback_frame_distance(),
-            )
-            .or_else(|| {
+            let directional = if playback_reverse {
+                self.cached_future_frame(
+                    media,
+                    frame_idx,
+                    FrameQuality::Scrub,
+                    settings.fallback_frame_distance(),
+                )
+            } else {
+                self.cached_past_frame(
+                    media,
+                    frame_idx,
+                    FrameQuality::Scrub,
+                    settings.fallback_frame_distance(),
+                )
+            };
+            directional.or_else(|| {
                 self.cached_near_frame(
                     media,
                     frame_idx,

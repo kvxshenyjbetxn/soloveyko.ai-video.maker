@@ -181,6 +181,7 @@ pub(super) fn draw_media_pool(
                         0.0,
                         false,
                         false,
+                        false,
                         editor.preview_render,
                     ) {
                         editor.pool_thumbnails.insert(media.id.clone(), tex);
