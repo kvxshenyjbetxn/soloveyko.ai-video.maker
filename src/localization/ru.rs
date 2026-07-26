@@ -144,6 +144,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         }
         "settings_shared_cache_enabled" => "Включить shared cache для стоков",
         "settings_shared_cache_open" => "Открыть папку кеша",
+        "settings_lumean_proxy" => "Прокси Lumean",
+        "settings_lumean_proxy_desc" => "Направляет только запросы Lumean через HTTP-прокси.",
+        "settings_lumean_proxy_enabled" => "Включить прокси для Lumean",
+        "settings_lumean_proxy_hint" => "хост:порт:логин:пароль",
         "settings_show_welcome" => "Показывать приветственное окно при запуске",
         "settings_lang" => "Язык интерфейса",
         "settings_lang_desc" => "Выберите язык отображения программы:",

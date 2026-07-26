@@ -55,6 +55,10 @@ pub struct VideoMakerApp {
     pub lumean_key: String,
     /// Статус перевірки Lumean API ключа.
     pub lumean_status: Option<String>,
+    /// Чи спрямовувати трафік Lumean через проксі.
+    pub lumean_proxy_enabled: bool,
+    /// URL HTTP-проксі для Lumean.
+    pub lumean_proxy_url: String,
     /// Ключ API для Googler.
     pub googler_key: String,
     /// Статус перевірки Googler API ключа.
@@ -551,15 +555,23 @@ impl eframe::App for VideoMakerApp {
                     }
                 }
                 Tab::Settings => {
-                    let welcome_changed = gui::settings::draw_settings(
-                        ui,
-                        &mut self.theme,
-                        &mut self.accent_color,
-                        &mut self.language,
-                        &mut self.last_saved_settings.show_welcome,
-                        &mut self.shared_stock_cache_enabled,
-                        &mut self.shared_stock_cache_dir,
-                    );
+                    let welcome_changed = egui::ScrollArea::vertical()
+                        .id_salt("settings_scroll")
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
+                            gui::settings::draw_settings(
+                                ui,
+                                &mut self.theme,
+                                &mut self.accent_color,
+                                &mut self.language,
+                                &mut self.last_saved_settings.show_welcome,
+                                &mut self.shared_stock_cache_enabled,
+                                &mut self.shared_stock_cache_dir,
+                                &mut self.lumean_proxy_enabled,
+                                &mut self.lumean_proxy_url,
+                            )
+                        })
+                        .inner;
                     if welcome_changed {
                         let new_settings = self.last_saved_settings.clone();
                         crate::gui::settings::storage::save_settings(&new_settings);

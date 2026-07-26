@@ -144,6 +144,10 @@ pub fn translate_uk(key: &str) -> &'static str {
         }
         "settings_shared_cache_enabled" => "Увімкнути shared cache для стоків",
         "settings_shared_cache_open" => "Відкрити папку кешу",
+        "settings_lumean_proxy" => "Проксі Lumean",
+        "settings_lumean_proxy_desc" => "Спрямовує лише запити Lumean через HTTP-проксі.",
+        "settings_lumean_proxy_enabled" => "Увімкнути проксі для Lumean",
+        "settings_lumean_proxy_hint" => "хост:порт:логін:пароль",
         "settings_show_welcome" => "Показувати привітальне вікно при запуску",
         "settings_lang" => "Мова інтерфейсу",
         "settings_lang_desc" => "Оберіть мову відображення програми:",

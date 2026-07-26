@@ -12,6 +12,8 @@ pub fn draw_general_settings(
     show_welcome: &mut bool,
     shared_stock_cache_enabled: &mut bool,
     shared_stock_cache_dir: &mut String,
+    lumean_proxy_enabled: &mut bool,
+    lumean_proxy_url: &mut String,
 ) -> bool {
     let mut welcome_changed = false;
     ui.vertical(|ui| {
@@ -183,6 +185,26 @@ pub fn draw_general_settings(
                 super::storage::open_folder(std::path::Path::new(shared_stock_cache_dir.trim()));
             }
         });
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(12.0);
+
+        ui.strong(translate(*language, "settings_lumean_proxy"));
+        ui.small(translate(*language, "settings_lumean_proxy_desc"));
+        ui.add_space(8.0);
+        ui.checkbox(
+            lumean_proxy_enabled,
+            translate(*language, "settings_lumean_proxy_enabled"),
+        );
+        if *lumean_proxy_enabled {
+            ui.add_space(6.0);
+            ui.add(
+                egui::TextEdit::singleline(lumean_proxy_url)
+                    .hint_text(translate(*language, "settings_lumean_proxy_hint")),
+            );
+        }
+        crate::api::lumean::configure_proxy(*lumean_proxy_enabled, lumean_proxy_url);
 
         ui.add_space(16.0);
         ui.separator();

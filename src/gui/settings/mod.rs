@@ -14,6 +14,8 @@ pub fn draw_settings(
     show_welcome: &mut bool,
     shared_stock_cache_enabled: &mut bool,
     shared_stock_cache_dir: &mut String,
+    lumean_proxy_enabled: &mut bool,
+    lumean_proxy_url: &mut String,
 ) -> bool {
     general::draw_general_settings(
         ui,
@@ -23,5 +25,7 @@ pub fn draw_settings(
         show_welcome,
         shared_stock_cache_enabled,
         shared_stock_cache_dir,
+        lumean_proxy_enabled,
+        lumean_proxy_url,
     )
 }

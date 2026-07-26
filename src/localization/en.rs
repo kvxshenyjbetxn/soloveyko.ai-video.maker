@@ -144,6 +144,10 @@ pub fn translate_en(key: &str) -> &'static str {
         }
         "settings_shared_cache_enabled" => "Enable shared stock cache",
         "settings_shared_cache_open" => "Open cache folder",
+        "settings_lumean_proxy" => "Lumean Proxy",
+        "settings_lumean_proxy_desc" => "Routes only Lumean requests through an HTTP proxy.",
+        "settings_lumean_proxy_enabled" => "Enable proxy for Lumean",
+        "settings_lumean_proxy_hint" => "host:port:login:password",
         "settings_show_welcome" => "Show welcome window on startup",
         "settings_lang" => "Interface Language",
         "settings_lang_desc" => "Select application display language:",

@@ -327,6 +327,12 @@ pub struct AppSettings {
     /// Ключ API для Lumean.
     #[serde(alias = "voicebot_key")]
     pub lumean_key: String,
+    /// Чи спрямовувати трафік Lumean через проксі.
+    #[serde(default)]
+    pub lumean_proxy_enabled: bool,
+    /// URL HTTP-проксі для Lumean.
+    #[serde(default)]
+    pub lumean_proxy_url: String,
     /// Ключ API для Googler
     pub googler_key: String,
     /// Ключ API для AssemblyAI
@@ -659,6 +665,8 @@ impl Default for AppSettings {
             language: "Uk".to_string(),
             openrouter_key: String::new(),
             lumean_key: String::new(),
+            lumean_proxy_enabled: false,
+            lumean_proxy_url: String::new(),
             googler_key: String::new(),
             assemblyai_key: String::new(),
             pexels_key: String::new(),

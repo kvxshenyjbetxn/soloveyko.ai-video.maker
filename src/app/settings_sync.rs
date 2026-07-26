@@ -32,6 +32,8 @@ impl VideoMakerApp {
                 || current_language_str != self.last_saved_settings.language
                 || self.openrouter_key != self.last_saved_settings.openrouter_key
                 || self.lumean_key != self.last_saved_settings.lumean_key
+                || self.lumean_proxy_enabled != self.last_saved_settings.lumean_proxy_enabled
+                || self.lumean_proxy_url != self.last_saved_settings.lumean_proxy_url
                 || self.voiceover_provider != self.last_saved_settings.voiceover_provider
                 || self.voiceover_template_uuid != self.last_saved_settings.voiceover_template_uuid
                 || self.template_name_input != self.last_saved_settings.last_template
@@ -185,6 +187,8 @@ impl VideoMakerApp {
                     language: current_language_str,
                     openrouter_key: self.openrouter_key.clone(),
                     lumean_key: self.lumean_key.clone(),
+                    lumean_proxy_enabled: self.lumean_proxy_enabled,
+                    lumean_proxy_url: self.lumean_proxy_url.clone(),
                     googler_key: self.googler_key.clone(),
                     assemblyai_key: self.assemblyai_key.clone(),
                     pexels_key: self.pexels_key.clone(),

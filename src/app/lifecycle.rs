@@ -22,6 +22,8 @@ impl Default for VideoMakerApp {
             template_status: None,
             lumean_key: String::new(),
             lumean_status: None,
+            lumean_proxy_enabled: false,
+            lumean_proxy_url: String::new(),
             googler_key: String::new(),
             googler_status: None,
             googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -301,6 +303,9 @@ impl VideoMakerApp {
 
         let openrouter_key = saved.openrouter_key.clone();
         let lumean_key = saved.lumean_key.clone();
+        let lumean_proxy_enabled = saved.lumean_proxy_enabled;
+        let lumean_proxy_url = saved.lumean_proxy_url.clone();
+        crate::api::lumean::configure_proxy(lumean_proxy_enabled, &lumean_proxy_url);
         let googler_key = saved.googler_key.clone();
         let assemblyai_key = saved.assemblyai_key.clone();
         let pexels_key = saved.pexels_key.clone();
@@ -504,6 +509,8 @@ impl VideoMakerApp {
             template_status: None,
             lumean_key,
             lumean_status: None,
+            lumean_proxy_enabled,
+            lumean_proxy_url,
             googler_key,
             googler_status: None,
             googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),

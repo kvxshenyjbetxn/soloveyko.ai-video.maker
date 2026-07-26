@@ -4,6 +4,65 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock};
 const BASE_URL: &str = "https://api.lumean.app/api/public";
 const MAX_CONCURRENT_REQUESTS: usize = 5;
 
+#[derive(Default)]
+struct ProxyConfig {
+    enabled: bool,
+    url: String,
+}
+
+static PROXY_CONFIG: OnceLock<Mutex<ProxyConfig>> = OnceLock::new();
+
+/// Оновлює проксі лише для запитів до Lumean.
+pub fn configure_proxy(enabled: bool, url: &str) {
+    let mut config = PROXY_CONFIG
+        .get_or_init(|| Mutex::new(ProxyConfig::default()))
+        .lock()
+        .unwrap();
+    config.enabled = enabled;
+    config.url = url.trim().to_string();
+}
+
+fn proxy_url() -> Option<String> {
+    let config = PROXY_CONFIG
+        .get_or_init(|| Mutex::new(ProxyConfig::default()))
+        .lock()
+        .unwrap();
+    config.enabled.then(|| normalize_proxy_url(&config.url))
+}
+
+/// Перетворює формат `хост:порт:логін:пароль` у формат, потрібний HTTP-клієнту.
+fn normalize_proxy_url(proxy: &str) -> String {
+    if proxy.contains("://") {
+        return proxy.to_string();
+    }
+
+    let mut parts = proxy.splitn(4, ':');
+    let (Some(host), Some(port), Some(login), Some(password)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return proxy.to_string();
+    };
+
+    if host.is_empty() || port.is_empty() || login.is_empty() || password.is_empty() {
+        return proxy.to_string();
+    }
+
+    format!("http://{login}:{password}@{host}:{port}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_proxy_url;
+
+    #[test]
+    fn normalizes_host_port_login_password_proxy() {
+        assert_eq!(
+            normalize_proxy_url("s-37320.sp1.ovh:11001:VWewNcKM_0:970sGXvxL8bn"),
+            "http://VWewNcKM_0:970sGXvxL8bn@s-37320.sp1.ovh:11001"
+        );
+    }
+}
+
 /// Обмежує кількість одночасних запитів до Lumean.
 pub struct LumeanLimiter {
     active: Mutex<usize>,
@@ -136,6 +195,7 @@ pub fn check_key(
 /// Завантажує доступні шаблони Lumean.
 pub fn fetch_templates(key: &str) -> Result<Vec<LumeanTemplate>, String> {
     request_agent()
+        .map_err(format_request_error)?
         .get(&format!("{BASE_URL}/templates"))
         .set("X-API-KEY", key)
         .set("Accept", "application/json")
@@ -154,6 +214,7 @@ pub fn create_tts_order(key: &str, text: &str, template_id: &str) -> Result<Stri
     });
 
     request_agent()
+        .map_err(format_request_error)?
         .post(&format!("{BASE_URL}/orders"))
         .set("X-API-KEY", key)
         .set("Content-Type", "application/json")
@@ -167,6 +228,7 @@ pub fn create_tts_order(key: &str, text: &str, template_id: &str) -> Result<Stri
 /// Повертає статус замовлення і шлях до готового аудіофайлу.
 pub fn get_order_status(key: &str, order_id: &str) -> Result<(String, Option<String>), String> {
     let response = request_agent()
+        .map_err(format_request_error)?
         .get(&format!("{BASE_URL}/orders/{order_id}"))
         .set("X-API-KEY", key)
         .set("Accept", "application/json")
@@ -187,6 +249,7 @@ pub fn download_result(key: &str, storage_path: &str, save_dir: &str) -> Result<
     use std::io::Read;
 
     let signed_url = request_agent()
+        .map_err(format_request_error)?
         .post(&format!("{BASE_URL}/storage/url"))
         .set("X-API-KEY", key)
         .set("Content-Type", "application/json")
@@ -198,6 +261,7 @@ pub fn download_result(key: &str, storage_path: &str, save_dir: &str) -> Result<
 
     let mut bytes = Vec::new();
     request_agent()
+        .map_err(format_request_error)?
         .get(&signed_url)
         .call()
         .map_err(format_request_error)?
@@ -218,7 +282,7 @@ pub fn download_result(key: &str, storage_path: &str, save_dir: &str) -> Result<
 }
 
 fn fetch_usage(key: &str) -> Result<String, ureq::Error> {
-    let usage = request_agent()
+    let usage = request_agent()?
         .get(&format!("{BASE_URL}/usage"))
         .set("X-API-KEY", key)
         .set("Accept", "application/json")
@@ -234,11 +298,16 @@ fn fetch_usage(key: &str) -> Result<String, ureq::Error> {
         .join(" · "))
 }
 
-fn request_agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
+fn request_agent() -> Result<ureq::Agent, ureq::Error> {
+    let mut builder = ureq::AgentBuilder::new()
         .timeout_connect(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
+        .timeout(std::time::Duration::from_secs(30));
+
+    if let Some(url) = proxy_url() {
+        builder = builder.proxy(ureq::Proxy::new(url)?);
+    }
+
+    Ok(builder.build())
 }
 
 fn format_request_error(error: ureq::Error) -> String {
